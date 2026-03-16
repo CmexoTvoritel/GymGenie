@@ -1,0 +1,22 @@
+server:
+  port: 8081
+
+spring:
+  datasource:
+    url: jdbc:postgresql://127.0.0.1:5432/myappdb
+    username: myappuser
+    password: myapppassword
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+app:
+  jwt:
+    secret: gymgenie-super-secret-jwt-key-change-in-production-min-32-chars
+    access-token-expiration: 15m
+    refresh-token-expiration: 30d
