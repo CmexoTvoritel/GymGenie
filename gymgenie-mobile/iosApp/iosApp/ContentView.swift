@@ -1,33 +1,33 @@
 import SwiftUI
-import Shared
 
 struct ContentView: View {
-    @State private var showContent = false
-    var body: some View {
-        VStack {
-            Button("Click me!") {
-                withAnimation {
-                    showContent = !showContent
-                }
-            }
+    @StateObject private var appState = AppState()
+    @StateObject private var authViewModel = AuthViewModel()
 
-            if showContent {
-                VStack(spacing: 16) {
-                    Image(systemName: "swift")
-                        .font(.system(size: 200))
-                        .foregroundColor(.accentColor)
-                    Text("SwiftUI: \(Greeting().greet())")
-                }
-                .transition(.move(edge: .top).combined(with: .opacity))
+    var body: some View {
+        Group {
+            switch appState.currentScreen {
+            case .splash:
+                // Splash resolves immediately in AppState.init
+                Color(red: 0.961, green: 0.969, blue: 0.980)
+                    .edgesIgnoringSafeArea(.all)
+
+            case .onboarding:
+                OnboardingView()
+
+            case .privacy:
+                PrivacyView()
+
+            case .login:
+                LoginView(viewModel: authViewModel)
+
+            case .register:
+                RegisterView(viewModel: authViewModel)
+
+            case .home:
+                HomeView()
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .padding()
-    }
-}
-
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView()
+        .environmentObject(appState)
     }
 }
