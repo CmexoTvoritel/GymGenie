@@ -8,7 +8,6 @@ struct ContentView: View {
         Group {
             switch appState.currentScreen {
             case .splash:
-                // Splash resolves immediately in AppState.init
                 Color(red: 0.961, green: 0.969, blue: 0.980)
                     .edgesIgnoringSafeArea(.all)
 
@@ -24,8 +23,14 @@ struct ContentView: View {
             case .register:
                 RegisterView(viewModel: authViewModel)
 
-            case .home:
-                HomeView()
+            case .paywall:
+                PaywallView()
+
+            case .purchaseSuccess:
+                PurchaseSuccessView()
+
+            case .main:
+                MainView()
             }
         }
         .environmentObject(appState)

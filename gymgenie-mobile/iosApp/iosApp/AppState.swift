@@ -6,7 +6,9 @@ enum AppScreen {
     case privacy
     case login
     case register
-    case home
+    case paywall
+    case purchaseSuccess
+    case main
 }
 
 final class AppState: ObservableObject {
@@ -35,12 +37,23 @@ final class AppState: ObservableObject {
     }
 
     func completeLogin() {
-        navigate(to: .home)
+        navigate(to: .paywall)
+    }
+
+    func completePurchase() {
+        navigate(to: .purchaseSuccess)
+    }
+
+    func completeOnboardingFlow() {
+        navigate(to: .main)
     }
 
     private func resolveInitialScreen() {
         let onboardingDone = UserDefaults.standard.bool(forKey: onboardingCompletedKey)
-        if onboardingDone {
+        let hasToken = UserDefaults.standard.string(forKey: "access_token") != nil
+        if hasToken {
+            currentScreen = .main
+        } else if onboardingDone {
             currentScreen = .login
         } else {
             currentScreen = .onboarding

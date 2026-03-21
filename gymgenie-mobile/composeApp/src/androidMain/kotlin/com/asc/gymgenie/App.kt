@@ -18,22 +18,26 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.asc.gymgenie.feature.auth.AuthViewModel
 import com.asc.gymgenie.feature.auth.LoginScreen
 import com.asc.gymgenie.feature.auth.RegisterScreen
-import com.asc.gymgenie.feature.home.HomeScreen
+import com.asc.gymgenie.feature.main.MainScreen
 import com.asc.gymgenie.feature.onboarding.OnboardingScreen
+import com.asc.gymgenie.feature.paywall.PaywallScreen
+import com.asc.gymgenie.feature.paywall.PurchaseSuccessScreen
 import com.asc.gymgenie.feature.privacy.PrivacyScreen
 import com.asc.gymgenie.ui.theme.GymGenieTheme
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "gymgenie_prefs")
+val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "gymgenie_prefs")
 
 private val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
+val ACCESS_TOKEN_KEY = stringPreferencesKey("access_token")
 
 sealed class Screen {
     data object Splash : Screen()
@@ -41,7 +45,9 @@ sealed class Screen {
     data object Privacy : Screen()
     data object Login : Screen()
     data object Register : Screen()
-    data object Home : Screen()
+    data object Paywall : Screen()
+    data object PurchaseSuccess : Screen()
+    data object Main : Screen()
 }
 
 @Composable
@@ -58,10 +64,14 @@ fun App() {
                 .map { prefs -> prefs[ONBOARDING_COMPLETED] ?: false }
                 .first()
 
-            currentScreen = if (onboardingCompleted) {
-                Screen.Login
-            } else {
-                Screen.Onboarding
+            val hasToken = context.dataStore.data
+                .map { prefs -> prefs[ACCESS_TOKEN_KEY] != null }
+                .first()
+
+            currentScreen = when {
+                hasToken -> Screen.Main
+                onboardingCompleted -> Screen.Login
+                else -> Screen.Onboarding
             }
         }
 
@@ -100,7 +110,7 @@ fun App() {
                 LoginScreen(
                     viewModel = authViewModel,
                     onLoginSuccess = {
-                        currentScreen = Screen.Home
+                        currentScreen = Screen.Paywall
                     },
                     onNavigateToRegister = {
                         authViewModel.resetState()
@@ -113,7 +123,7 @@ fun App() {
                 RegisterScreen(
                     viewModel = authViewModel,
                     onRegisterSuccess = {
-                        currentScreen = Screen.Home
+                        currentScreen = Screen.Paywall
                     },
                     onNavigateToLogin = {
                         authViewModel.resetState()
@@ -122,8 +132,27 @@ fun App() {
                 )
             }
 
-            Screen.Home -> {
-                HomeScreen()
+            Screen.Paywall -> {
+                PaywallScreen(
+                    onPurchaseSuccess = {
+                        currentScreen = Screen.PurchaseSuccess
+                    },
+                    onSkip = {
+                        currentScreen = Screen.Main
+                    },
+                )
+            }
+
+            Screen.PurchaseSuccess -> {
+                PurchaseSuccessScreen(
+                    onContinue = {
+                        currentScreen = Screen.Main
+                    },
+                )
+            }
+
+            Screen.Main -> {
+                MainScreen()
             }
         }
     }

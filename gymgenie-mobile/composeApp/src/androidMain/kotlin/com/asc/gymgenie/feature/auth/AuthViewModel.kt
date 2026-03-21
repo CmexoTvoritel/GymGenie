@@ -1,10 +1,15 @@
 package com.asc.gymgenie.feature.auth
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.datastore.preferences.core.edit
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.asc.gymgenie.ACCESS_TOKEN_KEY
 import com.asc.gymgenie.auth.AuthApi
 import com.asc.gymgenie.auth.AuthException
 import com.asc.gymgenie.auth.NetworkException
+import com.asc.gymgenie.auth.TokenResponse
+import com.asc.gymgenie.dataStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,7 +25,7 @@ data class AuthUiState(
     val isSuccess: Boolean = false,
 )
 
-class AuthViewModel : ViewModel() {
+class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     private val authApi = AuthApi(baseUrl = "http://10.0.2.2:8081/api/v1")
 
@@ -61,7 +66,8 @@ class AuthViewModel : ViewModel() {
                 password = state.password,
             )
             result.fold(
-                onSuccess = {
+                onSuccess = { tokenResponse ->
+                    saveAccessToken(tokenResponse)
                     _uiState.update { it.copy(isLoading = false, isSuccess = true) }
                 },
                 onFailure = { error ->
@@ -95,7 +101,8 @@ class AuthViewModel : ViewModel() {
                 password = state.password,
             )
             result.fold(
-                onSuccess = {
+                onSuccess = { tokenResponse ->
+                    saveAccessToken(tokenResponse)
                     _uiState.update { it.copy(isLoading = false, isSuccess = true) }
                 },
                 onFailure = { error ->
@@ -111,6 +118,12 @@ class AuthViewModel : ViewModel() {
                     _uiState.update { it.copy(isLoading = false, errorMessage = message) }
                 },
             )
+        }
+    }
+
+    private suspend fun saveAccessToken(tokenResponse: TokenResponse) {
+        getApplication<Application>().dataStore.edit { prefs ->
+            prefs[ACCESS_TOKEN_KEY] = tokenResponse.accessToken
         }
     }
 }
