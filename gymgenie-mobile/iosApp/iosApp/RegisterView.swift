@@ -2,7 +2,11 @@ import SwiftUI
 
 struct RegisterView: View {
     @EnvironmentObject var appState: AppState
-    @ObservedObject var viewModel: AuthViewModel
+    @ObservedObject var viewModel: AuthViewModelWrapper
+
+    @State private var usernameField: String = ""
+    @State private var emailField: String = ""
+    @State private var passwordField: String = ""
 
     private let accentColor = Color(red: 0.173, green: 0.757, blue: 0.890)
     private let backgroundColor = Color(red: 0.961, green: 0.969, blue: 0.980)
@@ -62,35 +66,42 @@ struct RegisterView: View {
                         // Name field
                         GymGenieTextField(
                             placeholder: "Имя",
-                            text: $viewModel.username,
+                            text: $usernameField,
                             icon: "person"
                         )
+                        .onChange(of: usernameField) { newValue in
+                            viewModel.onUsernameChanged(newValue)
+                        }
 
                         // Email field
                         GymGenieTextField(
                             placeholder: "Email",
-                            text: $viewModel.email,
+                            text: $emailField,
                             icon: "envelope"
                         )
                         .textContentType(.emailAddress)
                         .keyboardType(.emailAddress)
+                        .onChange(of: emailField) { newValue in
+                            viewModel.onEmailChanged(newValue)
+                        }
 
                         // Password field
                         GymGenieTextField(
                             placeholder: "Пароль",
-                            text: $viewModel.password,
+                            text: $passwordField,
                             icon: "lock",
                             isSecure: true
                         )
+                        .onChange(of: passwordField) { newValue in
+                            viewModel.onPasswordChanged(newValue)
+                        }
 
                         // Register button
                         GymGenieButton(
                             title: "Зарегистрироваться",
                             isLoading: viewModel.isLoading
                         ) {
-                            viewModel.register {
-                                appState.completeLogin()
-                            }
+                            viewModel.register()
                         }
 
                         // Divider with text
@@ -123,6 +134,9 @@ struct RegisterView: View {
                                 .foregroundColor(.gray)
                             Button(action: {
                                 viewModel.clearFields()
+                                usernameField = ""
+                                emailField = ""
+                                passwordField = ""
                                 appState.navigate(to: .login)
                             }) {
                                 Text("Войти")
@@ -143,5 +157,11 @@ struct RegisterView: View {
         }
         .background(backgroundColor)
         .edgesIgnoringSafeArea(.all)
+        .onChange(of: viewModel.registerSuccess) { success in
+            if success {
+                viewModel.consumeRegisterSuccess()
+                appState.completeLogin()
+            }
+        }
     }
 }

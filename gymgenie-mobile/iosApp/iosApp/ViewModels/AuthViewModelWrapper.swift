@@ -1,0 +1,82 @@
+import SwiftUI
+import Shared
+
+@MainActor
+final class AuthViewModelWrapper: ObservableObject {
+    private let vm: Shared.AuthViewModel
+
+    @Published private(set) var email: String = ""
+    @Published private(set) var password: String = ""
+    @Published private(set) var username: String = ""
+    @Published private(set) var isLoading: Bool = false
+    @Published private(set) var errorMessage: String? = nil
+    @Published private(set) var loginSuccess: Bool = false
+    @Published private(set) var registerSuccess: Bool = false
+
+    private var observationTask: Task<Void, Never>?
+
+    init() {
+        let tokenStorage = TokenStorageKt.createTokenStorage()
+        self.vm = Shared.AuthViewModel(authApi: AuthApi(), tokenStorage: tokenStorage)
+        startObserving()
+    }
+
+    private func startObserving() {
+        observationTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self = self else { break }
+                guard let state = self.vm.state.value as? AuthUiState else { continue }
+                self.email = state.email
+                self.password = state.password
+                self.username = state.username
+                self.isLoading = state.isLoading
+                self.errorMessage = state.errorMessage
+                self.loginSuccess = state.loginSuccess
+                self.registerSuccess = state.registerSuccess
+
+                try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+            }
+        }
+    }
+
+    func onEmailChanged(_ email: String) {
+        vm.onEmailChanged(email: email)
+    }
+
+    func onPasswordChanged(_ password: String) {
+        vm.onPasswordChanged(password: password)
+    }
+
+    func onUsernameChanged(_ username: String) {
+        vm.onUsernameChanged(username: username)
+    }
+
+    func login() {
+        vm.login()
+    }
+
+    func register() {
+        vm.register()
+    }
+
+    func consumeLoginSuccess() {
+        vm.consumeLoginSuccess()
+    }
+
+    func consumeRegisterSuccess() {
+        vm.consumeRegisterSuccess()
+    }
+
+    func clearFields() {
+        vm.resetState()
+    }
+
+    func resetState() {
+        vm.resetState()
+    }
+
+    deinit {
+        observationTask?.cancel()
+        vm.onCleared()
+    }
+}

@@ -1,4 +1,5 @@
 import SwiftUI
+import Shared
 
 enum AppScreen {
     case splash
@@ -15,8 +16,10 @@ final class AppState: ObservableObject {
     @Published var currentScreen: AppScreen = .splash
 
     private let onboardingCompletedKey = "onboarding_completed"
+    private let tokenStorage: TokenStorage
 
     init() {
+        self.tokenStorage = TokenStorageKt.createTokenStorage()
         resolveInitialScreen()
     }
 

@@ -1,22 +1,29 @@
 server:
   port: 8081
+  forward-headers-strategy: framework
 
 spring:
   datasource:
-    url: jdbc:postgresql://127.0.0.1:5432/myappdb
-    username: myappuser
-    password: myapppassword
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
 
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
+    show-sql: false
     properties:
       hibernate:
-        format_sql: true
+        format_sql: false
+
+logging:
+  level:
+    com.asc.gymgenie: DEBUG
+    org.hibernate.SQL: WARN
+    org.springframework.web: INFO
 
 app:
   jwt:
-    secret: gymgenie-super-secret-jwt-key-change-in-production-min-32-chars
+    secret: ${JWT_SECRET}
     access-token-expiration: 15m
     refresh-token-expiration: 30d

@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.sp
 import com.asc.gymgenie.feature.home.HomeScreen
 import com.asc.gymgenie.feature.workouts.WorkoutsScreen
 import com.asc.gymgenie.ui.theme.OnBackground
+import com.asc.gymgenie.storage.TokenStorage
 import com.asc.gymgenie.ui.theme.OnSurfaceVariant
 import com.asc.gymgenie.ui.theme.Primary
 
@@ -58,7 +59,7 @@ enum class MainTab(
 }
 
 @Composable
-fun MainScreen() {
+fun MainScreen(tokenStorage: TokenStorage) {
     var selectedTab by remember { mutableStateOf(MainTab.HOME) }
 
     Box(
@@ -71,8 +72,8 @@ fun MainScreen() {
                 .padding(bottom = 80.dp),
         ) {
             when (selectedTab) {
-                MainTab.HOME -> HomeScreen()
-                MainTab.WORKOUTS -> WorkoutsScreen()
+                MainTab.HOME -> HomeScreen(tokenStorage = tokenStorage)
+                MainTab.WORKOUTS -> WorkoutsScreen(tokenStorage = tokenStorage)
                 MainTab.AI_COACH -> PlaceholderScreen("ИИ Тренер", "Скоро будет доступен")
                 MainTab.STATS -> PlaceholderScreen("Статистика", "Скоро будет доступна")
                 MainTab.PROFILE -> PlaceholderScreen("Профиль", "Скоро будет доступен")

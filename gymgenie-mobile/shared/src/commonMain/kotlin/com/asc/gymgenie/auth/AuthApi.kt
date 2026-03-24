@@ -1,5 +1,6 @@
 package com.asc.gymgenie.auth
 
+import com.asc.gymgenie.config.AppConfig
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -13,7 +14,7 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
 class AuthApi(
-    private val baseUrl: String,
+    private val baseUrl: String = AppConfig.BASE_URL,
 ) {
     private val client = HttpClient {
         install(ContentNegotiation) {
@@ -26,7 +27,7 @@ class AuthApi(
 
     suspend fun login(email: String, password: String): Result<TokenResponse> {
         return try {
-            val response = client.post("$baseUrl/auth/login") {
+            val response = client.post("$baseUrl/api/v1/auth/login") {
                 contentType(ContentType.Application.Json)
                 setBody(LoginRequest(email = email, password = password))
             }
@@ -43,7 +44,7 @@ class AuthApi(
 
     suspend fun register(username: String, email: String, password: String): Result<TokenResponse> {
         return try {
-            val response = client.post("$baseUrl/auth/register") {
+            val response = client.post("$baseUrl/api/v1/auth/register") {
                 contentType(ContentType.Application.Json)
                 setBody(RegisterRequest(username = username, email = email, password = password))
             }

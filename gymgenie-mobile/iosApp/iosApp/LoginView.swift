@@ -2,7 +2,10 @@ import SwiftUI
 
 struct LoginView: View {
     @EnvironmentObject var appState: AppState
-    @ObservedObject var viewModel: AuthViewModel
+    @ObservedObject var viewModel: AuthViewModelWrapper
+
+    @State private var emailField: String = ""
+    @State private var passwordField: String = ""
 
     private let accentColor = Color(red: 0.173, green: 0.757, blue: 0.890)
     private let backgroundColor = Color(red: 0.961, green: 0.969, blue: 0.980)
@@ -62,28 +65,32 @@ struct LoginView: View {
                         // Email field
                         GymGenieTextField(
                             placeholder: "Email",
-                            text: $viewModel.email,
+                            text: $emailField,
                             icon: "envelope"
                         )
                         .textContentType(.emailAddress)
                         .keyboardType(.emailAddress)
+                        .onChange(of: emailField) { newValue in
+                            viewModel.onEmailChanged(newValue)
+                        }
 
                         // Password field
                         GymGenieTextField(
                             placeholder: "Пароль",
-                            text: $viewModel.password,
+                            text: $passwordField,
                             icon: "lock",
                             isSecure: true
                         )
+                        .onChange(of: passwordField) { newValue in
+                            viewModel.onPasswordChanged(newValue)
+                        }
 
                         // Login button
                         GymGenieButton(
                             title: "Войти",
                             isLoading: viewModel.isLoading
                         ) {
-                            viewModel.login {
-                                appState.completeLogin()
-                            }
+                            viewModel.login()
                         }
 
                         // Divider with text
@@ -116,6 +123,8 @@ struct LoginView: View {
                                 .foregroundColor(.gray)
                             Button(action: {
                                 viewModel.clearFields()
+                                emailField = ""
+                                passwordField = ""
                                 appState.navigate(to: .register)
                             }) {
                                 Text("Зарегистрируйтесь")
@@ -136,6 +145,12 @@ struct LoginView: View {
         }
         .background(backgroundColor)
         .edgesIgnoringSafeArea(.all)
+        .onChange(of: viewModel.loginSuccess) { success in
+            if success {
+                viewModel.consumeLoginSuccess()
+                appState.completeLogin()
+            }
+        }
     }
 }
 

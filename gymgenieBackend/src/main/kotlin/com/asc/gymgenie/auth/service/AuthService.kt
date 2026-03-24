@@ -9,6 +9,7 @@ import com.asc.gymgenie.common.exception.UnauthorizedException
 import com.asc.gymgenie.common.security.JwtProvider
 import com.asc.gymgenie.user.entity.UserEntity
 import com.asc.gymgenie.user.repository.UserRepository
+import org.slf4j.LoggerFactory
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -24,12 +25,18 @@ class AuthService(
     private val passwordEncoder: PasswordEncoder
 ) {
 
+    private val log = LoggerFactory.getLogger(AuthService::class.java)
+
     @Transactional
     fun register(request: RegisterRequest): TokenResponse {
+        log.info("Registration attempt for email={}, username={}", request.email, request.username)
+
         if (userRepository.existsByUsername(request.username)) {
+            log.info("Registration rejected: username '{}' already taken", request.username)
             throw ConflictException("Username already taken")
         }
         if (userRepository.existsByEmail(request.email)) {
+            log.info("Registration rejected: email '{}' already registered", request.email)
             throw ConflictException("Email already registered")
         }
 
@@ -41,18 +48,26 @@ class AuthService(
             )
         )
 
+        log.info("User registered successfully: id={}, email={}", user.id, user.email)
         return generateTokenResponse(user)
     }
 
     @Transactional
     fun login(request: LoginRequest): TokenResponse {
+        log.info("Login attempt for email={}", request.email)
+
         val user = userRepository.findByEmail(request.email)
-            ?: throw UnauthorizedException("Invalid email or password")
+            ?: run {
+                log.info("Login failed: no user found for email={}", request.email)
+                throw UnauthorizedException("Invalid email or password")
+            }
 
         if (!passwordEncoder.matches(request.password, user.passwordHash)) {
+            log.info("Login failed: incorrect password for email={}", request.email)
             throw UnauthorizedException("Invalid email or password")
         }
 
+        log.info("Login successful for user id={}", user.id)
         return generateTokenResponse(user)
     }
 

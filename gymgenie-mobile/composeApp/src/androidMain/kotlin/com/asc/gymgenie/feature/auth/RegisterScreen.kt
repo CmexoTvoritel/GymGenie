@@ -34,6 +34,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import com.asc.gymgenie.presentation.AuthViewModel
 import com.asc.gymgenie.ui.components.GymGenieButton
 import com.asc.gymgenie.ui.components.GymGenieTextField
 import com.asc.gymgenie.ui.theme.IllustrationBackground
@@ -44,10 +45,11 @@ fun RegisterScreen(
     onRegisterSuccess: () -> Unit,
     onNavigateToLogin: () -> Unit,
 ) {
-    val state by viewModel.uiState.collectAsState()
+    val state by viewModel.state.collectAsState()
 
-    LaunchedEffect(state.isSuccess) {
-        if (state.isSuccess) {
+    LaunchedEffect(state.registerSuccess) {
+        if (state.registerSuccess) {
+            viewModel.consumeRegisterSuccess()
             onRegisterSuccess()
         }
     }

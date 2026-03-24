@@ -1,6 +1,7 @@
 package com.asc.gymgenie.workout
 
 import com.asc.gymgenie.auth.NetworkException
+import com.asc.gymgenie.config.AppConfig
 import com.asc.gymgenie.common.ApiException
 import com.asc.gymgenie.common.PagedResponse
 import io.ktor.client.HttpClient
@@ -16,7 +17,7 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
 class WorkoutApi(
-    private val baseUrl: String,
+    private val baseUrl: String = AppConfig.BASE_URL,
 ) {
     private val client = HttpClient {
         install(ContentNegotiation) {
@@ -29,7 +30,7 @@ class WorkoutApi(
 
     suspend fun getActivePlans(accessToken: String): Result<List<WorkoutPlanShortResponse>> {
         return try {
-            val response = client.get("$baseUrl/workout-plans/active") {
+            val response = client.get("$baseUrl/api/v1/workout-plans/active") {
                 header(HttpHeaders.Authorization, "Bearer $accessToken")
             }
             if (response.status.isSuccess()) {
@@ -49,7 +50,7 @@ class WorkoutApi(
         size: Int = 20,
     ): Result<PagedResponse<WorkoutPlanShortResponse>> {
         return try {
-            val response = client.get("$baseUrl/workout-plans") {
+            val response = client.get("$baseUrl/api/v1/workout-plans") {
                 header(HttpHeaders.Authorization, "Bearer $accessToken")
                 parameter("page", page)
                 parameter("size", size)

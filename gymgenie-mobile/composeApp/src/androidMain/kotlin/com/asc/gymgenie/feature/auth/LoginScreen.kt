@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.asc.gymgenie.presentation.AuthViewModel
 import com.asc.gymgenie.ui.components.GymGenieButton
 import com.asc.gymgenie.ui.components.GymGenieTextField
 import com.asc.gymgenie.ui.theme.IllustrationBackground
@@ -48,10 +49,11 @@ fun LoginScreen(
     onLoginSuccess: () -> Unit,
     onNavigateToRegister: () -> Unit,
 ) {
-    val state by viewModel.uiState.collectAsState()
+    val state by viewModel.state.collectAsState()
 
-    LaunchedEffect(state.isSuccess) {
-        if (state.isSuccess) {
+    LaunchedEffect(state.loginSuccess) {
+        if (state.loginSuccess) {
+            viewModel.consumeLoginSuccess()
             onLoginSuccess()
         }
     }

@@ -1,6 +1,7 @@
 package com.asc.gymgenie.user
 
 import com.asc.gymgenie.auth.NetworkException
+import com.asc.gymgenie.config.AppConfig
 import com.asc.gymgenie.common.ApiException
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -14,7 +15,7 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
 class UserApi(
-    private val baseUrl: String,
+    private val baseUrl: String = AppConfig.BASE_URL,
 ) {
     private val client = HttpClient {
         install(ContentNegotiation) {
@@ -27,7 +28,7 @@ class UserApi(
 
     suspend fun getProfile(accessToken: String): Result<UserProfileResponse> {
         return try {
-            val response = client.get("$baseUrl/users/me") {
+            val response = client.get("$baseUrl/api/v1/users/me") {
                 header(HttpHeaders.Authorization, "Bearer $accessToken")
             }
             if (response.status.isSuccess()) {
