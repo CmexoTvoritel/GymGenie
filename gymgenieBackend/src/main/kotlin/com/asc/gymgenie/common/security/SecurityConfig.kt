@@ -2,6 +2,7 @@ package com.asc.gymgenie.common.security
 
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import jakarta.servlet.http.HttpServletResponse
 import org.springframework.http.HttpMethod
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
@@ -22,6 +23,13 @@ class SecurityConfig(
         return http
             .csrf { it.disable() }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
+            .exceptionHandling {
+                it.authenticationEntryPoint { _, response, _ ->
+                    response.status = HttpServletResponse.SC_UNAUTHORIZED
+                    response.contentType = "application/json"
+                    response.writer.write("""{"status":401,"error":"Unauthorized"}""")
+                }
+            }
             .authorizeHttpRequests {
                 it.requestMatchers(
                     HttpMethod.POST,

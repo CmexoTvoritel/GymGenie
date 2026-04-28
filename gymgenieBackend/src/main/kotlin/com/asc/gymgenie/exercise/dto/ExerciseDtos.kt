@@ -3,6 +3,9 @@ package com.asc.gymgenie.exercise.dto
 import com.asc.gymgenie.exercise.entity.DifficultyLevel
 import com.asc.gymgenie.exercise.entity.ExerciseCategory
 import com.asc.gymgenie.exercise.entity.MuscleGroup
+import jakarta.validation.constraints.DecimalMax
+import jakarta.validation.constraints.DecimalMin
+import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
 import java.util.*
@@ -13,6 +16,7 @@ data class ExerciseResponse(
     val nameEn: String,
     val description: String?,
     val muscleGroup: MuscleGroup,
+    val secondaryMuscleGroups: List<MuscleGroup>,
     val category: ExerciseCategory,
     val difficultyLevel: DifficultyLevel,
     val durationMinutes: Int?,
@@ -21,7 +25,11 @@ data class ExerciseResponse(
     val imageUrl: String?,
     val videoUrl: String?,
     val instructions: List<String>,
-    val equipment: List<String>
+    val equipment: List<String>,
+    val techniqueTip: String?,
+    val defaultRepsMin: Int?,
+    val defaultRepsMax: Int?,
+    val defaultWeightPercentage: Double?
 )
 
 data class ExerciseShortResponse(
@@ -50,6 +58,7 @@ data class CreateExerciseRequest(
     val description: String? = null,
 
     val muscleGroup: MuscleGroup,
+    val secondaryMuscleGroups: List<MuscleGroup> = emptyList(),
     val category: ExerciseCategory,
     val difficultyLevel: DifficultyLevel,
     val durationMinutes: Int? = null,
@@ -58,7 +67,20 @@ data class CreateExerciseRequest(
     val imageUrl: String? = null,
     val videoUrl: String? = null,
     val instructions: List<String> = emptyList(),
-    val equipment: List<String> = emptyList()
+    val equipment: List<String> = emptyList(),
+
+    @field:Size(max = 500)
+    val techniqueTip: String? = null,
+
+    @field:Min(1)
+    val defaultRepsMin: Int? = null,
+
+    @field:Min(1)
+    val defaultRepsMax: Int? = null,
+
+    @field:DecimalMin("0.0")
+    @field:DecimalMax("100.0")
+    val defaultWeightPercentage: Double? = null
 )
 
 data class UpdateExerciseRequest(
@@ -72,6 +94,7 @@ data class UpdateExerciseRequest(
     val description: String? = null,
 
     val muscleGroup: MuscleGroup? = null,
+    val secondaryMuscleGroups: List<MuscleGroup>? = null,
     val category: ExerciseCategory? = null,
     val difficultyLevel: DifficultyLevel? = null,
     val durationMinutes: Int? = null,
@@ -80,7 +103,20 @@ data class UpdateExerciseRequest(
     val imageUrl: String? = null,
     val videoUrl: String? = null,
     val instructions: List<String>? = null,
-    val equipment: List<String>? = null
+    val equipment: List<String>? = null,
+
+    @field:Size(max = 500)
+    val techniqueTip: String? = null,
+
+    @field:Min(1)
+    val defaultRepsMin: Int? = null,
+
+    @field:Min(1)
+    val defaultRepsMax: Int? = null,
+
+    @field:DecimalMin("0.0")
+    @field:DecimalMax("100.0")
+    val defaultWeightPercentage: Double? = null
 )
 
 data class PagedResponse<T>(
@@ -90,4 +126,11 @@ data class PagedResponse<T>(
     val totalElements: Long,
     val totalPages: Int,
     val last: Boolean
+)
+
+data class MuscleGroupInfo(
+    val key: String,
+    val nameRu: String,
+    val nameEn: String,
+    val imageUrl: String?
 )

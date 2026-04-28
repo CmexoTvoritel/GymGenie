@@ -12,15 +12,26 @@ final class HomeViewModelWrapper: ObservableObject {
     @Published private(set) var streakDays: Int32 = 0
     @Published private(set) var activeWorkoutPlans: [WorkoutPlanShortResponse] = []
     @Published private(set) var userProfile: UserProfileResponse? = nil
+    @Published private(set) var isLoggedOut: Bool = false
 
     private var observationTask: Task<Void, Never>?
 
     init() {
         let tokenStorage = TokenStorageKt.createTokenStorage()
+        let authApi = AuthApi()
+        let client = AuthenticatedHttpClientKt.createAuthenticatedClient(
+            tokenStorage: tokenStorage,
+            authApi: authApi
+        )
         self.vm = Shared.HomeViewModel(
-            userApi: UserApi(),
-            workoutApi: WorkoutApi(),
-            tokenStorage: tokenStorage
+            userApi: UserApi(client: client),
+            workoutApi: WorkoutApi(client: client),
+            tokenStorage: tokenStorage,
+            onLogout: { [weak self] in
+                Task { @MainActor in
+                    self?.isLoggedOut = true
+                }
+            }
         )
         startObserving()
     }

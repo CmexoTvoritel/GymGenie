@@ -3,80 +3,80 @@ import Shared
 
 struct FeaturedWorkoutCard: View {
     let plan: WorkoutPlanShortResponse
+    var onStart: () -> Void = {}
 
-    private let accentColor = Color(red: 0.173, green: 0.757, blue: 0.890)
+    private let orange = Color(red: 0.941, green: 0.439, blue: 0.188)
+    private let deepInk = Color(red: 0.161, green: 0.141, blue: 0.125)
+    private let softCard = Color(red: 0.953, green: 0.949, blue: 0.937)
+    private let mutedText = Color(red: 0.463, green: 0.447, blue: 0.416)
+
+    private var isAI: Bool {
+        plan.createdBy.uppercased() == "AI"
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Today plan")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Capsule().fill(Color.white.opacity(0.3)))
-
-                Spacer()
-
-                Text("09:00")
-                    .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.8))
-            }
-
-            Text(plan.name)
-                .font(.system(size: 20, weight: .bold))
-                .foregroundColor(.white)
-
-            if let description = plan.description_ {
-                Text(description)
-                    .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.8))
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                Text(plan.name)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(deepInk)
                     .lineLimit(2)
-            }
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-            HStack {
-                Text("\(plan.daysCount) дн.")
-                    .font(.system(size: 12))
-                    .foregroundColor(.white.opacity(0.7))
-
-                Spacer()
-            }
-
-            HStack(spacing: 12) {
-                Button(action: {}) {
-                    Text("Детали")
-                        .font(.system(size: 13, weight: .semibold))
+                if isAI {
+                    Text("+ AI")
+                        .font(.system(size: 11, weight: .bold))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 8)
-                        .background(
-                            Capsule().stroke(.white, lineWidth: 1.5)
-                        )
-                }
-
-                Button(action: {}) {
-                    Text("Начать")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(accentColor)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 8)
-                        .background(
-                            Capsule().fill(.white)
-                        )
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(orange))
                 }
             }
+
+            HStack(spacing: 8) {
+                tagChip(text: "\(plan.daysCount) дней/нед.")
+                if let desc = plan.description_, !desc.trimmingCharacters(in: .whitespaces).isEmpty {
+                    tagChip(text: String(desc.prefix(25)))
+                }
+            }
+
+            if plan.isActive {
+                HStack(spacing: 6) {
+                    Circle().fill(orange).frame(width: 8, height: 8)
+                    Text("АКТИВНЫЙ ПЛАН")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(orange)
+                        .kerning(0.5)
+                }
+            }
+
+            Button(action: onStart) {
+                Text("Начать тренировку")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(orange))
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 4)
         }
-        .padding(20)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
+        .background(RoundedRectangle(cornerRadius: 20).fill(.white))
+        .overlay(
             RoundedRectangle(cornerRadius: 20)
-                .fill(
-                    LinearGradient(
-                        gradient: Gradient(colors: [accentColor, accentColor.opacity(0.7)]),
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                .stroke(plan.isActive ? orange : Color.clear, lineWidth: 2)
         )
+        .shadow(color: Color.black.opacity(0.06), radius: 6, y: 2)
+    }
+
+    private func tagChip(text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11))
+            .foregroundColor(mutedText)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(softCard))
     }
 }

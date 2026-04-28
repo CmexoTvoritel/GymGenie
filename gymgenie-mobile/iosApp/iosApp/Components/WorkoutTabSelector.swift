@@ -5,37 +5,33 @@ struct WorkoutTabSelector: View {
     let selectedTab: Shared.WorkoutsTab
     let onTabSelected: (Shared.WorkoutsTab) -> Void
 
-    private let accentColor = Color(red: 0.173, green: 0.757, blue: 0.890)
+    private let deepInk = Color(red: 0.161, green: 0.141, blue: 0.125)
+    private let mutedText = Color(red: 0.463, green: 0.447, blue: 0.416)
+    private let pillBg = Color(red: 0.929, green: 0.925, blue: 0.918) // #EDECEA
 
     var body: some View {
-        HStack(spacing: 0) {
-            tabButton(title: "Тренировки", tab: .workouts)
-            tabButton(title: "Упражнения", tab: .exercises)
+        HStack(spacing: 3) {
+            tabButton(title: "Мои планы", tab: .workouts)
+            tabButton(title: "Каталог", tab: .exercises)
         }
-        .padding(4)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.gray.opacity(0.1))
-        )
+        .padding(3)
+        .background(Capsule().fill(pillBg))
         .padding(.horizontal, 20)
         .padding(.vertical, 8)
     }
 
     private func tabButton(title: String, tab: Shared.WorkoutsTab) -> some View {
-        Button(action: {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                onTabSelected(tab)
-            }
+        let selected = selectedTab == tab
+        return Button(action: {
+            withAnimation(.easeInOut(duration: 0.2)) { onTabSelected(tab) }
         }) {
             Text(title)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(selectedTab == tab ? .white : .gray)
+                .foregroundColor(selected ? .white : mutedText)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(selectedTab == tab ? accentColor : Color.clear)
-                )
+                .background(Capsule().fill(selected ? deepInk : Color.clear))
         }
+        .buttonStyle(.plain)
     }
 }

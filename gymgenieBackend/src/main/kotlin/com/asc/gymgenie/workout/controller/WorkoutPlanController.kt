@@ -50,6 +50,16 @@ class WorkoutPlanController(
         return ResponseEntity.status(HttpStatus.CREATED).body(workoutPlanService.create(userId, request))
     }
 
+    @PostMapping("/simple")
+    fun createSimplePlan(
+        authentication: Authentication,
+        @Valid @RequestBody request: CreateSimpleWorkoutRequest
+    ): ResponseEntity<WorkoutPlanResponse> {
+        val userId = UUID.fromString(authentication.name)
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(workoutPlanService.createSimpleWorkout(userId, request))
+    }
+
     @PutMapping("/{id}")
     fun update(
         authentication: Authentication,

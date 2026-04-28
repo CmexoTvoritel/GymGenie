@@ -2,13 +2,20 @@ import SwiftUI
 import Shared
 
 struct WorkoutsView: View {
+    @EnvironmentObject private var appState: AppState
     @StateObject private var viewModel = WorkoutsViewModelWrapper()
 
     @State private var localSearchQuery: String = ""
+    @State private var selectedExerciseId: String? = nil
+    @State private var showCreateWorkout: Bool = false
+    @State private var activeWorkoutSession: ActiveWorkoutSession? = nil
+    @State private var showWorkoutSession: Bool = false
 
-    private let accentColor = Color(red: 0.173, green: 0.757, blue: 0.890)
-    private let backgroundColor = Color(red: 0.961, green: 0.969, blue: 0.980)
-    private let darkColor = Color(red: 0.102, green: 0.102, blue: 0.180)
+    private let orange = Color(red: 0.941, green: 0.439, blue: 0.188)
+    private let deepInk = Color(red: 0.161, green: 0.141, blue: 0.125)
+    private let warmOffWhite = Color(red: 0.980, green: 0.976, blue: 0.969)
+    private let softCard = Color(red: 0.953, green: 0.949, blue: 0.937)
+    private let mutedText = Color(red: 0.463, green: 0.447, blue: 0.416)
 
     private let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -16,6 +23,58 @@ struct WorkoutsView: View {
     ]
 
     var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            warmOffWhite.edgesIgnoringSafeArea(.all)
+
+            mainContent
+
+            fabButton
+        }
+        .fullScreenCover(
+            isPresented: Binding(
+                get: { selectedExerciseId != nil },
+                set: { if !$0 { selectedExerciseId = nil } }
+            )
+        ) {
+            if let id = selectedExerciseId {
+                ExerciseDetailView(
+                    exerciseId: id,
+                    onBack: { selectedExerciseId = nil }
+                )
+            }
+        }
+        .fullScreenCover(isPresented: $showCreateWorkout) {
+            CreateWorkoutFlowView(
+                onDismiss: {
+                    showCreateWorkout = false
+                    viewModel.loadWorkoutPlans()
+                }
+            )
+        }
+        .fullScreenCover(isPresented: $showWorkoutSession) {
+            if let session = activeWorkoutSession {
+                WorkoutSessionView(session: session)
+                    .onDisappear { activeWorkoutSession = nil }
+            }
+        }
+        .onChange(of: viewModel.isLoggedOut) { loggedOut in
+            if loggedOut {
+                appState.navigate(to: .login)
+            }
+        }
+    }
+
+    private func startSession(planId: String, planName: String) {
+        activeWorkoutSession = ActiveWorkoutSession(
+            planId: planId,
+            planName: planName,
+            exercises: [],
+            restSeconds: 60
+        )
+        showWorkoutSession = true
+    }
+
+    private var mainContent: some View {
         VStack(spacing: 0) {
             headerSection
 
@@ -28,10 +87,9 @@ struct WorkoutsView: View {
 
             if viewModel.isLoading && contentIsEmpty {
                 Spacer()
-                ProgressView()
-                    .scaleEffect(1.2)
+                ProgressView().scaleEffect(1.2).tint(orange)
                 Spacer()
-            } else if let error = viewModel.errorMessage, contentIsEmpty {
+            } else if let error = viewModel.errorMessage, contentIsEmpty, !isExpectedEmptyState {
                 Spacer()
                 errorView(message: error)
                 Spacer()
@@ -46,12 +104,11 @@ struct WorkoutsView: View {
                 }
             }
         }
-        .background(backgroundColor)
-        .onAppear {
-            viewModel.loadWorkoutPlans()
-        }
+        .onAppear { viewModel.loadWorkoutPlans() }
         .onChange(of: viewModel.searchQuery) { newValue in
-            localSearchQuery = newValue
+            if localSearchQuery != newValue {
+                localSearchQuery = newValue
+            }
         }
     }
 
@@ -66,31 +123,30 @@ struct WorkoutsView: View {
         }
     }
 
+    /// Distinguishes "successful empty result" from "error while empty".
+    private var isExpectedEmptyState: Bool {
+        switch viewModel.selectedTab {
+        case .workouts:
+            return viewModel.workoutPlansLoaded && viewModel.workoutPlans.isEmpty
+        case .exercises:
+            return viewModel.exercisesLoaded && viewModel.exercises.isEmpty && viewModel.errorMessage == nil
+        @unknown default:
+            return false
+        }
+    }
+
     // MARK: - Header
 
     private var headerSection: some View {
-        HStack {
-            Text("Мои тренировки")
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Тренировки")
                 .font(.system(size: 24, weight: .bold))
-                .foregroundColor(darkColor)
-
-            Spacer()
-
-            Button(action: {}) {
-                HStack(spacing: 4) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 13, weight: .semibold))
-                    Text("Добавить")
-                        .font(.system(size: 13, weight: .semibold))
-                }
-                .foregroundColor(accentColor)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(
-                    Capsule().fill(accentColor.opacity(0.1))
-                )
-            }
+                .foregroundColor(deepInk)
+            Text("Твои планы и каталог упражнений")
+                .font(.system(size: 13))
+                .foregroundColor(mutedText)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)
         .padding(.top, 16)
         .padding(.bottom, 8)
@@ -100,13 +156,10 @@ struct WorkoutsView: View {
 
     private func errorView(message: String) -> some View {
         VStack(spacing: 12) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 36))
-                .foregroundColor(.orange)
-
+            Text("⚠️").font(.system(size: 36))
             Text(message)
                 .font(.system(size: 14))
-                .foregroundColor(.gray)
+                .foregroundColor(mutedText)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
 
@@ -116,8 +169,9 @@ struct WorkoutsView: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 10)
-                    .background(Capsule().fill(accentColor))
+                    .background(Capsule().fill(orange))
             }
+            .buttonStyle(.plain)
         }
     }
 
@@ -126,26 +180,57 @@ struct WorkoutsView: View {
     private var workoutsTab: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 16) {
-                if let featured = viewModel.workoutPlans.first {
-                    FeaturedWorkoutCard(plan: featured)
-                }
+                if viewModel.workoutPlans.isEmpty {
+                    workoutsEmptyState
+                } else {
+                    if let featured = viewModel.workoutPlans.first {
+                        FeaturedWorkoutCard(plan: featured) {
+                            startSession(planId: featured.id, planName: featured.name)
+                        }
+                    }
 
-                let otherPlans = Array(viewModel.workoutPlans.dropFirst())
-                if !otherPlans.isEmpty {
-                    LazyVGrid(columns: columns, spacing: 12) {
-                        ForEach(otherPlans, id: \.id) { plan in
-                            WorkoutCardSmall(plan: plan)
+                    let otherPlans = Array(viewModel.workoutPlans.dropFirst())
+                    if !otherPlans.isEmpty {
+                        LazyVGrid(columns: columns, spacing: 12) {
+                            ForEach(otherPlans, id: \.id) { plan in
+                                WorkoutCardSmall(plan: plan) {
+                                    startSession(planId: plan.id, planName: plan.name)
+                                }
+                            }
                         }
                     }
                 }
 
-                if viewModel.workoutPlans.isEmpty {
-                    emptyStateView(message: "Нет тренировочных планов")
-                }
+                Color.clear.frame(height: 96)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
         }
+    }
+
+    private var workoutsEmptyState: some View {
+        VStack(spacing: 10) {
+            Text("🏋").font(.system(size: 48))
+            Text("Нет тренировочных планов")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(deepInk)
+            Text("Создайте свой первый план тренировок")
+                .font(.system(size: 13))
+                .foregroundColor(mutedText)
+
+            Button(action: {}) {
+                Text("Создать первый план")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
+                    .background(Capsule().fill(orange))
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 8)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
     }
 
     // MARK: - Exercises Tab
@@ -171,46 +256,75 @@ struct WorkoutsView: View {
                 }
             }
 
+            if localSearchQuery.isEmpty {
+                MuscleGroupFilterChips(
+                    selected: viewModel.selectedMuscleGroup,
+                    onSelected: { group in
+                        viewModel.filterByMuscleGroup(group)
+                    }
+                )
+            }
+
             ScrollView(showsIndicators: false) {
-                if viewModel.exercises.isEmpty && !viewModel.isLoading {
-                    emptyStateView(message: "Упражнения не найдены")
+                if viewModel.exercises.isEmpty && !viewModel.isLoading && !viewModel.isLoadingMore {
+                    exercisesEmptyState
                         .padding(.top, 40)
                 } else {
                     LazyVGrid(columns: columns, spacing: 12) {
                         ForEach(viewModel.exercises, id: \.id) { exercise in
-                            ExerciseCard(exercise: exercise)
-                                .onAppear {
-                                    if exercise.id == viewModel.exercises.last?.id {
-                                        viewModel.loadMoreExercises()
-                                    }
+                            ExerciseCard(
+                                exercise: exercise,
+                                onTap: { selectedExerciseId = exercise.id }
+                            )
+                            .onAppear {
+                                if exercise.id == viewModel.exercises.last?.id {
+                                    viewModel.loadMoreExercises()
                                 }
+                            }
                         }
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 12)
 
                     if viewModel.isLoadingMore {
-                        ProgressView()
-                            .padding()
+                        ProgressView().padding()
                     }
+
+                    Color.clear.frame(height: 96)
                 }
             }
         }
     }
 
-    // MARK: - Empty State
-
-    private func emptyStateView(message: String) -> some View {
-        VStack(spacing: 12) {
-            Image(systemName: "tray")
-                .font(.system(size: 36))
-                .foregroundColor(.gray.opacity(0.5))
-
-            Text(message)
-                .font(.system(size: 15))
-                .foregroundColor(.gray)
+    private var exercisesEmptyState: some View {
+        let hasFilter = !localSearchQuery.isEmpty || viewModel.selectedMuscleGroup != nil
+        return VStack(spacing: 8) {
+            Text("📦").font(.system(size: 48))
+            Text(hasFilter ? "Ничего не найдено" : "Каталог пуст")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(deepInk)
+            Text(hasFilter ? "Попробуйте изменить запрос или фильтр" : "Упражнения скоро появятся")
+                .font(.system(size: 13))
+                .foregroundColor(mutedText)
+                .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 40)
+    }
+
+    // MARK: - FAB
+
+    private var fabButton: some View {
+        Button(action: { showCreateWorkout = true }) {
+            Image(systemName: "plus")
+                .font(.system(size: 22, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 56, height: 56)
+                .background(Circle().fill(orange))
+                .shadow(color: orange.opacity(0.4), radius: 8, y: 4)
+        }
+        .buttonStyle(.plain)
+        .padding(.trailing, 20)
+        .padding(.bottom, 20)
     }
 }

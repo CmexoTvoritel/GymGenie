@@ -7,3 +7,7 @@ enum class CreatedBy {
 enum class SessionStatus {
     IN_PROGRESS, COMPLETED, CANCELLED
 }
+
+enum class WorkoutScheduleType {
+    ONE_TIME, RECURRING
+}

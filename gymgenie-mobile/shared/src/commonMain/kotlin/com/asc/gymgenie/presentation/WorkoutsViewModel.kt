@@ -1,5 +1,6 @@
 package com.asc.gymgenie.presentation
 
+import com.asc.gymgenie.common.ApiException
 import com.asc.gymgenie.exercise.ExerciseApi
 import com.asc.gymgenie.exercise.ExerciseShortResponse
 import com.asc.gymgenie.storage.TokenStorage
@@ -25,18 +26,21 @@ data class WorkoutsUiState(
     val isLoading: Boolean = false,
     val isLoadingMore: Boolean = false,
     val workoutPlans: List<WorkoutPlanShortResponse> = emptyList(),
+    val workoutPlansLoaded: Boolean = false,
     val exercises: List<ExerciseShortResponse> = emptyList(),
     val exercisesLoaded: Boolean = false,
     val searchQuery: String = "",
+    val selectedMuscleGroup: String? = null,
     val errorMessage: String? = null,
     val hasMoreExercises: Boolean = true,
     val currentExercisePage: Int = 0,
 )
 
 class WorkoutsViewModel(
-    private val workoutApi: WorkoutApi = WorkoutApi(),
-    private val exerciseApi: ExerciseApi = ExerciseApi(),
+    private val workoutApi: WorkoutApi,
+    private val exerciseApi: ExerciseApi,
     private val tokenStorage: TokenStorage,
+    private val onLogout: () -> Unit = {},
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val _state = MutableStateFlow(WorkoutsUiState())
@@ -47,22 +51,24 @@ class WorkoutsViewModel(
         _state.update { it.copy(isLoading = true, errorMessage = null) }
 
         scope.launch {
-            val token = tokenStorage.getAccessToken()
-            if (token == null) {
-                _state.update {
-                    it.copy(isLoading = false, errorMessage = "Не авторизован")
-                }
-                return@launch
-            }
-
-            val result = workoutApi.getPlans(token, page = 0, size = 20)
+            val result = workoutApi.getPlans(page = 0, size = 20)
             result.fold(
                 onSuccess = { pagedResponse ->
                     _state.update {
-                        it.copy(isLoading = false, workoutPlans = pagedResponse.content)
+                        it.copy(
+                            isLoading = false,
+                            workoutPlans = pagedResponse.content,
+                            workoutPlansLoaded = true,
+                            errorMessage = null,
+                        )
                     }
                 },
                 onFailure = { error ->
+                    if (shouldLogOut(error)) {
+                        tokenStorage.clearTokens()
+                        onLogout()
+                        return@launch
+                    }
                     _state.update {
                         it.copy(
                             isLoading = false,
@@ -75,7 +81,7 @@ class WorkoutsViewModel(
     }
 
     fun selectTab(tab: WorkoutsTab) {
-        _state.update { it.copy(selectedTab = tab) }
+        _state.update { it.copy(selectedTab = tab, errorMessage = null) }
         if (tab == WorkoutsTab.EXERCISES && !_state.value.exercisesLoaded) {
             _state.update { it.copy(exercisesLoaded = true) }
             loadExercises(reset = true)
@@ -84,6 +90,12 @@ class WorkoutsViewModel(
 
     fun onSearchQueryChanged(query: String) {
         _state.update { it.copy(searchQuery = query) }
+    }
+
+    fun filterByMuscleGroup(group: String?) {
+        if (_state.value.selectedMuscleGroup == group) return
+        _state.update { it.copy(selectedMuscleGroup = group) }
+        loadExercises(reset = true)
     }
 
     fun loadExercises(reset: Boolean = false) {
@@ -110,9 +122,17 @@ class WorkoutsViewModel(
             val query = _state.value.searchQuery.trim()
             val page = _state.value.currentExercisePage
             val result = if (query.isEmpty()) {
-                exerciseApi.getExercises(page = page, size = 20)
+                exerciseApi.getExercises(
+                    muscleGroup = _state.value.selectedMuscleGroup,
+                    page = page,
+                    size = 20,
+                )
             } else {
-                exerciseApi.searchExercises(query = query, page = page, size = 20)
+                exerciseApi.searchExercises(
+                    query = query,
+                    page = page,
+                    size = 20,
+                )
             }
 
             result.fold(
@@ -123,12 +143,18 @@ class WorkoutsViewModel(
                             isLoading = false,
                             isLoadingMore = false,
                             exercises = if (page == 0) newItems else it.exercises + newItems,
-                            hasMoreExercises = !pagedResponse.last,
+                            hasMoreExercises = !(pagedResponse.last ?: true),
                             currentExercisePage = page + 1,
+                            errorMessage = null,
                         )
                     }
                 },
                 onFailure = { error ->
+                    if (shouldLogOut(error)) {
+                        tokenStorage.clearTokens()
+                        onLogout()
+                        return@launch
+                    }
                     _state.update {
                         it.copy(
                             isLoading = false,
@@ -150,6 +176,7 @@ class WorkoutsViewModel(
     }
 
     fun retry() {
+        _state.update { it.copy(errorMessage = null) }
         when (_state.value.selectedTab) {
             WorkoutsTab.WORKOUTS -> loadWorkoutPlans()
             WorkoutsTab.EXERCISES -> loadExercises(reset = true)
@@ -158,5 +185,10 @@ class WorkoutsViewModel(
 
     fun onCleared() {
         scope.cancel()
+    }
+
+    private suspend fun shouldLogOut(error: Throwable): Boolean {
+        val is401 = (error as? ApiException)?.statusCode == 401
+        return is401 || tokenStorage.getAccessToken() == null
     }
 }

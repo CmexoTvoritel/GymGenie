@@ -23,6 +23,11 @@ data class UserResponse(
 )
 
 @Serializable
+data class RefreshTokenRequest(
+    val refreshToken: String,
+)
+
+@Serializable
 data class TokenResponse(
     val accessToken: String,
     val refreshToken: String,

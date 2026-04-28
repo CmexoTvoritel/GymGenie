@@ -1,14 +1,13 @@
 package com.asc.gymgenie.feature.workouts.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,77 +21,87 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.asc.gymgenie.exercise.ExerciseShortResponse
-import com.asc.gymgenie.ui.theme.OnBackground
-import com.asc.gymgenie.ui.theme.OnSurfaceVariant
-import com.asc.gymgenie.ui.theme.Primary
+import com.asc.gymgenie.ui.theme.AccentOrange
+import com.asc.gymgenie.ui.theme.DeepInk
+import com.asc.gymgenie.ui.theme.MutedText
+import com.asc.gymgenie.ui.theme.SoftCard
 
 @Composable
-fun ExerciseCard(exercise: ExerciseShortResponse) {
+fun ExerciseCard(
+    exercise: ExerciseShortResponse,
+    onClick: () -> Unit = {},
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(2.dp, RoundedCornerShape(14.dp))
-            .clip(RoundedCornerShape(14.dp))
+            .shadow(2.dp, RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(Color.White)
+            .clickable { onClick() }
             .padding(10.dp),
     ) {
-        // Image placeholder
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(100.dp)
+                .height(110.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(Color.Gray.copy(alpha = 0.15f)),
+                .background(SoftCard),
             contentAlignment = Alignment.Center,
         ) {
-            Text(text = "\uD83C\uDFCB", fontSize = 28.sp)
-
-            if (exercise.muscleGroup.isNotEmpty()) {
-                Text(
-                    text = exercise.muscleGroup,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(8.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(Primary)
-                        .padding(horizontal = 8.dp, vertical = 3.dp),
-                )
-            }
+            Text(
+                text = muscleGroupEmoji(exercise.muscleGroup),
+                fontSize = 36.sp,
+            )
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         Text(
             text = exercise.nameRu,
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
-            color = OnBackground,
+            color = DeepInk,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
+            lineHeight = 17.sp,
         )
 
-        exercise.durationMinutes?.let { duration ->
-            Spacer(modifier = Modifier.height(4.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = "\u23F0", fontSize = 10.sp)
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "$duration мин",
-                    fontSize = 11.sp,
-                    color = OnSurfaceVariant,
-                )
-            }
-        }
-
         if (exercise.difficultyLevel.isNotEmpty()) {
-            Text(
-                text = exercise.difficultyLevel,
-                fontSize = 10.sp,
-                color = OnSurfaceVariant,
-            )
+            Spacer(modifier = Modifier.height(6.dp))
+            DifficultyBadge(level = exercise.difficultyLevel)
         }
     }
+}
+
+@Composable
+private fun DifficultyBadge(level: String) {
+    val (label, color) = when (level.uppercase()) {
+        "BEGINNER" -> "Легко" to Color(0xFF4CAF50)
+        "INTERMEDIATE" -> "Средн." to AccentOrange
+        "ADVANCED" -> "Сложн." to Color(0xFFE53935)
+        else -> level to MutedText
+    }
+    Text(
+        text = label,
+        fontSize = 10.sp,
+        fontWeight = FontWeight.Bold,
+        color = Color.White,
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(color)
+            .padding(horizontal = 9.dp, vertical = 4.dp),
+    )
+}
+
+internal fun muscleGroupEmoji(muscleGroup: String): String = when (muscleGroup.uppercase()) {
+    "CHEST" -> "🤸"
+    "BACK" -> "🏋"
+    "SHOULDERS" -> "💪"
+    "BICEPS", "TRICEPS", "FOREARMS" -> "💪"
+    "ABS" -> "⚡"
+    "QUADRICEPS", "HAMSTRINGS", "CALVES" -> "🏃"
+    "GLUTES" -> "🔥"
+    "CARDIO" -> "❤️"
+    "FULL_BODY" -> "⭐"
+    else -> "🏋"
 }

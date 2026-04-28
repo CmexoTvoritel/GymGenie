@@ -161,7 +161,10 @@ fun App() {
             }
 
             Screen.Main -> {
-                MainScreen(tokenStorage = tokenStorage)
+                MainScreen(
+                    tokenStorage = tokenStorage,
+                    onLogout = { currentScreen = Screen.Login },
+                )
             }
         }
     }

@@ -77,3 +77,36 @@ data class FinishWorkoutSessionRequest(
     @field:Size(max = 1000)
     val notes: String? = null
 )
+
+/**
+ * Offline-first batch submit. The mobile client tracks the workout locally and
+ * pushes the full session (with all sets) in a single request when finished.
+ */
+data class SubmitWorkoutSessionRequest(
+    @field:NotBlank
+    @field:Size(max = 100)
+    val name: String,
+
+    val workoutPlanDayId: UUID? = null,
+
+    val startedAt: Instant,
+
+    val finishedAt: Instant,
+
+    val status: SessionStatus = SessionStatus.COMPLETED,
+
+    @field:Size(max = 1000)
+    val notes: String? = null,
+
+    @field:Valid
+    val sets: List<SubmitSessionSetItem> = emptyList()
+)
+
+data class SubmitSessionSetItem(
+    val exerciseId: UUID,
+    val setNumber: Int,
+    val reps: Int? = null,
+    val weightKg: Double? = null,
+    val completed: Boolean = true,
+    val durationSeconds: Int? = null
+)

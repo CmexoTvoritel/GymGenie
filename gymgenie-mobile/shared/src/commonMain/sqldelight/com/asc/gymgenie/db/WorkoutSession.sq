@@ -1,0 +1,46 @@
+-- Local-only persistence layer for an in-progress workout session.
+--
+-- Sets are written here as the user ticks them off; only when the user
+-- finishes the session do we POST a single submit request to the backend
+-- and clear the rows. This keeps the workout flow resilient to flaky
+-- networks and short app lifecycles.
+
+CREATE TABLE IF NOT EXISTS PendingWorkoutSession (
+    id TEXT NOT NULL PRIMARY KEY,
+    plan_id TEXT,
+    plan_day_id TEXT,
+    name TEXT NOT NULL,
+    started_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS PendingWorkoutSet (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    exercise_id TEXT NOT NULL,
+    set_number INTEGER NOT NULL,
+    reps INTEGER,
+    weight_kg REAL,
+    completed INTEGER NOT NULL DEFAULT 1,
+    duration_seconds INTEGER,
+    FOREIGN KEY (session_id) REFERENCES PendingWorkoutSession(id) ON DELETE CASCADE
+);
+
+insertSession:
+INSERT OR REPLACE INTO PendingWorkoutSession(id, plan_id, plan_day_id, name, started_at)
+VALUES (?, ?, ?, ?, ?);
+
+insertSet:
+INSERT INTO PendingWorkoutSet(session_id, exercise_id, set_number, reps, weight_kg, completed, duration_seconds)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+getSession:
+SELECT * FROM PendingWorkoutSession WHERE id = ?;
+
+getSetsForSession:
+SELECT * FROM PendingWorkoutSet WHERE session_id = ? ORDER BY set_number ASC;
+
+deleteSession:
+DELETE FROM PendingWorkoutSession WHERE id = ?;
+
+deleteSetsBySession:
+DELETE FROM PendingWorkoutSet WHERE session_id = ?;

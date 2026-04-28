@@ -6,26 +6,15 @@ import com.asc.gymgenie.common.ApiException
 import com.asc.gymgenie.common.PagedResponse
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
-import io.ktor.serialization.kotlinx.json.json
-import kotlinx.serialization.json.Json
 
 class ExerciseApi(
+    private val client: HttpClient,
     private val baseUrl: String = AppConfig.BASE_URL,
 ) {
-    private val client = HttpClient {
-        install(ContentNegotiation) {
-            json(Json {
-                ignoreUnknownKeys = true
-                isLenient = true
-            })
-        }
-    }
-
     suspend fun getExercises(
         muscleGroup: String? = null,
         category: String? = null,
@@ -40,10 +29,9 @@ class ExerciseApi(
                 parameter("size", size)
             }
             if (response.status.isSuccess()) {
-                Result.success(response.body<PagedResponse<ExerciseShortResponse>>())
+                Result.success(response.body())
             } else {
-                val errorBody = response.bodyAsText()
-                Result.failure(ApiException(response.status.value, errorBody))
+                Result.failure(ApiException(response.status.value, response.bodyAsText()))
             }
         } catch (e: Exception) {
             Result.failure(NetworkException(e.message ?: "Ошибка сети"))
@@ -62,10 +50,35 @@ class ExerciseApi(
                 parameter("size", size)
             }
             if (response.status.isSuccess()) {
-                Result.success(response.body<PagedResponse<ExerciseShortResponse>>())
+                Result.success(response.body())
             } else {
-                val errorBody = response.bodyAsText()
-                Result.failure(ApiException(response.status.value, errorBody))
+                Result.failure(ApiException(response.status.value, response.bodyAsText()))
+            }
+        } catch (e: Exception) {
+            Result.failure(NetworkException(e.message ?: "Ошибка сети"))
+        }
+    }
+
+    suspend fun getExerciseById(id: String): Result<ExerciseDetailResponse> {
+        return try {
+            val response = client.get("$baseUrl/api/v1/exercises/$id")
+            if (response.status.isSuccess()) {
+                Result.success(response.body())
+            } else {
+                Result.failure(ApiException(response.status.value, response.bodyAsText()))
+            }
+        } catch (e: Exception) {
+            Result.failure(NetworkException(e.message ?: "Ошибка сети"))
+        }
+    }
+
+    suspend fun getMuscleGroups(): Result<List<MuscleGroupInfo>> {
+        return try {
+            val response = client.get("$baseUrl/api/v1/exercises/muscle-groups")
+            if (response.status.isSuccess()) {
+                Result.success(response.body())
+            } else {
+                Result.failure(ApiException(response.status.value, response.bodyAsText()))
             }
         } catch (e: Exception) {
             Result.failure(NetworkException(e.message ?: "Ошибка сети"))

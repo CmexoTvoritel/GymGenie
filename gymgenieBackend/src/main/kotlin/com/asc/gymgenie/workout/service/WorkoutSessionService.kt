@@ -56,6 +56,56 @@ class WorkoutSessionService(
     }
 
     @Transactional
+    fun submit(userId: UUID, request: SubmitWorkoutSessionRequest): WorkoutSessionResponse {
+        if (request.finishedAt.isBefore(request.startedAt)) {
+            throw BadRequestException("finishedAt must not be before startedAt")
+        }
+        if (request.status == SessionStatus.IN_PROGRESS) {
+            throw BadRequestException("Submitted session must be in a finished state (COMPLETED or CANCELLED)")
+        }
+
+        val user = userRepository.findById(userId)
+            .orElseThrow { NotFoundException("User not found") }
+
+        val planDay = request.workoutPlanDayId?.let {
+            planDayRepository.findById(it).orElseGet { null }
+        }
+
+        val savedSession = sessionRepository.save(
+            WorkoutSessionEntity(
+                user = user,
+                workoutPlanDay = planDay,
+                name = request.name,
+                startedAt = request.startedAt,
+                finishedAt = request.finishedAt,
+                status = request.status,
+                notes = request.notes
+            )
+        )
+
+        request.sets.forEach { item ->
+            val exercise = exerciseRepository.findById(item.exerciseId)
+                .orElseThrow { NotFoundException("Exercise not found: ${item.exerciseId}") }
+
+            sessionSetRepository.save(
+                WorkoutSessionSetEntity(
+                    workoutSession = savedSession,
+                    exercise = exercise,
+                    setNumber = item.setNumber,
+                    reps = item.reps,
+                    weightKg = item.weightKg,
+                    completed = item.completed,
+                    durationSeconds = item.durationSeconds
+                )
+            )
+        }
+
+        return sessionRepository.findById(savedSession.id!!)
+            .orElseThrow { NotFoundException("Session not found") }
+            .toResponse()
+    }
+
+    @Transactional
     fun start(userId: UUID, request: StartWorkoutSessionRequest): WorkoutSessionResponse {
         val user = userRepository.findById(userId)
             .orElseThrow { NotFoundException("User not found") }

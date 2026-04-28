@@ -1,14 +1,20 @@
 package com.asc.gymgenie.feature.workouts.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -23,74 +29,112 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.asc.gymgenie.ui.theme.OnBackground
-import com.asc.gymgenie.ui.theme.OnSurfaceVariant
-import com.asc.gymgenie.ui.theme.Primary
+import com.asc.gymgenie.ui.theme.AccentOrange
+import com.asc.gymgenie.ui.theme.DeepInk
+import com.asc.gymgenie.ui.theme.MutedText
+import com.asc.gymgenie.ui.theme.SoftCard
 import com.asc.gymgenie.workout.WorkoutPlanShortResponse
 
 @Composable
-fun WorkoutCardSmall(plan: WorkoutPlanShortResponse) {
+fun WorkoutCardSmall(
+    plan: WorkoutPlanShortResponse,
+    onStart: () -> Unit = {},
+) {
+    val isAI = plan.createdBy.equals("AI", ignoreCase = true)
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .height(160.dp)
-            .shadow(2.dp, RoundedCornerShape(14.dp))
-            .clip(RoundedCornerShape(14.dp))
+            .defaultMinSize(minHeight = 160.dp)
+            .shadow(2.dp, RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(Color.White)
-            .padding(12.dp),
+            .then(
+                if (plan.isActive) Modifier.border(
+                    width = 1.5.dp,
+                    color = AccentOrange,
+                    shape = RoundedCornerShape(16.dp),
+                ) else Modifier
+            )
+            .padding(14.dp),
     ) {
-        Text(
-            text = "План",
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            color = Primary,
-            modifier = Modifier
-                .clip(RoundedCornerShape(50))
-                .background(Primary.copy(alpha = 0.1f))
-                .padding(horizontal = 8.dp, vertical = 3.dp),
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top,
+        ) {
+            Text(
+                text = plan.name,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = DeepInk,
+                modifier = Modifier.weight(1f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (isAI) {
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "+ AI",
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(AccentOrange)
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = plan.name,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
-            color = OnBackground,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
+            text = "${plan.daysCount} дней/нед.",
+            fontSize = 11.sp,
+            color = MutedText,
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .background(SoftCard)
+                .padding(horizontal = 10.dp, vertical = 4.dp),
         )
 
-        Spacer(modifier = Modifier.height(4.dp))
-
-        Text(
-            text = "${plan.daysCount} дн.",
-            fontSize = 12.sp,
-            color = OnSurfaceVariant,
-        )
+        if (plan.isActive) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(AccentOrange),
+                )
+                Spacer(modifier = Modifier.width(5.dp))
+                Text(
+                    text = "АКТИВНЫЙ",
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = AccentOrange,
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.weight(1f))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        Row(
+        Button(
+            onClick = onStart,
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = AccentOrange,
+                contentColor = Color.White,
+            ),
+            shape = RoundedCornerShape(10.dp),
+            contentPadding = PaddingValues(vertical = 8.dp),
         ) {
             Text(
-                text = "Детали",
-                fontSize = 11.sp,
+                text = "Начать",
+                fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = Primary,
             )
-
-            Button(
-                onClick = {},
-                colors = ButtonDefaults.buttonColors(containerColor = Primary),
-                shape = RoundedCornerShape(50),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 5.dp),
-            ) {
-                Text("Начать", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-            }
         }
     }
 }

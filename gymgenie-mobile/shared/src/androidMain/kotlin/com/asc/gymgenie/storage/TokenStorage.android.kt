@@ -45,7 +45,7 @@ private class AndroidTokenStorage : TokenStorage {
         prefs.edit()
             .remove(KEY_ACCESS_TOKEN)
             .remove(KEY_REFRESH_TOKEN)
-            .apply()
+            .commit()
     }
 
     private companion object {

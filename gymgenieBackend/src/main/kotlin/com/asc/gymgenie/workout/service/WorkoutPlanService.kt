@@ -1,5 +1,6 @@
 package com.asc.gymgenie.workout.service
 
+import com.asc.gymgenie.common.exception.BadRequestException
 import com.asc.gymgenie.common.exception.NotFoundException
 import com.asc.gymgenie.exercise.dto.PagedResponse
 import com.asc.gymgenie.exercise.repository.ExerciseRepository
@@ -13,6 +14,7 @@ import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.DayOfWeek
 import java.util.*
 
 @Service
@@ -95,6 +97,63 @@ class WorkoutPlanService(
     }
 
     @Transactional
+    fun createSimpleWorkout(userId: UUID, request: CreateSimpleWorkoutRequest): WorkoutPlanResponse {
+        if (request.scheduleType == WorkoutScheduleType.RECURRING && request.scheduleDays.isEmpty()) {
+            throw BadRequestException("At least one schedule day is required for recurring workouts")
+        }
+
+        val user = userRepository.findById(userId)
+            .orElseThrow { NotFoundException("User not found") }
+
+        val plan = WorkoutPlanEntity(
+            user = user,
+            name = request.name,
+            description = null,
+            createdBy = CreatedBy.USER,
+            isActive = true,
+            scheduleType = request.scheduleType
+        )
+        val savedPlan = workoutPlanRepository.save(plan)
+
+        val daysToCreate: List<DayOfWeek> = when (request.scheduleType) {
+            WorkoutScheduleType.ONE_TIME -> listOf(DayOfWeek.MONDAY) // placeholder day for one-time workouts
+            WorkoutScheduleType.RECURRING -> request.scheduleDays.distinct()
+        }
+
+        daysToCreate.forEachIndexed { dayIndex, dayOfWeek ->
+            val day = WorkoutPlanDayEntity(
+                workoutPlan = savedPlan,
+                dayOfWeek = dayOfWeek,
+                name = SIMPLE_WORKOUT_DAY_NAME,
+                orderIndex = dayIndex
+            )
+            val savedDay = workoutPlanDayRepository.save(day)
+
+            request.exercises.forEachIndexed { index, item ->
+                val exercise = exerciseRepository.findById(item.exerciseId)
+                    .orElseThrow { NotFoundException("Exercise not found: ${item.exerciseId}") }
+
+                workoutPlanExerciseRepository.save(
+                    WorkoutPlanExerciseEntity(
+                        workoutPlanDay = savedDay,
+                        exercise = exercise,
+                        sets = item.sets,
+                        reps = item.reps,
+                        weightKg = null,
+                        restSeconds = request.restSeconds,
+                        orderIndex = index,
+                        notes = null
+                    )
+                )
+            }
+        }
+
+        return workoutPlanRepository.findById(savedPlan.id!!)
+            .orElseThrow { NotFoundException("Plan not found") }
+            .toResponse()
+    }
+
+    @Transactional
     fun update(userId: UUID, planId: UUID, request: UpdateWorkoutPlanRequest): WorkoutPlanResponse {
         val plan = findPlanByIdAndUser(planId, userId)
 
@@ -157,6 +216,7 @@ class WorkoutPlanService(
         description = description,
         createdBy = createdBy,
         isActive = isActive,
+        scheduleType = scheduleType,
         days = days.map { day ->
             WorkoutPlanDayResponse(
                 id = day.id!!,
@@ -189,6 +249,11 @@ class WorkoutPlanService(
         description = description,
         createdBy = createdBy,
         isActive = isActive,
+        scheduleType = scheduleType,
         daysCount = days.size
     )
+
+    companion object {
+        private const val SIMPLE_WORKOUT_DAY_NAME = "Тренировка"
+    }
 }

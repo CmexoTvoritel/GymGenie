@@ -3,62 +3,71 @@ import Shared
 
 struct ExerciseCard: View {
     let exercise: ExerciseShortResponse
+    var onTap: () -> Void = {}
 
-    private let accentColor = Color(red: 0.173, green: 0.757, blue: 0.890)
-    private let darkColor = Color(red: 0.102, green: 0.102, blue: 0.180)
+    private let orange = Color(red: 0.941, green: 0.439, blue: 0.188)
+    private let deepInk = Color(red: 0.161, green: 0.141, blue: 0.125)
+    private let softCard = Color(red: 0.953, green: 0.949, blue: 0.937)
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Image placeholder
-            ZStack(alignment: .topLeading) {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.gray.opacity(0.15))
-                    .frame(height: 100)
-                    .overlay(
-                        Image(systemName: "figure.strengthtraining.traditional")
-                            .font(.system(size: 28))
-                            .foregroundColor(.gray.opacity(0.4))
-                    )
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(softCard)
+                        .frame(height: 110)
+                    Text(muscleGroupEmoji(exercise.muscleGroup))
+                        .font(.system(size: 36))
+                }
 
-                if !exercise.muscleGroup.isEmpty {
-                    Text(exercise.muscleGroup)
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill(accentColor))
-                        .padding(8)
+                Text(exercise.nameRu)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(deepInk)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if !exercise.difficultyLevel.isEmpty {
+                    difficultyBadge(exercise.difficultyLevel)
                 }
             }
-
-            Text(exercise.nameRu)
-                .font(.system(size: 13, weight: .bold))
-                .foregroundColor(darkColor)
-                .lineLimit(2)
-
-            if let duration = exercise.durationMinutes {
-                HStack(spacing: 4) {
-                    Image(systemName: "clock")
-                        .font(.system(size: 10))
-                        .foregroundColor(.gray)
-                    Text("\(duration) мин")
-                        .font(.system(size: 11))
-                        .foregroundColor(.gray)
-                }
-            }
-
-            if !exercise.difficultyLevel.isEmpty {
-                Text(exercise.difficultyLevel)
-                    .font(.system(size: 10))
-                    .foregroundColor(.gray)
-            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 16).fill(.white))
+            .shadow(color: Color.black.opacity(0.04), radius: 4, y: 2)
         }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(.white)
-        )
-        .shadow(color: Color.black.opacity(0.04), radius: 4, y: 2)
+        .buttonStyle(.plain)
+    }
+
+    private func difficultyBadge(_ level: String) -> some View {
+        let (label, color): (String, Color) = {
+            switch level.uppercased() {
+            case "BEGINNER": return ("Легко", Color(red: 0.298, green: 0.686, blue: 0.314))
+            case "INTERMEDIATE": return ("Средн.", orange)
+            case "ADVANCED": return ("Сложн.", Color(red: 0.898, green: 0.224, blue: 0.208))
+            default: return (level, .gray)
+            }
+        }()
+        return Text(label)
+            .font(.system(size: 10, weight: .bold))
+            .foregroundColor(.white)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(color))
+    }
+
+    private func muscleGroupEmoji(_ mg: String) -> String {
+        switch mg.uppercased() {
+        case "CHEST": return "🤸"
+        case "BACK": return "🏋"
+        case "SHOULDERS": return "💪"
+        case "BICEPS", "TRICEPS", "FOREARMS": return "💪"
+        case "ABS": return "⚡"
+        case "QUADRICEPS", "HAMSTRINGS", "CALVES": return "🏃"
+        case "GLUTES": return "🔥"
+        case "CARDIO": return "❤️"
+        case "FULL_BODY": return "⭐"
+        default: return "🏋"
+        }
     }
 }

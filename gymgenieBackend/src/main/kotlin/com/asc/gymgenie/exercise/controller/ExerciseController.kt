@@ -17,6 +17,11 @@ class ExerciseController(
     private val exerciseService: ExerciseService
 ) {
 
+    @GetMapping("/muscle-groups")
+    fun getMuscleGroups(): ResponseEntity<List<MuscleGroupInfo>> {
+        return ResponseEntity.ok(exerciseService.getMuscleGroups())
+    }
+
     @GetMapping("/{id}")
     fun getById(@PathVariable id: UUID): ResponseEntity<ExerciseResponse> {
         return ResponseEntity.ok(exerciseService.getById(id))

@@ -42,6 +42,17 @@ class ExerciseService(
         return result.toPagedShortResponse()
     }
 
+    fun getMuscleGroups(): List<MuscleGroupInfo> {
+        return MuscleGroup.entries.map { group ->
+            MuscleGroupInfo(
+                key = group.name,
+                nameRu = MUSCLE_GROUP_NAMES_RU.getValue(group),
+                nameEn = MUSCLE_GROUP_NAMES_EN.getValue(group),
+                imageUrl = null
+            )
+        }
+    }
+
     @Transactional
     fun create(request: CreateExerciseRequest): ExerciseResponse {
         val exercise = ExerciseEntity(
@@ -49,6 +60,7 @@ class ExerciseService(
             nameEn = request.nameEn,
             description = request.description,
             muscleGroup = request.muscleGroup,
+            secondaryMuscleGroups = request.secondaryMuscleGroups,
             category = request.category,
             difficultyLevel = request.difficultyLevel,
             durationMinutes = request.durationMinutes,
@@ -57,7 +69,11 @@ class ExerciseService(
             imageUrl = request.imageUrl,
             videoUrl = request.videoUrl,
             instructions = request.instructions,
-            equipment = request.equipment
+            equipment = request.equipment,
+            techniqueTip = request.techniqueTip,
+            defaultRepsMin = request.defaultRepsMin,
+            defaultRepsMax = request.defaultRepsMax,
+            defaultWeightPercentage = request.defaultWeightPercentage
         )
         return exerciseRepository.save(exercise).toResponse()
     }
@@ -70,6 +86,7 @@ class ExerciseService(
         request.nameEn?.let { exercise.nameEn = it }
         request.description?.let { exercise.description = it }
         request.muscleGroup?.let { exercise.muscleGroup = it }
+        request.secondaryMuscleGroups?.let { exercise.secondaryMuscleGroups = it }
         request.category?.let { exercise.category = it }
         request.difficultyLevel?.let { exercise.difficultyLevel = it }
         request.durationMinutes?.let { exercise.durationMinutes = it }
@@ -79,6 +96,10 @@ class ExerciseService(
         request.videoUrl?.let { exercise.videoUrl = it }
         request.instructions?.let { exercise.instructions = it }
         request.equipment?.let { exercise.equipment = it }
+        request.techniqueTip?.let { exercise.techniqueTip = it }
+        request.defaultRepsMin?.let { exercise.defaultRepsMin = it }
+        request.defaultRepsMax?.let { exercise.defaultRepsMax = it }
+        request.defaultWeightPercentage?.let { exercise.defaultWeightPercentage = it }
 
         return exerciseRepository.save(exercise).toResponse()
     }
@@ -102,6 +123,7 @@ class ExerciseService(
         nameEn = nameEn,
         description = description,
         muscleGroup = muscleGroup,
+        secondaryMuscleGroups = secondaryMuscleGroups,
         category = category,
         difficultyLevel = difficultyLevel,
         durationMinutes = durationMinutes,
@@ -110,7 +132,11 @@ class ExerciseService(
         imageUrl = imageUrl,
         videoUrl = videoUrl,
         instructions = instructions,
-        equipment = equipment
+        equipment = equipment,
+        techniqueTip = techniqueTip,
+        defaultRepsMin = defaultRepsMin,
+        defaultRepsMax = defaultRepsMax,
+        defaultWeightPercentage = defaultWeightPercentage
     )
 
     private fun ExerciseEntity.toShortResponse() = ExerciseShortResponse(
@@ -134,4 +160,38 @@ class ExerciseService(
         totalPages = totalPages,
         last = isLast
     )
+
+    companion object {
+        private val MUSCLE_GROUP_NAMES_RU: Map<MuscleGroup, String> = mapOf(
+            MuscleGroup.CHEST to "Грудь",
+            MuscleGroup.BACK to "Спина",
+            MuscleGroup.SHOULDERS to "Плечи",
+            MuscleGroup.BICEPS to "Бицепс",
+            MuscleGroup.TRICEPS to "Трицепс",
+            MuscleGroup.FOREARMS to "Предплечья",
+            MuscleGroup.ABS to "Пресс",
+            MuscleGroup.QUADRICEPS to "Квадрицепс",
+            MuscleGroup.HAMSTRINGS to "Бицепс бедра",
+            MuscleGroup.GLUTES to "Ягодицы",
+            MuscleGroup.CALVES to "Икры",
+            MuscleGroup.FULL_BODY to "Всё тело",
+            MuscleGroup.CARDIO to "Кардио"
+        )
+
+        private val MUSCLE_GROUP_NAMES_EN: Map<MuscleGroup, String> = mapOf(
+            MuscleGroup.CHEST to "Chest",
+            MuscleGroup.BACK to "Back",
+            MuscleGroup.SHOULDERS to "Shoulders",
+            MuscleGroup.BICEPS to "Biceps",
+            MuscleGroup.TRICEPS to "Triceps",
+            MuscleGroup.FOREARMS to "Forearms",
+            MuscleGroup.ABS to "Abs",
+            MuscleGroup.QUADRICEPS to "Quadriceps",
+            MuscleGroup.HAMSTRINGS to "Hamstrings",
+            MuscleGroup.GLUTES to "Glutes",
+            MuscleGroup.CALVES to "Calves",
+            MuscleGroup.FULL_BODY to "Full Body",
+            MuscleGroup.CARDIO to "Cardio"
+        )
+    }
 }

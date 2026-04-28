@@ -29,6 +29,10 @@ class ExerciseEntity(
     @Column(nullable = false)
     var muscleGroup: MuscleGroup,
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb")
+    var secondaryMuscleGroups: List<MuscleGroup> = emptyList(),
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     var category: ExerciseCategory,
@@ -57,6 +61,15 @@ class ExerciseEntity(
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     var equipment: List<String> = emptyList(),
+
+    @Column(length = 500)
+    var techniqueTip: String? = null,
+
+    var defaultRepsMin: Int? = null,
+
+    var defaultRepsMax: Int? = null,
+
+    var defaultWeightPercentage: Double? = null,
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)

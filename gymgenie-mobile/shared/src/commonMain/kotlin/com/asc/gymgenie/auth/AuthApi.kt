@@ -42,6 +42,23 @@ class AuthApi(
         }
     }
 
+    suspend fun refreshToken(refreshToken: String): Result<TokenResponse> {
+        return try {
+            val response = client.post("$baseUrl/api/v1/auth/refresh") {
+                contentType(ContentType.Application.Json)
+                setBody(RefreshTokenRequest(refreshToken = refreshToken))
+            }
+            if (response.status.isSuccess()) {
+                Result.success(response.body<TokenResponse>())
+            } else {
+                val errorBody = response.bodyAsText()
+                Result.failure(AuthException(response.status.value, errorBody))
+            }
+        } catch (e: Exception) {
+            Result.failure(NetworkException(e.message ?: "Ошибка сети"))
+        }
+    }
+
     suspend fun register(username: String, email: String, password: String): Result<TokenResponse> {
         return try {
             val response = client.post("$baseUrl/api/v1/auth/register") {

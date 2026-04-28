@@ -8,6 +8,7 @@ import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
 import java.util.*
 
 interface ExerciseRepository : JpaRepository<ExerciseEntity, UUID> {
@@ -20,14 +21,14 @@ interface ExerciseRepository : JpaRepository<ExerciseEntity, UUID> {
 
     @Query("""
         SELECT e FROM ExerciseEntity e
-        WHERE (:muscleGroup IS NULL OR e.muscleGroup = :muscleGroup)
-        AND (:category IS NULL OR e.category = :category)
-        AND (:difficultyLevel IS NULL OR e.difficultyLevel = :difficultyLevel)
+        WHERE (cast(:muscleGroup as string) IS NULL OR e.muscleGroup = :muscleGroup)
+        AND (cast(:category as string) IS NULL OR e.category = :category)
+        AND (cast(:difficultyLevel as string) IS NULL OR e.difficultyLevel = :difficultyLevel)
     """)
     fun findWithFilters(
-        muscleGroup: MuscleGroup?,
-        category: ExerciseCategory?,
-        difficultyLevel: DifficultyLevel?,
+        @Param("muscleGroup") muscleGroup: MuscleGroup?,
+        @Param("category") category: ExerciseCategory?,
+        @Param("difficultyLevel") difficultyLevel: DifficultyLevel?,
         pageable: Pageable
     ): Page<ExerciseEntity>
 
@@ -36,5 +37,5 @@ interface ExerciseRepository : JpaRepository<ExerciseEntity, UUID> {
         WHERE LOWER(e.nameRu) LIKE LOWER(CONCAT('%', :query, '%'))
         OR LOWER(e.nameEn) LIKE LOWER(CONCAT('%', :query, '%'))
     """)
-    fun search(query: String, pageable: Pageable): Page<ExerciseEntity>
+    fun search(@Param("query") query: String, pageable: Pageable): Page<ExerciseEntity>
 }

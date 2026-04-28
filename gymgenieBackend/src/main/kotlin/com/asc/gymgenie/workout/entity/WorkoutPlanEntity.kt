@@ -32,6 +32,10 @@ class WorkoutPlanEntity(
     @Column(nullable = false)
     var isActive: Boolean = true,
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    var scheduleType: WorkoutScheduleType = WorkoutScheduleType.ONE_TIME,
+
     @OneToMany(mappedBy = "workoutPlan", cascade = [CascadeType.ALL], orphanRemoval = true)
     @OrderBy("orderIndex ASC")
     var days: MutableList<WorkoutPlanDayEntity> = mutableListOf(),

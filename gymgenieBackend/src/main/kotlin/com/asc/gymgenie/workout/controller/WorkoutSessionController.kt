@@ -54,6 +54,15 @@ class WorkoutSessionController(
         return ResponseEntity.status(HttpStatus.CREATED).body(workoutSessionService.start(userId, request))
     }
 
+    @PostMapping("/submit")
+    fun submit(
+        authentication: Authentication,
+        @Valid @RequestBody request: SubmitWorkoutSessionRequest
+    ): ResponseEntity<WorkoutSessionResponse> {
+        val userId = UUID.fromString(authentication.name)
+        return ResponseEntity.status(HttpStatus.CREATED).body(workoutSessionService.submit(userId, request))
+    }
+
     @PostMapping("/{id}/sets")
     fun addSet(
         authentication: Authentication,

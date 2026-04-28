@@ -3,6 +3,7 @@ import Shared
 
 struct WorkoutPlanCard: View {
     let plan: WorkoutPlanShortResponse
+    var onStart: () -> Void = {}
 
     private let accentColor = Color(red: 0.173, green: 0.757, blue: 0.890)
     private let darkColor = Color(red: 0.102, green: 0.102, blue: 0.180)
@@ -47,7 +48,7 @@ struct WorkoutPlanCard: View {
                         )
                 }
 
-                Button(action: {}) {
+                Button(action: onStart) {
                     Text("Начать")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.white)
