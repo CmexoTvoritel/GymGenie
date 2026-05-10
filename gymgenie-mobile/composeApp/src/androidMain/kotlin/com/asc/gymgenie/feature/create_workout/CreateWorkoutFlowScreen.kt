@@ -124,6 +124,7 @@ fun CreateWorkoutFlowScreen(
                     if (stack.size > 1) stack.removeAt(stack.lastIndex) else onDismiss()
                 },
                 onNameChange = viewModel::setWorkoutName,
+                onDescriptionChange = viewModel::setDescription,
                 onIncrementRest = viewModel::incrementRestSeconds,
                 onDecrementRest = viewModel::decrementRestSeconds,
                 onRemoveExerciseAt = viewModel::removeExerciseAt,

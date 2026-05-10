@@ -20,8 +20,8 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
-import com.asc.gymgenie.feature.auth.LoginScreen
-import com.asc.gymgenie.feature.auth.RegisterScreen
+import com.asc.gymgenie.common.SessionManager
+import com.asc.gymgenie.feature.auth.AuthScreen
 import com.asc.gymgenie.feature.main.MainScreen
 import com.asc.gymgenie.storage.TokenStorage
 import com.asc.gymgenie.feature.onboarding.OnboardingScreen
@@ -29,11 +29,13 @@ import com.asc.gymgenie.feature.paywall.PaywallScreen
 import com.asc.gymgenie.feature.paywall.PurchaseSuccessScreen
 import com.asc.gymgenie.feature.privacy.PrivacyScreen
 import com.asc.gymgenie.presentation.AuthViewModel
-import com.asc.gymgenie.storage.createTokenStorage
 import com.asc.gymgenie.ui.theme.GymGenieTheme
+import com.asc.gymgenie.user.UserApi
+import com.asc.gymgenie.user.UserProfileStore
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import org.koin.core.context.GlobalContext
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "gymgenie_prefs")
 
@@ -44,7 +46,6 @@ sealed class Screen {
     data object Onboarding : Screen()
     data object Privacy : Screen()
     data object Login : Screen()
-    data object Register : Screen()
     data object Paywall : Screen()
     data object PurchaseSuccess : Screen()
     data object Main : Screen()
@@ -57,7 +58,15 @@ fun App() {
         val scope = rememberCoroutineScope()
         var currentScreen by remember { mutableStateOf<Screen>(Screen.Splash) }
 
-        val tokenStorage = remember { createTokenStorage() }
+        // Resolved from Koin so every screen that asks for `TokenStorage`,
+        // `UserApi` or `UserProfileStore` receives the same singleton wired in
+        // `GymGenieApplication.onCreate()`. Resolution happens once per
+        // composition root and is cached via `remember`.
+        val koin = remember { GlobalContext.get() }
+        val tokenStorage = remember { koin.get<TokenStorage>() }
+        val userApi = remember { koin.get<UserApi>() }
+        val userProfileStore = remember { koin.get<UserProfileStore>() }
+        val sessionManager = remember { koin.get<SessionManager>() }
 
         val authViewModel = remember {
             AuthViewModel(tokenStorage = tokenStorage)
@@ -66,6 +75,17 @@ fun App() {
         DisposableEffect(Unit) {
             onDispose {
                 authViewModel.onCleared()
+            }
+        }
+
+        // Network layer fires this when a refresh definitively fails (or
+        // there is no refresh token to use). The app forgets any in-memory
+        // user state and routes the user back to the login screen so they
+        // can sign in again with fresh credentials.
+        LaunchedEffect(sessionManager) {
+            sessionManager.logoutEvent.collect {
+                userProfileStore.clear()
+                currentScreen = Screen.Login
             }
         }
 
@@ -81,6 +101,13 @@ fun App() {
                 hasToken -> Screen.Main
                 onboardingCompleted -> Screen.Login
                 else -> Screen.Onboarding
+            }
+
+            // When the user is already authenticated, eagerly populate the
+            // shared profile store so any downstream presenter (AI flow,
+            // Profile, ...) can render with real values on first composition.
+            if (hasToken) {
+                scope.launch { userProfileStore.load() }
             }
         }
 
@@ -116,33 +143,22 @@ fun App() {
             }
 
             Screen.Login -> {
-                LoginScreen(
+                AuthScreen(
                     viewModel = authViewModel,
-                    onLoginSuccess = {
-                        currentScreen = Screen.Paywall
-                    },
-                    onNavigateToRegister = {
-                        authViewModel.resetState()
-                        currentScreen = Screen.Register
-                    },
-                )
-            }
-
-            Screen.Register -> {
-                RegisterScreen(
-                    viewModel = authViewModel,
-                    onRegisterSuccess = {
-                        currentScreen = Screen.Paywall
-                    },
-                    onNavigateToLogin = {
-                        authViewModel.resetState()
-                        currentScreen = Screen.Login
+                    initialIsLogin = true,
+                    onAuthSuccess = {
+                        // Backend is authoritative for premium state. Read it
+                        // off the auth response so paid users skip the paywall.
+                        val subscriptionType = authViewModel.state.value.subscriptionType
+                        currentScreen = if (subscriptionType == "PREMIUM") Screen.Main else Screen.Paywall
                     },
                 )
             }
 
             Screen.Paywall -> {
                 PaywallScreen(
+                    userApi = userApi,
+                    userProfileStore = userProfileStore,
                     onPurchaseSuccess = {
                         currentScreen = Screen.PurchaseSuccess
                     },
@@ -163,6 +179,7 @@ fun App() {
             Screen.Main -> {
                 MainScreen(
                     tokenStorage = tokenStorage,
+                    userProfileStore = userProfileStore,
                     onLogout = { currentScreen = Screen.Login },
                 )
             }

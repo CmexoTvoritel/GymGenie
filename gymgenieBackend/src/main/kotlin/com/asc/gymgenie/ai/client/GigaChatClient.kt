@@ -49,7 +49,7 @@ class GigaChatClient(
 
     companion object {
         private const val CHAT_URL = "https://gigachat.devices.sberbank.ru/api/v1/chat/completions"
-        private const val MODEL = "GigaChat-2-Lite"
+        private const val MODEL = "GigaChat"
         private const val TEMPERATURE = 0.3
     }
 }

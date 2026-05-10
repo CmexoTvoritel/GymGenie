@@ -39,6 +39,17 @@ class UserEntity(
 
     var heightCm: Double? = null,
 
+    var ageYears: Int? = null,
+
+    @Column(length = 100)
+    var experience: String? = null,
+
+    @Column(length = 100)
+    var frequency: String? = null,
+
+    @Column(length = 2000)
+    var healthIssues: String? = null,
+
     @Column(length = 500)
     var profilePhotoUrl: String? = null,
 

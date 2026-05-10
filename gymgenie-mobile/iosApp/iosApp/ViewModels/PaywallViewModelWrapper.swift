@@ -12,7 +12,12 @@ final class PaywallViewModelWrapper: ObservableObject {
     private var observationTask: Task<Void, Never>?
 
     init() {
-        self.vm = Shared.PaywallViewModel()
+        let userApi = KoinHelper.shared.getUserApi()
+        let userProfileStore = KoinHelper.shared.getUserProfileStore()
+        self.vm = Shared.PaywallViewModel(
+            userApi: userApi,
+            userProfileStore: userProfileStore
+        )
         startObserving()
     }
 

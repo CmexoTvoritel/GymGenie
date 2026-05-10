@@ -1,8 +1,9 @@
 package com.asc.gymgenie.feature.home.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,8 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -21,120 +20,72 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.asc.gymgenie.ui.theme.AccentOrange
+import com.asc.gymgenie.ui.theme.Coral
 import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
-import com.asc.gymgenie.ui.theme.SoftCard
-import com.asc.gymgenie.workout.WorkoutPlanShortResponse
 
+private val CardBorder = Color(0xFFEDEDEF)
+
+/**
+ * Empty-day placeholder used when the user has neither a recurring workout
+ * for today nor any one-off plans queued up.
+ */
 @Composable
-fun WorkoutOfTheDayCard(
-    plan: WorkoutPlanShortResponse,
-    onStart: () -> Unit,
+fun NoWorkoutPlaceholder(
+    onCreate: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    // TODO: duration/calories come from the design spec until the backend exposes them.
-    val duration = 42
-    val calories = 320
-
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(24.dp))
-            .background(SoftCard)
-            .padding(24.dp),
+            .background(Color.White)
+            .border(
+                border = BorderStroke(1.5.dp, CardBorder),
+                shape = RoundedCornerShape(24.dp),
+            )
+            .padding(vertical = 28.dp, horizontal = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Row(verticalAlignment = Alignment.Top) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "ТРЕНИРОВКА ДНЯ · ДЕНЬ ${plan.daysCount.coerceAtLeast(1)}",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = AccentOrange,
-                    letterSpacing = 0.5.sp,
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = plan.name,
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = DeepInk,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = plan.description ?: "Упражнения для всего тела",
-                    fontSize = 14.sp,
-                    color = MutedText,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .size(72.dp)
-                    .clip(CircleShape)
-                    .background(AccentOrange.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(text = "🏋", fontSize = 32.sp)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(18.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color(0xFFF4F4F6)),
+            contentAlignment = Alignment.Center,
         ) {
-            StatPill(value = plan.daysCount.toString(), label = "УПРАЖН.")
-            StatPill(value = duration.toString(), label = "МИН")
-            StatPill(value = calories.toString(), label = "ККАЛ СЖЕЧЬ")
+            Text(text = "🏋", fontSize = 24.sp)
         }
-
-        Spacer(modifier = Modifier.height(18.dp))
-
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = "Сегодня выходной",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = DeepInk,
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = "На этот день тренировки не запланированы",
+            fontSize = 13.sp,
+            color = MutedText,
+        )
+        Spacer(modifier = Modifier.height(16.dp))
         Row(
             modifier = Modifier
-                .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
-                .background(AccentOrange)
-                .clickable { onStart() }
-                .padding(vertical = 14.dp),
-            horizontalArrangement = Arrangement.Center,
+                .background(Coral)
+                .clickable { onCreate() }
+                .padding(horizontal = 18.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(text = "▶", fontSize = 14.sp, color = Color.White, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "Начать тренировку",
-                fontSize = 16.sp,
+                text = "Создать тренировку",
+                fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
             )
         }
-    }
-}
-
-@Composable
-private fun StatPill(value: String, label: String) {
-    Column {
-        Text(
-            text = value,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.ExtraBold,
-            color = DeepInk,
-        )
-        Text(
-            text = label,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = MutedText,
-            letterSpacing = 0.3.sp,
-        )
     }
 }

@@ -20,14 +20,8 @@ final class ExercisePickerViewModelWrapper: ObservableObject {
     private var observationTask: Task<Void, Never>?
 
     init() {
-        let tokenStorage = TokenStorageKt.createTokenStorage()
-        let authApi = AuthApi()
-        let client = AuthenticatedHttpClientKt.createAuthenticatedClient(
-            tokenStorage: tokenStorage,
-            authApi: authApi
-        )
         self.vm = Shared.ExercisePickerViewModel(
-            exerciseApi: Shared.ExerciseApi(client: client)
+            exerciseApi: KoinHelper.shared.getExerciseApi()
         )
         startObserving()
     }
@@ -37,7 +31,11 @@ final class ExercisePickerViewModelWrapper: ObservableObject {
             while !Task.isCancelled {
                 guard let self = self else { break }
                 guard let state = self.vm.state.value as? Shared.ExercisePickerUiState else { continue }
-                self.exercises = state.exercises as? [Shared.ExerciseShortResponse] ?? []
+                if let list = state.exercises as? [Shared.ExerciseShortResponse] {
+                    self.exercises = list
+                } else {
+                    self.exercises = (state.exercises as NSArray).compactMap { $0 as? Shared.ExerciseShortResponse }
+                }
                 self.isLoading = state.isLoading
                 self.isLoadingMore = state.isLoadingMore
                 self.hasMore = state.hasMore

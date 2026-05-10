@@ -7,12 +7,13 @@ import org.springframework.web.client.RestClient
 import java.net.http.HttpClient
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
+import java.time.Duration
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
 @Configuration
-class GigaChatConfig {
+class GigaChatConfig(private val properties: GigaChatProperties) {
 
     @Bean("gigaChatRestClient")
     fun gigaChatRestClient(): RestClient {
@@ -22,9 +23,15 @@ class GigaChatConfig {
             override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
         })
         val sslContext = SSLContext.getInstance("TLS").apply { init(null, trustAll, SecureRandom()) }
-        val httpClient = HttpClient.newBuilder().sslContext(sslContext).build()
+        val httpClient = HttpClient.newBuilder()
+            .sslContext(sslContext)
+            .connectTimeout(Duration.ofSeconds(properties.connectTimeoutSeconds))
+            .build()
+        val factory = JdkClientHttpRequestFactory(httpClient).apply {
+            setReadTimeout(Duration.ofSeconds(properties.readTimeoutSeconds))
+        }
         return RestClient.builder()
-            .requestFactory(JdkClientHttpRequestFactory(httpClient))
+            .requestFactory(factory)
             .build()
     }
 }

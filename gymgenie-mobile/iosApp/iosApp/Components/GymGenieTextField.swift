@@ -5,6 +5,7 @@ struct GymGenieTextField: View {
     @Binding var text: String
     var icon: String = ""
     var isSecure: Bool = false
+    var accentColor: Color = Color(.sRGB, red: 0.4, green: 0.4, blue: 0.4)
 
     @State private var isPasswordVisible: Bool = false
 
@@ -12,7 +13,7 @@ struct GymGenieTextField: View {
         HStack(spacing: 12) {
             if !icon.isEmpty {
                 Image(systemName: icon)
-                    .foregroundColor(.gray)
+                    .foregroundColor(accentColor)
                     .frame(width: 20)
             }
 
@@ -21,11 +22,13 @@ struct GymGenieTextField: View {
                     .textContentType(.password)
                     .autocapitalization(.none)
                     .disableAutocorrection(true)
+                    .tint(accentColor)
             } else {
                 TextField(placeholder, text: $text)
                     .autocapitalization(isSecure ? .none : .none)
                     .disableAutocorrection(true)
                     .textContentType(isSecure ? .password : .none)
+                    .tint(accentColor)
             }
 
             if isSecure {
@@ -41,7 +44,11 @@ struct GymGenieTextField: View {
         .frame(height: 52)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.systemGray6))
+                .fill(Color.white)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color(.systemGray4), lineWidth: 1)
         )
     }
 }

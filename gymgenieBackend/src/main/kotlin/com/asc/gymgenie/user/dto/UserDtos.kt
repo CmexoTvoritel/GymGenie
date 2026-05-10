@@ -16,7 +16,11 @@ data class UserProfileResponse(
     val weightKg: Double?,
     val heightCm: Double?,
     val profilePhotoUrl: String?,
-    val subscriptionType: String
+    val subscriptionType: String,
+    val ageYears: Int? = null,
+    val experience: String? = null,
+    val frequency: String? = null,
+    val healthIssues: String? = null,
 )
 
 data class UpdateProfileRequest(
@@ -30,5 +34,10 @@ data class UpdateProfileRequest(
     val birthDate: LocalDate? = null,
     val weightKg: Double? = null,
     val heightCm: Double? = null,
-    val profilePhotoUrl: String? = null
+    val profilePhotoUrl: String? = null,
+    val ageYears: Int? = null,
+    val experience: String? = null,
+    val frequency: String? = null,
+    @field:Size(max = 2000)
+    val healthIssues: String? = null,
 )

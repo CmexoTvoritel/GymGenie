@@ -17,8 +17,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.asc.gymgenie.auth.AuthApi
-import com.asc.gymgenie.common.createAuthenticatedClient
 import com.asc.gymgenie.exercise.ExerciseApi
 import com.asc.gymgenie.exercise.ExerciseDetailResponse
 import com.asc.gymgenie.storage.TokenStorage
@@ -27,6 +25,7 @@ import com.asc.gymgenie.ui.theme.Background
 import com.asc.gymgenie.ui.theme.OnBackground
 import com.asc.gymgenie.ui.theme.OnSurfaceVariant
 import kotlinx.coroutines.launch
+import org.koin.core.context.GlobalContext
 
 @Composable
 fun ExerciseDetailScreen(
@@ -38,11 +37,8 @@ fun ExerciseDetailScreen(
     var exercise by remember { mutableStateOf<ExerciseDetailResponse?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    val api = remember {
-        val authApi = AuthApi()
-        val client = createAuthenticatedClient(tokenStorage, authApi)
-        ExerciseApi(client)
-    }
+    val koin = remember { GlobalContext.get() }
+    val api = remember { koin.get<ExerciseApi>() }
 
     fun loadExercise() {
         isLoading = true

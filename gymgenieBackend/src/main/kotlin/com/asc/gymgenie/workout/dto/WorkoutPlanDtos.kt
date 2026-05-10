@@ -31,7 +31,17 @@ data class WorkoutPlanShortResponse(
     val createdBy: CreatedBy,
     val isActive: Boolean,
     val scheduleType: WorkoutScheduleType,
-    val daysCount: Int
+    val daysCount: Int,
+    /** Distinct days for [WorkoutScheduleType.RECURRING] plans; empty list for [WorkoutScheduleType.ONE_TIME]. */
+    val scheduleDays: List<DayOfWeek>,
+    /** Rest seconds taken from the first exercise of the first day; defaults to 60 when no exercises exist. */
+    val restSeconds: Int,
+    /** Most common [com.asc.gymgenie.exercise.entity.MuscleGroup] across all exercises of the plan; null when no exercises exist. */
+    val primaryMuscleGroup: String?,
+    /** Total exercises in the first day. For simple workouts this equals all exercises in the plan. */
+    val exercisesCount: Int,
+    /** Sum of sets across all exercises in the first day. */
+    val totalSets: Int
 )
 
 data class WorkoutPlanDayResponse(
@@ -80,7 +90,20 @@ data class UpdateWorkoutPlanRequest(
     @field:Size(max = 500)
     val description: String? = null,
 
-    val isActive: Boolean? = null
+    val isActive: Boolean? = null,
+
+    val scheduleType: WorkoutScheduleType? = null,
+
+    /** Required when [scheduleType] is [WorkoutScheduleType.RECURRING]. */
+    val scheduleDays: List<DayOfWeek>? = null,
+
+    @field:Min(10)
+    @field:Max(600)
+    val restSeconds: Int? = null,
+
+    /** When `null`, existing days/exercises are kept untouched. When non-null, the plan's days/exercises are fully replaced. */
+    @field:Valid
+    val exercises: List<SimpleWorkoutExerciseItem>? = null
 )
 
 data class CreateWorkoutPlanDayRequest(
@@ -110,6 +133,9 @@ data class CreateSimpleWorkoutRequest(
     @field:NotBlank
     @field:Size(max = 100)
     val name: String,
+
+    @field:Size(max = 500)
+    val description: String? = null,
 
     @field:Min(10)
     @field:Max(600)

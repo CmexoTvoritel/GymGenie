@@ -31,6 +31,17 @@ class AiChatController(private val workoutAiService: WorkoutAiService) {
         return ResponseEntity.ok(SaveWorkoutResponse(planId))
     }
 
+    @PutMapping("/save/{planId}")
+    fun replaceWorkout(
+        authentication: Authentication,
+        @PathVariable planId: UUID,
+        @Valid @RequestBody request: SaveWorkoutRequest
+    ): ResponseEntity<SaveWorkoutResponse> {
+        val userId = UUID.fromString(authentication.name)
+        val id = workoutAiService.replaceWorkout(userId, planId, request)
+        return ResponseEntity.ok(SaveWorkoutResponse(id))
+    }
+
     @DeleteMapping("/session")
     fun clearSession(authentication: Authentication): ResponseEntity<Void> {
         val userId = UUID.fromString(authentication.name)

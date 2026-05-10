@@ -11,20 +11,21 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,50 +39,38 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.asc.gymgenie.feature.activities.GoalCategory
+import com.asc.gymgenie.activity.ActivityApi
+import com.asc.gymgenie.activity.ActivityCatalogResponse
+import com.asc.gymgenie.activity.ActivityKind
+import com.asc.gymgenie.activity.ActivityRing
+import com.asc.gymgenie.presentation.ActivityCatalogViewModel
+import com.asc.gymgenie.ui.theme.AccentOrange
 import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
-import com.asc.gymgenie.ui.theme.PastelBlue
-import com.asc.gymgenie.ui.theme.PastelCoral
-import com.asc.gymgenie.ui.theme.PastelGreen
-import com.asc.gymgenie.ui.theme.PastelLavender
-import com.asc.gymgenie.ui.theme.PastelYellow
+import com.asc.gymgenie.ui.theme.RingLife
+import com.asc.gymgenie.ui.theme.RingMind
+import com.asc.gymgenie.ui.theme.RingMove
 import com.asc.gymgenie.ui.theme.SoftCard
 import com.asc.gymgenie.ui.theme.WarmOffWhite
+import org.koin.core.context.GlobalContext
 
-private data class ActivityCategory(
-    val emoji: String,
-    val title: String,
-    val subtitle: String,
-    val background: Color,
-    val fullWidth: Boolean = false,
-    val unit: String = "раз",
-    val defaultValue: Int = 1,
-    val step: Int = 1,
-)
-
-// TODO: replace with backend-driven catalog when the endpoint is exposed.
-private val categories = listOf(
-    ActivityCategory("🏃", "Физическая активность", "Шаги, кардио, бег", PastelCoral, unit = "шагов", defaultValue = 10000, step = 500),
-    ActivityCategory("💧", "Питьевой режим", "Вода, напитки", PastelBlue, unit = "стаканов", defaultValue = 8, step = 1),
-    ActivityCategory("😴", "Сон", "Отслеживание сна", PastelLavender, unit = "часов", defaultValue = 8, step = 1),
-    ActivityCategory("🧘", "Медитация", "Осознанность, дыхание", PastelGreen, unit = "минут", defaultValue = 15, step = 5),
-    ActivityCategory("⭐", "Кастомная цель", "Создай свою активность", PastelYellow, fullWidth = true, unit = "раз", defaultValue = 1, step = 1),
-)
-
+/**
+ * Activity catalog: full list of activities the user can add to their daily
+ * plan. Items are grouped by ring (Movement / Mind / Life) and the per-row
+ * toggle reflects the current plan membership exposed by
+ * [ActivityCatalogViewModel].
+ */
 @Composable
-fun ActivityCatalogScreen(
-    onBack: () -> Unit,
-    onCategorySelected: (GoalCategory) -> Unit = {},
-) {
+fun ActivityCatalogScreen(onBack: () -> Unit) {
+    val koin = remember { GlobalContext.get() }
+    val viewModel = remember { ActivityCatalogViewModel(koin.get<ActivityApi>()) }
+    val state by viewModel.state.collectAsState()
     var query by remember { mutableStateOf("") }
 
-    val filtered = remember(query) {
-        if (query.isBlank()) categories
-        else categories.filter {
-            it.title.contains(query, ignoreCase = true) ||
-                it.subtitle.contains(query, ignoreCase = true)
-        }
+    LaunchedEffect(Unit) { viewModel.load() }
+
+    DisposableEffect(viewModel) {
+        onDispose { viewModel.onCleared() }
     }
 
     Column(
@@ -93,34 +82,16 @@ fun ActivityCatalogScreen(
         TopBar(onBack = onBack)
         SearchBar(value = query, onValueChange = { query = it })
 
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            items(
-                items = filtered,
-                span = { item ->
-                    if (item.fullWidth) GridItemSpan(2) else GridItemSpan(1)
-                },
-            ) { category ->
-                CategoryCard(
-                    category = category,
-                    onClick = {
-                        onCategorySelected(
-                            GoalCategory(
-                                emoji = category.emoji,
-                                title = category.title,
-                                unit = category.unit,
-                                defaultValue = category.defaultValue,
-                                step = category.step,
-                            )
-                        )
-                    },
-                )
-            }
+        when {
+            state.isLoading -> CenteredSpinner()
+            state.error != null && state.catalog.isEmpty() ->
+                ErrorState(message = state.error.orEmpty(), onRetry = viewModel::load)
+            else -> CatalogList(
+                catalog = state.catalog,
+                planIds = state.planIds,
+                query = query,
+                onTogglePlan = viewModel::togglePlan,
+            )
         }
     }
 }
@@ -185,10 +156,7 @@ private fun SearchBar(value: String, onValueChange: (String) -> Unit) {
                 onValueChange = onValueChange,
                 singleLine = true,
                 cursorBrush = SolidColor(DeepInk),
-                textStyle = TextStyle(
-                    color = DeepInk,
-                    fontSize = 15.sp,
-                ),
+                textStyle = TextStyle(color = DeepInk, fontSize = 15.sp),
                 modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -196,29 +164,221 @@ private fun SearchBar(value: String, onValueChange: (String) -> Unit) {
 }
 
 @Composable
-private fun CategoryCard(category: ActivityCategory, onClick: () -> Unit = {}) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = if (category.fullWidth) 120.dp else 150.dp)
-            .clip(RoundedCornerShape(24.dp))
-            .background(category.background)
-            .clickable { onClick() }
-            .padding(20.dp),
+private fun CatalogList(
+    catalog: List<ActivityCatalogResponse>,
+    planIds: Set<String>,
+    query: String,
+    onTogglePlan: (String) -> Unit,
+) {
+    val filtered = remember(catalog, query) {
+        if (query.isBlank()) catalog
+        else catalog.filter { it.name.contains(query, ignoreCase = true) }
+    }
+
+    if (filtered.isEmpty()) {
+        EmptyState(
+            icon = "🔍",
+            message = "Ничего не найдено",
+            hint = "Попробуй изменить запрос",
+        )
+        return
+    }
+
+    val grouped = remember(filtered) { filtered.groupBy { it.ring } }
+
+    LazyColumn(
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(text = category.emoji, fontSize = if (category.fullWidth) 44.sp else 40.sp)
-        Spacer(modifier = Modifier.height(10.dp))
-        Text(
-            text = category.title,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.ExtraBold,
-            color = DeepInk,
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = category.subtitle,
-            fontSize = 12.sp,
-            color = MutedText,
-        )
+        ActivityRing.entries.forEach { ring ->
+            val items = grouped[ring.name].orEmpty()
+            if (items.isEmpty()) return@forEach
+
+            item(key = "header-${ring.name}") {
+                Text(
+                    text = ringLabel(ring),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MutedText,
+                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                )
+            }
+            items(items, key = { it.id }) { activity ->
+                CatalogActivityCard(
+                    activity = activity,
+                    isInPlan = activity.id in planIds,
+                    onToggle = { onTogglePlan(activity.id) },
+                )
+            }
+        }
     }
 }
+
+@Composable
+private fun CatalogActivityCard(
+    activity: ActivityCatalogResponse,
+    isInPlan: Boolean,
+    onToggle: () -> Unit,
+) {
+    val ringColor = ringColorFor(activity.ring)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color.White)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(ringColor.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = activity.name.take(1).uppercase(),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = ringColor,
+            )
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = activity.name,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = DeepInk,
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = kindLabel(activity.kind),
+                fontSize = 12.sp,
+                color = MutedText,
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(if (isInPlan) ringColor else SoftCard)
+                .clickable { onToggle() },
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = if (isInPlan) "✓" else "+",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isInPlan) Color.White else ringColor,
+            )
+        }
+    }
+}
+
+@Composable
+private fun CenteredSpinner() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        CircularProgressIndicator(color = AccentOrange)
+    }
+}
+
+@Composable
+private fun EmptyState(icon: String, message: String, hint: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(SoftCard)
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(text = icon, fontSize = 32.sp)
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = message,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = DeepInk,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(text = hint, fontSize = 13.sp, color = MutedText)
+        }
+    }
+}
+
+@Composable
+private fun ErrorState(message: String, onRetry: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(SoftCard)
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(text = "⚠️", fontSize = 32.sp)
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "Не удалось загрузить",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = DeepInk,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(text = message, fontSize = 13.sp, color = MutedText)
+            Spacer(modifier = Modifier.height(16.dp))
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(AccentOrange)
+                    .clickable { onRetry() }
+                    .padding(horizontal = 20.dp, vertical = 10.dp),
+            ) {
+                Text(
+                    text = "Повторить",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                )
+            }
+        }
+    }
+}
+
+private fun ringColorFor(ring: String): Color = when (ring) {
+    ActivityRing.MOVE.name -> RingMove
+    ActivityRing.MIND.name -> RingMind
+    ActivityRing.LIFE.name -> RingLife
+    else -> AccentOrange
+}
+
+private fun ringLabel(ring: ActivityRing): String = when (ring) {
+    ActivityRing.MOVE -> "Движение"
+    ActivityRing.MIND -> "Разум"
+    ActivityRing.LIFE -> "Режим"
+}
+
+private fun kindLabel(kind: String): String =
+    when (runCatching { ActivityKind.valueOf(kind) }.getOrNull()) {
+        ActivityKind.BINARY -> "Да/Нет"
+        ActivityKind.COUNTER -> "Счётчик"
+        ActivityKind.PRESET -> "Пресеты"
+        null -> kind
+    }

@@ -28,6 +28,39 @@ data class WorkoutPlanShortResponse(
      * the enum value — falls back to [WorkoutScheduleType.ONE_TIME].
      */
     val scheduleType: String = WorkoutScheduleType.ONE_TIME.name,
+    /**
+     * `DayOfWeek` enum names (e.g. `"MONDAY"`) — populated only when
+     * [scheduleType] is `RECURRING`. Empty otherwise.
+     */
+    val scheduleDays: List<String> = emptyList(),
+    val restSeconds: Int = 60,
+    /**
+     * Backend-derived primary muscle group of the plan, used by the catalog
+     * card to colour the icon tile and badge. Stored as the raw enum name
+     * (e.g. `"CHEST"`) so the mapping table lives entirely on the client.
+     */
+    val primaryMuscleGroup: String? = null,
+    val exercisesCount: Int = 0,
+    val totalSets: Int = 0,
+)
+
+/**
+ * Partial-update payload for `PUT /api/v1/workout-plans/{id}`.
+ *
+ * Every field is nullable on purpose: `null` means "do not modify". The full
+ * exercise list is on the other hand replace-or-untouched — passing an empty
+ * list explicitly clears the plan, which is intentional and matches the
+ * backend contract.
+ */
+@Serializable
+data class UpdateWorkoutPlanRequest(
+    val name: String? = null,
+    val description: String? = null,
+    val isActive: Boolean? = null,
+    val scheduleType: WorkoutScheduleType? = null,
+    val scheduleDays: List<String>? = null,
+    val restSeconds: Int? = null,
+    val exercises: List<SimpleWorkoutExerciseItem>? = null,
 )
 
 data class ActiveWorkoutSession(
@@ -68,6 +101,7 @@ data class CompletedSet(
 @Serializable
 data class CreateSimpleWorkoutRequest(
     val name: String,
+    val description: String? = null,
     val restSeconds: Int,
     val scheduleType: WorkoutScheduleType = WorkoutScheduleType.ONE_TIME,
     val scheduleDays: List<String> = emptyList(),

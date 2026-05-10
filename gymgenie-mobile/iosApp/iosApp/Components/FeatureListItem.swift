@@ -5,7 +5,6 @@ struct FeatureListItem: View {
     let isFirst: Bool
     let isLast: Bool
 
-    private let greenColor = Color(red: 0.180, green: 0.800, blue: 0.443)
     private let darkColor = Color(red: 0.102, green: 0.102, blue: 0.180)
 
     var body: some View {
@@ -13,19 +12,19 @@ struct FeatureListItem: View {
             VStack(spacing: 0) {
                 if !isFirst {
                     Rectangle()
-                        .fill(greenColor.opacity(0.3))
+                        .fill(Palette.coral.opacity(0.3))
                         .frame(width: 2, height: 12)
                 } else {
                     Spacer().frame(width: 2, height: 12)
                 }
 
                 Circle()
-                    .fill(greenColor)
+                    .fill(Palette.coral)
                     .frame(width: 12, height: 12)
 
                 if !isLast {
                     Rectangle()
-                        .fill(greenColor.opacity(0.3))
+                        .fill(Palette.coral.opacity(0.3))
                         .frame(width: 2, height: 12)
                 } else {
                     Spacer().frame(width: 2, height: 12)
@@ -33,7 +32,7 @@ struct FeatureListItem: View {
             }
 
             Text(text)
-                .font(.system(size: 16, weight: .medium))
+                .font(.system(size: 17, weight: .medium))
                 .foregroundColor(darkColor)
         }
     }

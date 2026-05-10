@@ -19,7 +19,7 @@ final class AppState: ObservableObject {
     private let tokenStorage: TokenStorage
 
     init() {
-        self.tokenStorage = TokenStorageKt.createTokenStorage()
+        self.tokenStorage = KoinHelper.shared.getTokenStorage()
         resolveInitialScreen()
     }
 
@@ -39,10 +39,15 @@ final class AppState: ObservableObject {
         navigate(to: .login)
     }
 
-    func completeLogin() {
-        navigate(to: .paywall)
+    /// Routes the user after a successful login/register based on the
+    /// authoritative `subscriptionType` returned by the backend. Premium users
+    /// skip the paywall; everyone else lands on it.
+    func completeLogin(isPremium: Bool = false) {
+        navigate(to: isPremium ? .main : .paywall)
     }
 
+    /// Backend has already been told to activate the subscription by the
+    /// paywall view model — this only navigates to the success screen.
     func completePurchase() {
         navigate(to: .purchaseSuccess)
     }

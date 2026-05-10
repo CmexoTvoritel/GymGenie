@@ -12,14 +12,8 @@ final class ExerciseDetailViewModelWrapper: ObservableObject {
     private var observationTask: Task<Void, Never>?
 
     init() {
-        let tokenStorage = TokenStorageKt.createTokenStorage()
-        let authApi = AuthApi()
-        let client = AuthenticatedHttpClientKt.createAuthenticatedClient(
-            tokenStorage: tokenStorage,
-            authApi: authApi
-        )
         self.vm = Shared.ExerciseDetailViewModel(
-            exerciseApi: ExerciseApi(client: client)
+            exerciseApi: KoinHelper.shared.getExerciseApi()
         )
         startObserving()
     }

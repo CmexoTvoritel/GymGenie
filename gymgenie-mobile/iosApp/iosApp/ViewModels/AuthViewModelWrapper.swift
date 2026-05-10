@@ -12,12 +12,15 @@ final class AuthViewModelWrapper: ObservableObject {
     @Published private(set) var errorMessage: String? = nil
     @Published private(set) var loginSuccess: Bool = false
     @Published private(set) var registerSuccess: Bool = false
+    @Published private(set) var subscriptionType: String = "FREE"
 
     private var observationTask: Task<Void, Never>?
 
     init() {
-        let tokenStorage = TokenStorageKt.createTokenStorage()
-        self.vm = Shared.AuthViewModel(authApi: AuthApi(), tokenStorage: tokenStorage)
+        self.vm = Shared.AuthViewModel(
+            authApi: KoinHelper.shared.getAuthApi(),
+            tokenStorage: KoinHelper.shared.getTokenStorage()
+        )
         startObserving()
     }
 
@@ -33,6 +36,7 @@ final class AuthViewModelWrapper: ObservableObject {
                 self.errorMessage = state.errorMessage
                 self.loginSuccess = state.loginSuccess
                 self.registerSuccess = state.registerSuccess
+                self.subscriptionType = state.subscriptionType
 
                 try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
             }

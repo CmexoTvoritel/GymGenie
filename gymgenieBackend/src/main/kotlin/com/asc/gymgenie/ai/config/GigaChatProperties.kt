@@ -4,5 +4,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 
 @ConfigurationProperties(prefix = "gigachat")
 data class GigaChatProperties(
-    val authKey: String
+    val authKey: String,
+    val connectTimeoutSeconds: Long = 10,
+    val readTimeoutSeconds: Long = 120
 )

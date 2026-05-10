@@ -5,7 +5,7 @@ struct PrivacyView: View {
 
     @State private var isAgreed: Bool = false
 
-    private let accentColor = Color(red: 0.173, green: 0.757, blue: 0.890)
+    private let coralColor = Color(.sRGB, red: 1.0, green: 0.353, blue: 0.235)
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,7 +23,7 @@ struct PrivacyView: View {
             // Terms content
             ScrollView {
                 Text(termsText)
-                    .font(.system(size: 14))
+                    .font(.system(size: 16))
                     .foregroundColor(.secondary)
                     .lineSpacing(4)
                     .padding(.horizontal, 24)
@@ -38,11 +38,11 @@ struct PrivacyView: View {
                     Button(action: { isAgreed.toggle() }) {
                         Image(systemName: isAgreed ? "checkmark.square.fill" : "square")
                             .font(.system(size: 24))
-                            .foregroundColor(isAgreed ? accentColor : .gray)
+                            .foregroundColor(isAgreed ? coralColor : .gray)
                     }
 
                     Text("Я соглашаюсь с правилами")
-                        .font(.system(size: 14))
+                        .font(.system(size: 16))
                         .foregroundColor(.primary)
 
                     Spacer()
@@ -51,7 +51,10 @@ struct PrivacyView: View {
 
                 GymGenieButton(
                     title: "Принять",
-                    isEnabled: isAgreed
+                    isEnabled: isAgreed,
+                    accentColor: coralColor,
+                    fontSize: 20,
+                    fontWeight: .bold
                 ) {
                     appState.completePrivacy()
                 }

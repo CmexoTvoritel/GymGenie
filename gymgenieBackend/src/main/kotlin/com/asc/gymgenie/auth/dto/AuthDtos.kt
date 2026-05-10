@@ -42,5 +42,6 @@ data class TokenResponse(
 data class AuthUserResponse(
     val id: UUID,
     val username: String,
-    val email: String
+    val email: String,
+    val subscriptionType: String,
 )

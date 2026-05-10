@@ -2,6 +2,7 @@ package com.asc.gymgenie.feature.auth
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,6 +30,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.KeyboardType
@@ -47,6 +51,8 @@ fun RegisterScreen(
     onNavigateToLogin: () -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     LaunchedEffect(state.registerSuccess) {
         if (state.registerSuccess) {
@@ -59,7 +65,17 @@ fun RegisterScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(IllustrationBackground)
-            .statusBarsPadding(),
+            .statusBarsPadding()
+            // Tap on any non-interactive area of the screen (illustration,
+            // paddings, divider gaps) clears focus from the form fields.
+            // Buttons and text fields consume their own taps so this only
+            // fires for empty space.
+            .pointerInput(Unit) {
+                detectTapGestures {
+                    focusManager.clearFocus()
+                    keyboardController?.hide()
+                }
+            },
     ) {
         // Top illustration area
         Box(
@@ -179,7 +195,13 @@ fun RegisterScreen(
             Text(
                 text = annotatedText,
                 style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.clickable { onNavigateToLogin() },
+                modifier = Modifier.clickable {
+                    // Navigating away should also drop focus so the keyboard
+                    // doesn't carry over to the next screen.
+                    focusManager.clearFocus()
+                    keyboardController?.hide()
+                    onNavigateToLogin()
+                },
             )
         }
     }

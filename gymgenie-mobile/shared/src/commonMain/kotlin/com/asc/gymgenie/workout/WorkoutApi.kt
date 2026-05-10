@@ -6,9 +6,11 @@ import com.asc.gymgenie.common.ApiException
 import com.asc.gymgenie.common.PagedResponse
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
+import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
@@ -116,6 +118,50 @@ class WorkoutApi(
     suspend fun getPlanById(planId: String): Result<WorkoutPlanResponse> {
         return try {
             val response = client.get("$baseUrl/api/v1/workout-plans/$planId")
+            if (response.status.isSuccess()) {
+                Result.success(response.body<WorkoutPlanResponse>())
+            } else {
+                val errorBody = response.bodyAsText()
+                Result.failure(ApiException(response.status.value, errorBody))
+            }
+        } catch (e: Exception) {
+            Result.failure(NetworkException(e.message ?: "Ошибка сети"))
+        }
+    }
+
+    /**
+     * Permanently deletes a workout plan. The backend responds with 204 on
+     * success — we accept any 2xx and treat the body as empty.
+     */
+    suspend fun deletePlan(planId: String): Result<Unit> {
+        return try {
+            val response = client.delete("$baseUrl/api/v1/workout-plans/$planId")
+            if (response.status.isSuccess()) {
+                Result.success(Unit)
+            } else {
+                val errorBody = response.bodyAsText()
+                Result.failure(ApiException(response.status.value, errorBody))
+            }
+        } catch (e: Exception) {
+            Result.failure(NetworkException(e.message ?: "Ошибка сети"))
+        }
+    }
+
+    /**
+     * Applies a partial update to an existing plan. Fields left null on the
+     * request are kept untouched on the server; the response is the freshly
+     * persisted [WorkoutPlanResponse] so the client can replace its local copy
+     * without a follow-up GET.
+     */
+    suspend fun updatePlan(
+        planId: String,
+        request: UpdateWorkoutPlanRequest,
+    ): Result<WorkoutPlanResponse> {
+        return try {
+            val response = client.put("$baseUrl/api/v1/workout-plans/$planId") {
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }
             if (response.status.isSuccess()) {
                 Result.success(response.body<WorkoutPlanResponse>())
             } else {

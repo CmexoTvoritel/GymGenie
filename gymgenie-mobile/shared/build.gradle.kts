@@ -34,6 +34,7 @@ kotlin {
             api(libs.ktor.client.content.negotiation)
             api(libs.ktor.serialization.kotlinx.json)
             implementation(libs.sqldelight.coroutines.extensions)
+            api(libs.koin.core)
         }
         androidMain.dependencies {
             api(libs.ktor.client.okhttp)

@@ -20,6 +20,7 @@ data class UserResponse(
     val id: String,
     val username: String,
     val email: String,
+    val subscriptionType: String = "FREE",
 )
 
 @Serializable

@@ -25,15 +25,9 @@ final class CreateWorkoutViewModelWrapper: ObservableObject {
     private var observationTask: Task<Void, Never>?
 
     init() {
-        let tokenStorage = TokenStorageKt.createTokenStorage()
-        let authApi = AuthApi()
-        let client = AuthenticatedHttpClientKt.createAuthenticatedClient(
-            tokenStorage: tokenStorage,
-            authApi: authApi
-        )
         self.vm = Shared.CreateWorkoutViewModel(
-            exerciseApi: Shared.ExerciseApi(client: client),
-            workoutApi: Shared.WorkoutApi(client: client)
+            exerciseApi: KoinHelper.shared.getExerciseApi(),
+            workoutApi: KoinHelper.shared.getWorkoutApi()
         )
         startObserving()
     }
@@ -45,8 +39,16 @@ final class CreateWorkoutViewModelWrapper: ObservableObject {
                 guard let state = self.vm.state.value as? Shared.CreateWorkoutUiState else { continue }
                 self.workoutName = state.workoutName
                 self.restSeconds = state.restSeconds
-                self.exercises = state.exercises as? [Shared.PendingExercise] ?? []
-                self.muscleGroups = state.muscleGroups as? [Shared.MuscleGroupInfo] ?? []
+                if let list = state.exercises as? [Shared.PendingExercise] {
+                    self.exercises = list
+                } else {
+                    self.exercises = (state.exercises as NSArray).compactMap { $0 as? Shared.PendingExercise }
+                }
+                if let list = state.muscleGroups as? [Shared.MuscleGroupInfo] {
+                    self.muscleGroups = list
+                } else {
+                    self.muscleGroups = (state.muscleGroups as NSArray).compactMap { $0 as? Shared.MuscleGroupInfo }
+                }
                 self.isMuscleGroupsLoading = state.isMuscleGroupsLoading
                 self.isMuscleGroupsLoaded = state.isMuscleGroupsLoaded
                 self.isSaving = state.isSaving

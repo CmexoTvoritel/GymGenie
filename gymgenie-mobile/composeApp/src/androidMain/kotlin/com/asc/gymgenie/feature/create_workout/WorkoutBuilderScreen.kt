@@ -59,6 +59,7 @@ fun WorkoutBuilderScreen(
     state: CreateWorkoutUiState,
     onBack: () -> Unit,
     onNameChange: (String) -> Unit,
+    onDescriptionChange: (String) -> Unit,
     onIncrementRest: () -> Unit,
     onDecrementRest: () -> Unit,
     onRemoveExerciseAt: (Int) -> Unit,
@@ -88,6 +89,17 @@ fun WorkoutBuilderScreen(
                 WorkoutNameField(
                     value = state.workoutName,
                     onValueChange = onNameChange,
+                )
+            }
+
+            item {
+                WorkoutDescriptionField(
+                    value = state.description,
+                    onValueChange = { newValue ->
+                        if (newValue.length <= WorkoutDescriptionMaxLength) {
+                            onDescriptionChange(newValue)
+                        }
+                    },
                 )
             }
 
@@ -178,6 +190,42 @@ private fun WorkoutNameField(
         ),
     )
 }
+
+/**
+ * Optional free-text description for the workout plan.
+ *
+ * Mirrors [WorkoutNameField] visually so the two inputs read as a pair, with
+ * the only deliberate difference being a 2-line cap (vs. single line) since
+ * the description is meant to be a short blurb rather than a title.
+ *
+ * Length is clamped at [WorkoutDescriptionMaxLength] at the call site so the
+ * cap is visible next to the field declaration and stays consistent with the
+ * presenter's expectations.
+ */
+@Composable
+private fun WorkoutDescriptionField(
+    value: String,
+    onValueChange: (String) -> Unit,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        placeholder = { Text("Короткое описание (необязательно)", color = MutedText) },
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        singleLine = false,
+        maxLines = 2,
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = AccentOrange,
+            unfocusedBorderColor = SoftCard,
+            cursorColor = AccentOrange,
+            focusedContainerColor = Color.White,
+            unfocusedContainerColor = Color.White,
+        ),
+    )
+}
+
+private const val WorkoutDescriptionMaxLength = 500
 
 @Composable
 private fun RestTimeCard(

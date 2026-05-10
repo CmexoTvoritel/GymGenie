@@ -37,6 +37,13 @@ val RingMovement = Color(0xFFF43F55)
 val RingActivity = Color(0xFF4DD47B)
 val RingWarmups = Color(0xFF3BACF7)
 
+// New activity-ring palette aligned with the home redesign spec.
+// MOVE = movement-style activities, MIND = focus/calm, LIFE = lifestyle/habits.
+val RingMove = Color(0xFFFF3B5C)
+val RingMind = Color(0xFF3DDC84)
+val RingLife = Color(0xFF3B9DFF)
+val ActivityCardBorder = Color(0xFFEDEDEF)
+
 val ActivityWater = Color(0xFF3BACF7)
 val ActivityWalking = Color(0xFF4DD47B)
 val ActivityStretching = Color(0xFFFB8094)

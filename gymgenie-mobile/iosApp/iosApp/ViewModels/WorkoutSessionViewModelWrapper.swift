@@ -38,16 +38,10 @@ final class WorkoutSessionViewModelWrapper: ObservableObject {
         session: ActiveWorkoutSession,
         localRepository: LocalWorkoutRepository
     ) {
-        let tokenStorage = TokenStorageKt.createTokenStorage()
-        let authApi = AuthApi()
-        let client = AuthenticatedHttpClientKt.createAuthenticatedClient(
-            tokenStorage: tokenStorage,
-            authApi: authApi
-        )
         self.vm = WorkoutSessionViewModel(
             session: session,
             localRepository: localRepository,
-            workoutApi: WorkoutApi(client: client),
+            workoutApi: KoinHelper.shared.getWorkoutApi(),
             sessionIdSeed: Self.generateSessionId()
         )
         startObserving()

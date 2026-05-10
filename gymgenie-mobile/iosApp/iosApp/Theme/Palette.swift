@@ -18,6 +18,12 @@ enum Palette {
     static let ringActivity  = Color(red: 0.298, green: 0.831, blue: 0.482) // fresh green
     static let ringWarmups   = Color(red: 0.231, green: 0.671, blue: 0.969) // sky blue
 
+    // New activity-ring palette (home redesign): MOVE / MIND / LIFE.
+    static let ringMove = Color(red: 1.0, green: 0.231, blue: 0.361)   // #FF3B5C
+    static let ringMind = Color(red: 0.239, green: 0.863, blue: 0.518) // #3DDC84
+    static let ringLife = Color(red: 0.231, green: 0.616, blue: 1.0)   // #3B9DFF
+    static let activityCardBorder = Color(red: 0.929, green: 0.929, blue: 0.937) // #EDEDEF
+
     static let activityWater      = Color(red: 0.231, green: 0.671, blue: 0.969)
     static let activityWalking    = Color(red: 0.298, green: 0.831, blue: 0.482)
     static let activityStretching = Color(red: 0.984, green: 0.502, blue: 0.580)

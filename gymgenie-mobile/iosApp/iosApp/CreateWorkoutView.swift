@@ -214,7 +214,7 @@ struct CreateWorkoutView: View {
 
             VStack(spacing: 8) {
                 ForEach(exercises) { exercise in
-                    exerciseRow(exercise: exercise)
+                    exerciseRow(exercise)
                 }
 
                 // Catalog button

@@ -18,10 +18,10 @@ struct ContentView: View {
                 PrivacyView()
 
             case .login:
-                LoginView(viewModel: authViewModel)
+                AuthView(viewModel: authViewModel, initialIsLogin: true)
 
             case .register:
-                RegisterView(viewModel: authViewModel)
+                AuthView(viewModel: authViewModel, initialIsLogin: false)
 
             case .paywall:
                 PaywallView()

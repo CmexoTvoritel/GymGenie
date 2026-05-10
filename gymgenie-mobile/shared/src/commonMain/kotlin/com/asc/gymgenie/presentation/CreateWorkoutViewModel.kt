@@ -42,6 +42,7 @@ data class PendingExercise(
 
 data class CreateWorkoutUiState(
     val workoutName: String = "",
+    val description: String = "",
     val restSeconds: Int = CreateWorkoutLimits.DEFAULT_REST_SECONDS,
     val exercises: List<PendingExercise> = emptyList(),
     val muscleGroups: List<MuscleGroupInfo> = emptyList(),
@@ -95,6 +96,10 @@ class CreateWorkoutViewModel(
 
     fun setWorkoutName(name: String) {
         _state.update { it.copy(workoutName = name) }
+    }
+
+    fun setDescription(description: String) {
+        _state.update { it.copy(description = description) }
     }
 
     fun setRestSeconds(seconds: Int) {
@@ -178,6 +183,7 @@ class CreateWorkoutViewModel(
         scope.launch {
             val request = CreateSimpleWorkoutRequest(
                 name = name,
+                description = current.description.trim().ifEmpty { null },
                 restSeconds = current.restSeconds,
                 scheduleType = current.scheduleType,
                 scheduleDays = if (current.scheduleType == WorkoutScheduleType.RECURRING) {

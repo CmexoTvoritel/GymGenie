@@ -3,63 +3,79 @@ import SwiftUI
 struct PurchaseSuccessView: View {
     @EnvironmentObject var appState: AppState
 
-    private let accentColor = Color(red: 0.173, green: 0.757, blue: 0.890)
-    private let greenColor = Color(red: 0.180, green: 0.800, blue: 0.443)
+    private let darkColor = Color(red: 0.102, green: 0.102, blue: 0.180)
 
     var body: some View {
-        ZStack {
-            // Gradient background
-            VStack(spacing: 0) {
-                LinearGradient(
-                    gradient: Gradient(colors: [
-                        greenColor.opacity(0.3),
-                        greenColor.opacity(0.1),
-                        Color(red: 0.961, green: 0.969, blue: 0.980),
-                    ]),
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
+        ZStack(alignment: .topLeading) {
+            Color.white.ignoresSafeArea()
+
+            // Close button — absolutely positioned, does not affect layout flow.
+            Button(action: { appState.completeOnboardingFlow() }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(darkColor)
+                    .frame(width: 32, height: 32)
+                    .background(Circle().fill(Color.gray.opacity(0.15)))
             }
-            .edgesIgnoringSafeArea(.all)
+            .padding(.leading, 20)
+            .padding(.top, 8)
+            .zIndex(1)
 
-            VStack(spacing: 24) {
+            // Main column — image+texts block is vertically centered by two
+            // flexible spacers so it sits between the X button area and the
+            // action buttons. Buttons are part of the same VStack to avoid
+            // overlapping bottom overlays.
+            VStack(spacing: 0) {
+                // Reserved space for the absolutely-placed X button.
+                Spacer().frame(height: 56)
+
                 Spacer()
 
-                // Illustration placeholder
-                ZStack {
-                    Circle()
-                        .fill(greenColor.opacity(0.15))
-                        .frame(width: 140, height: 140)
+                // Centered content block — image + both texts as one group.
+                VStack(spacing: 0) {
+                    Image("ic_paywall_success")
+                        .resizable()
+                        .aspectRatio(1, contentMode: .fit)
+                        .frame(maxWidth: .infinity)
 
-                    Image(systemName: "figure.strengthtraining.traditional")
-                        .font(.system(size: 56))
-                        .foregroundColor(greenColor)
+                    Spacer().frame(height: 32)
+
+                    // Single Text with explicit line spacing — approximates
+                    // 110% lineHeight at 32pt (35 - 32 = 3pt extra leading).
+                    Text("Успешно!\nВы разблокировали все функции")
+                        .font(.system(size: 32, weight: .bold))
+                        .lineSpacing(3)
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(darkColor)
+
+                    Spacer().frame(height: 12)
+
+                    Text("Теперь давайте начнём с вашего ИИ-плана и изучим все возможности приложения")
+                        .font(.system(size: 21, weight: .medium))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
                 }
-
-                // Title
-                Text("Успешно!")
-                    .font(.system(size: 32, weight: .bold))
-                    .foregroundColor(Color(red: 0.102, green: 0.102, blue: 0.180))
-
-                // Subtitle
-                Text("Вы разблокировали все функции")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(Color(red: 0.102, green: 0.102, blue: 0.180))
-
-                Text("Теперь давайте начнём с вашего ИИ-плана и изучим все возможности приложения")
-                    .font(.system(size: 15))
-                    .foregroundColor(.gray)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 40)
+                .padding(.horizontal, 36)
 
                 Spacer()
 
-                // Button
-                GymGenieButton(title: "Начать с планом от ИИ") {
-                    appState.completeOnboardingFlow()
+                // Bottom buttons inside the same VStack so the symmetric
+                // spacers above distribute free space around the content block.
+                VStack(spacing: 12) {
+                    GymGenieButton(title: "Начать с планом от ИИ", accentColor: Palette.coral) {
+                        appState.completeOnboardingFlow()
+                    }
+
+                    Button(action: { appState.completeOnboardingFlow() }) {
+                        Text("Продолжить без плана")
+                            .font(.system(size: 16))
+                            .foregroundColor(.gray)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 52)
+                    }
                 }
                 .padding(.horizontal, 24)
-                .padding(.bottom, 40)
+                .padding(.bottom, 24)
             }
         }
     }

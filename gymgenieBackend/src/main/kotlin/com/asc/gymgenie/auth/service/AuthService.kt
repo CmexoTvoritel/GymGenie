@@ -115,7 +115,8 @@ class AuthService(
             user = AuthUserResponse(
                 id = user.id!!,
                 username = user.username,
-                email = user.email
+                email = user.email,
+                subscriptionType = user.subscriptionType.name,
             )
         )
     }

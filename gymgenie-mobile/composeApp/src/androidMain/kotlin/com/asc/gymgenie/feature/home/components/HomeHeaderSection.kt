@@ -26,7 +26,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Color
 import com.asc.gymgenie.ui.theme.AccentOrange
+import com.asc.gymgenie.ui.theme.Coral
 import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
 import com.asc.gymgenie.ui.theme.SoftCard
@@ -78,7 +80,7 @@ fun HomeHeaderSection(
                 text = streakDays.toString(),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                color = androidx.compose.ui.graphics.Color.White,
+                color = Color.White,
             )
         }
 
@@ -107,14 +109,14 @@ private fun Avatar(username: String) {
         modifier = Modifier
             .size(44.dp)
             .clip(CircleShape)
-            .background(SoftCard),
+            .background(Coral),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = initial,
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
-            color = DeepInk,
+            color = Color.White,
         )
     }
 }

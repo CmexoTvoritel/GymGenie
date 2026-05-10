@@ -4,6 +4,7 @@ enum MainTab: Int, CaseIterable {
     case home
     case aiCoach
     case workouts
+    case nutrition
     case profile
 
     var title: String {
@@ -11,6 +12,7 @@ enum MainTab: Int, CaseIterable {
         case .home: return "Главная"
         case .aiCoach: return "ИИ"
         case .workouts: return "Тренировки"
+        case .nutrition: return "Рацион"
         case .profile: return "Профиль"
         }
     }
@@ -20,6 +22,7 @@ enum MainTab: Int, CaseIterable {
         case .home: return "house"
         case .aiCoach: return "sparkles"
         case .workouts: return "dumbbell"
+        case .nutrition: return "fork.knife"
         case .profile: return "person"
         }
     }
@@ -29,6 +32,7 @@ enum MainTab: Int, CaseIterable {
         case .home: return "house.fill"
         case .aiCoach: return "sparkles"
         case .workouts: return "dumbbell.fill"
+        case .nutrition: return "fork.knife"
         case .profile: return "person.fill"
         }
     }
@@ -36,6 +40,7 @@ enum MainTab: Int, CaseIterable {
 
 struct MainView: View {
     @State private var selectedTab: MainTab = .home
+    @StateObject private var profileStore = UserProfileStoreWrapper()
 
     private var navItems: [BottomNavBar.Item] {
         MainTab.allCases.map { tab in
@@ -50,20 +55,21 @@ struct MainView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            Group {
-                switch selectedTab {
-                case .home:
-                    HomeView()
-                case .aiCoach:
-                    PlaceholderView(title: "ИИ Тренер", icon: "sparkles", subtitle: "Скоро будет доступен")
-                case .workouts:
-                    WorkoutsView()
-                case .profile:
-                    ProfileView()
-                }
+            // All four tab views stay alive in the view hierarchy so each
+            // tab's @StateObject ViewModels and scroll positions survive tab
+            // switches. We toggle visibility / hit-testing rather than
+            // swapping the views in/out via `switch`, which would tear down
+            // their state.
+            ZStack {
+                tabView(.home) { HomeView() }
+                tabView(.aiCoach) { AiCoachView() }
+                tabView(.workouts) { WorkoutsView() }
+                tabView(.nutrition) { NutritionView() }
+                tabView(.profile) { ProfileView() }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.bottom, 88)
+            .environmentObject(profileStore)
 
             BottomNavBar(
                 items: navItems,
@@ -77,6 +83,21 @@ struct MainView: View {
             .padding(.top, 8)
         }
         .background(Palette.warmOffWhite)
+        .onAppear { profileStore.load() }
+    }
+
+    @ViewBuilder
+    private func tabView<Content: View>(
+        _ tab: MainTab,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        let isActive = selectedTab == tab
+        content()
+            .opacity(isActive ? 1 : 0)
+            .allowsHitTesting(isActive)
+            // Keeps inactive tabs out of accessibility focus while they sit
+            // invisible in the hierarchy.
+            .accessibilityHidden(!isActive)
     }
 }
 

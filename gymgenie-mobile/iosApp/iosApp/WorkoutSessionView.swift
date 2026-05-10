@@ -36,7 +36,7 @@ struct WorkoutSessionView: View {
         Group {
             if sessionVM.isFinished {
                 WorkoutSummaryView(
-                    planName: sessionVM.vm.state.value?.session.planName ?? "Тренировка",
+                    planName: (sessionVM.vm.state.value as? WorkoutSessionViewModel.State)?.session.planName ?? "Тренировка",
                     durationSeconds: Int(sessionVM.sessionDurationSeconds),
                     exerciseCount: Int(sessionVM.totalExercises),
                     totalVolumeKg: sessionVM.totalVolumeKg(),
@@ -170,7 +170,7 @@ struct WorkoutSessionView: View {
             }
 
             // Recommended weight badge
-            Text("Рек: \(Int(sessionVM.currentExercise?.weightKg ?? 60)) кг")
+            Text("Рек: \(Int(sessionVM.currentExercise?.weightKg?.doubleValue ?? 60.0)) кг")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(.white)
                 .padding(.horizontal, 10)

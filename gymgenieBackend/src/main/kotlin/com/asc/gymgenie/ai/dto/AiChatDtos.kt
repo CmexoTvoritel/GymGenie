@@ -8,7 +8,12 @@ import java.util.UUID
 data class AiChatRequest(
     @field:NotBlank
     val message: String,
-    val healthIssues: String? = null
+    val ageYears: Int? = null,
+    val heightCm: Double? = null,
+    val weightKg: Double? = null,
+    val experience: String? = null,
+    val frequency: String? = null,
+    val healthIssues: String? = null,
 )
 
 data class AiChatResponse(
@@ -25,9 +30,30 @@ data class AiWorkoutDto(
     val name: String,
     val description: String?,
     val estimatedDurationMinutes: Int,
-    val exercises: List<AiWorkoutExerciseDto>
+    val exercises: List<AiWorkoutExerciseParsedDto>
 )
 
+/**
+ * Lenient DTO used only for deserializing GigaChat JSON responses.
+ *
+ * `reps` and `restSeconds` are nullable because GigaChat omits these fields
+ * for bodyweight or time-based exercises. This DTO must NOT be exposed on
+ * mobile-facing endpoints — use [AiWorkoutExerciseDto] there.
+ */
+data class AiWorkoutExerciseParsedDto(
+    val exerciseId: UUID,
+    val sets: Int,
+    val reps: Int? = null,
+    val restSeconds: Int? = null,
+    val notes: String? = null
+)
+
+/**
+ * Strict DTO used by the mobile-facing save/replace workout endpoints.
+ *
+ * All numeric prescription fields are required: clients must explicitly
+ * specify `reps` and `restSeconds` before persistence.
+ */
 data class AiWorkoutExerciseDto(
     val exerciseId: UUID,
     val sets: Int,

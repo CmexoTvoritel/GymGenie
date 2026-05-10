@@ -10,6 +10,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -24,6 +25,8 @@ fun GymGenieTextField(
     visualTransformation: VisualTransformation = VisualTransformation.None,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     isError: Boolean = false,
+    enabled: Boolean = true,
+    accentColor: Color = MaterialTheme.colorScheme.primary,
 ) {
     OutlinedTextField(
         value = value,
@@ -39,12 +42,16 @@ fun GymGenieTextField(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = MaterialTheme.colorScheme.primary,
+            focusedBorderColor = accentColor,
             unfocusedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+            focusedLabelColor = accentColor,
+            cursorColor = accentColor,
+            focusedLeadingIconColor = accentColor,
         ),
         visualTransformation = visualTransformation,
         keyboardOptions = keyboardOptions,
         singleLine = true,
         isError = isError,
+        enabled = enabled,
     )
 }

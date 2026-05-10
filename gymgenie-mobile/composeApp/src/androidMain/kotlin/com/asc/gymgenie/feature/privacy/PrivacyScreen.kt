@@ -22,8 +22,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.asc.gymgenie.ui.components.GymGenieButton
+import com.asc.gymgenie.ui.theme.Coral
 
 private val termsText = """
 Условия использования приложения GymGenie
@@ -87,7 +90,7 @@ fun PrivacyScreen(
 
         Text(
             text = termsText,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 16.sp),
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier
                 .weight(1f)
@@ -104,12 +107,12 @@ fun PrivacyScreen(
                 checked = isChecked,
                 onCheckedChange = { isChecked = it },
                 colors = CheckboxDefaults.colors(
-                    checkedColor = MaterialTheme.colorScheme.primary,
+                    checkedColor = Coral,
                 ),
             )
             Text(
                 text = "Я соглашаюсь с правилами",
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 16.sp),
                 color = MaterialTheme.colorScheme.onSurface,
             )
         }
@@ -120,6 +123,11 @@ fun PrivacyScreen(
             text = "Принять",
             onClick = onAccepted,
             enabled = isChecked,
+            containerColor = Coral,
+            textStyle = MaterialTheme.typography.labelLarge.copy(
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+            ),
         )
 
         Spacer(modifier = Modifier.height(32.dp))

@@ -10,6 +10,18 @@ struct LoginView: View {
     private let accentColor = Color(red: 0.173, green: 0.757, blue: 0.890)
     private let backgroundColor = Color(red: 0.961, green: 0.969, blue: 0.980)
 
+    /// Resigns the first responder, dismissing the on-screen keyboard.
+    /// Used for taps on empty space inside the auth card and for the
+    /// register-link button — text fields keep their own tap behavior.
+    private func hideKeyboard() {
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil,
+            from: nil,
+            for: nil
+        )
+    }
+
     var body: some View {
         ZStack(alignment: .top) {
             // Top illustration area
@@ -122,6 +134,7 @@ struct LoginView: View {
                                 .font(.system(size: 14))
                                 .foregroundColor(.gray)
                             Button(action: {
+                                hideKeyboard()
                                 viewModel.clearFields()
                                 emailField = ""
                                 passwordField = ""
@@ -140,6 +153,12 @@ struct LoginView: View {
                             .fill(.white)
                     )
                     .offset(y: -40)
+                    // Empty areas inside the white card (paddings, divider row,
+                    // social row gaps) still dismiss the keyboard. Interactive
+                    // children (TextFields, Buttons) capture their own taps,
+                    // so this only fires for truly empty space.
+                    .contentShape(Rectangle())
+                    .onTapGesture { hideKeyboard() }
                 }
             }
         }

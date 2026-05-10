@@ -29,4 +29,10 @@ class UserController(
         val userId = UUID.fromString(authentication.name)
         return ResponseEntity.ok(userService.updateProfile(userId, request))
     }
+
+    @PutMapping("/me/subscription")
+    fun activateSubscription(authentication: Authentication): ResponseEntity<UserProfileResponse> {
+        val userId = UUID.fromString(authentication.name)
+        return ResponseEntity.ok(userService.activateSubscription(userId))
+    }
 }

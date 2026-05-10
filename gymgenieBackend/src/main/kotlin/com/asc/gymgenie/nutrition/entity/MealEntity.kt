@@ -3,6 +3,10 @@ package com.asc.gymgenie.nutrition.entity
 import jakarta.persistence.*
 import java.util.*
 
+/**
+ * A single meal within a [MealPlanEntity]. Owns one or more [DishEntity] rows
+ * (each dish is a concrete food item with its own portion + macros).
+ */
 @Entity
 @Table(name = "meals")
 class MealEntity(
@@ -11,32 +15,27 @@ class MealEntity(
     @GeneratedValue(strategy = GenerationType.UUID)
     var id: UUID? = null,
 
+    @Column(name = "order_index", nullable = false)
+    var orderIndex: Int = 0,
+
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "meal_plan_day_id", nullable = false)
-    var mealPlanDay: MealPlanDayEntity,
+    @JoinColumn(name = "meal_plan_id", nullable = false)
+    var mealPlan: MealPlanEntity,
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 32)
     var mealType: MealType,
 
     @Column(nullable = false, length = 100)
     var name: String,
 
-    @Column(length = 500)
-    var description: String? = null,
-
-    var totalCalories: Int = 0,
-
-    var totalProteinG: Double = 0.0,
-
-    var totalFatG: Double = 0.0,
-
-    var totalCarbsG: Double = 0.0,
-
-    @Column(nullable = false)
-    var orderIndex: Int = 0,
+    /**
+     * Estimated calories for the whole meal. Nullable because the AI
+     * may decline to estimate a value and we prefer to record `null`
+     * over a fabricated number.
+     */
+    var estimatedCalories: Int? = null,
 
     @OneToMany(mappedBy = "meal", cascade = [CascadeType.ALL], orphanRemoval = true)
-    @OrderBy("orderIndex ASC")
-    var items: MutableList<MealItemEntity> = mutableListOf()
+    var dishes: MutableList<DishEntity> = mutableListOf()
 )

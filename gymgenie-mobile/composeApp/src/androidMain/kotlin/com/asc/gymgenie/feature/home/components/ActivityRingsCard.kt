@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,77 +28,116 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.asc.gymgenie.activity.ActivityRing
+import com.asc.gymgenie.activity.ActivityTodayResponse
+import com.asc.gymgenie.activity.toProgress
 import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
-import com.asc.gymgenie.ui.theme.RingActivity
-import com.asc.gymgenie.ui.theme.RingMovement
-import com.asc.gymgenie.ui.theme.RingWarmups
+import com.asc.gymgenie.ui.theme.RingLife
+import com.asc.gymgenie.ui.theme.RingMind
+import com.asc.gymgenie.ui.theme.RingMove
 import com.asc.gymgenie.ui.theme.SoftCard
 
 /**
- * Apple Fitness style concentric-ring card.
+ * Triple-ring summary of today's activity progress.
  *
- * All progress values are hardcoded — the backend does not yet expose a
- * dedicated Activity feed. Replace with real data once available.
+ * Receives the raw KMM payloads and computes the per-ring averages on the
+ * fly, which keeps the card stateless and allows the parent screen to
+ * recompose freely without re-fetching anything.
  */
 @Composable
-fun ActivityRingsCard() {
-    // TODO: hook up to an ActivityFeed endpoint when the backend exposes one.
-    val movementProgress = 420f / 600f
-    val activityProgress = 28f / 45f
-    val warmupsProgress = 6f / 12f
+fun ActivityRingsCard(activities: List<ActivityTodayResponse>) {
+    val (move, mind, life) = remember(activities) { computeRingProgress(activities) }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(24.dp))
             .background(SoftCard)
-            .padding(24.dp),
+            .padding(18.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ConcentricRings(
-            movementProgress = movementProgress,
-            activityProgress = activityProgress,
-            warmupsProgress = warmupsProgress,
-            modifier = Modifier.size(132.dp),
+            moveProgress = move ?: 0f,
+            mindProgress = mind ?: 0f,
+            lifeProgress = life ?: 0f,
+            modifier = Modifier.size(140.dp),
         )
 
         Spacer(modifier = Modifier.width(20.dp))
 
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            LegendRow(color = RingMovement, title = "ДВИЖЕНИЕ", value = "420/600 ккал")
-            LegendRow(color = RingActivity, title = "АКТИВНОСТЬ", value = "28/45 мин")
-            LegendRow(color = RingWarmups, title = "РАЗМИНКИ", value = "6/12 раз")
+            LegendRow(color = RingMove, title = "ДВИЖЕНИЕ", value = formatPct(move))
+            LegendRow(color = RingMind, title = "РАЗУМ", value = formatPct(mind))
+            LegendRow(color = RingLife, title = "РЕЖИМ", value = formatPct(life))
         }
     }
 }
 
+/**
+ * Per-ring progress as a fraction in `[0f, 1f]` or `null` if the ring has no
+ * activities planned for today. Keeping `null` separate from `0f` lets the
+ * legend distinguish "no progress yet" from "nothing to do" — the latter
+ * renders as `–` instead of `0%`.
+ */
+private data class RingTotals(val move: Float?, val mind: Float?, val life: Float?)
+
+private operator fun RingTotals.component1() = move
+private operator fun RingTotals.component2() = mind
+private operator fun RingTotals.component3() = life
+
+/**
+ * Aggregates the per-activity progress fractions into one number per ring by
+ * averaging across the activities that belong to that ring. An empty ring
+ * yields `null` so the UI can render a neutral placeholder.
+ *
+ * Activities whose `ring` field does not match any [ActivityRing] entry are
+ * silently ignored — they cannot influence a ring they don't belong to.
+ */
+private fun computeRingProgress(activities: List<ActivityTodayResponse>): RingTotals {
+    fun average(target: ActivityRing): Float? {
+        val group = activities.filter {
+            runCatching { ActivityRing.valueOf(it.ring) }.getOrNull() == target
+        }
+        if (group.isEmpty()) return null
+        return group.fold(0f) { acc, a -> acc + a.toProgress().fraction } / group.size
+    }
+    return RingTotals(
+        move = average(ActivityRing.MOVE),
+        mind = average(ActivityRing.MIND),
+        life = average(ActivityRing.LIFE),
+    )
+}
+
+private fun formatPct(value: Float?): String =
+    if (value == null) "–" else "${(value.coerceIn(0f, 1f) * 100f).toInt()}%"
+
 @Composable
 private fun ConcentricRings(
-    movementProgress: Float,
-    activityProgress: Float,
-    warmupsProgress: Float,
+    moveProgress: Float,
+    mindProgress: Float,
+    lifeProgress: Float,
     modifier: Modifier = Modifier,
 ) {
     Canvas(modifier = modifier) {
-        val strokeWidth = 12.dp.toPx()
-        val gap = 4.dp.toPx()
+        val strokeWidth = 13.dp.toPx()
+        val gap = 3.dp.toPx()
 
         drawRing(
-            color = RingMovement,
-            progress = movementProgress,
+            color = RingMove,
+            progress = moveProgress,
             inset = 0f,
             strokeWidth = strokeWidth,
         )
         drawRing(
-            color = RingActivity,
-            progress = activityProgress,
+            color = RingMind,
+            progress = mindProgress,
             inset = strokeWidth + gap,
             strokeWidth = strokeWidth,
         )
         drawRing(
-            color = RingWarmups,
-            progress = warmupsProgress,
+            color = RingLife,
+            progress = lifeProgress,
             inset = 2 * (strokeWidth + gap),
             strokeWidth = strokeWidth,
         )
@@ -121,7 +161,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRing(
     val safeProgress = progress.coerceIn(0f, 1f)
 
     drawArc(
-        color = color.copy(alpha = 0.18f),
+        color = color.copy(alpha = 0.15f),
         startAngle = 0f,
         sweepAngle = 360f,
         useCenter = false,
@@ -129,15 +169,17 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRing(
         size = arcSize,
         style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
     )
-    drawArc(
-        color = color,
-        startAngle = -90f,
-        sweepAngle = 360f * safeProgress,
-        useCenter = false,
-        topLeft = topLeft,
-        size = arcSize,
-        style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
-    )
+    if (safeProgress > 0f) {
+        drawArc(
+            color = color,
+            startAngle = -90f,
+            sweepAngle = 360f * safeProgress,
+            useCenter = false,
+            topLeft = topLeft,
+            size = arcSize,
+            style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
+        )
+    }
 }
 
 @Composable
@@ -153,16 +195,16 @@ private fun LegendRow(color: Color, title: String, value: String) {
         Column {
             Text(
                 text = title,
-                fontSize = 11.sp,
+                fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
                 color = MutedText,
-                letterSpacing = 0.4.sp,
+                letterSpacing = 0.6.sp,
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = value,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.ExtraBold,
                 color = DeepInk,
             )
         }

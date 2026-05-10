@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -24,7 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.asc.gymgenie.ui.theme.AccentGreen
+import com.asc.gymgenie.ui.theme.Coral
 import com.asc.gymgenie.ui.theme.OnBackground
 
 @Composable
@@ -50,7 +49,7 @@ fun PlanCard(
                 if (isSelected) {
                     Modifier.border(
                         width = 2.dp,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = Coral,
                         shape = RoundedCornerShape(16.dp),
                     )
                 } else {
@@ -71,7 +70,7 @@ fun PlanCard(
                     color = Color.White,
                     modifier = Modifier
                         .clip(RoundedCornerShape(50))
-                        .background(AccentGreen)
+                        .background(Coral)
                         .padding(horizontal = 8.dp, vertical = 3.dp),
                 )
                 Spacer(modifier = Modifier.height(4.dp))

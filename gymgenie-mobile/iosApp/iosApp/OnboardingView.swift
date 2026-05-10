@@ -5,23 +5,23 @@ struct OnboardingView: View {
 
     @State private var currentPage: Int = 0
 
-    private let accentColor = Color(red: 0.173, green: 0.757, blue: 0.890)
+    private let coralColor = Color(.sRGB, red: 1.0, green: 0.353, blue: 0.235)
 
     private let pages: [OnboardingPage] = [
         OnboardingPage(
             title: "Твой ИИ-тренер",
             subtitle: "Понимает цель и нагрузку",
-            iconName: "figure.strengthtraining.traditional"
-        ),
-        OnboardingPage(
-            title: "План в чате",
-            subtitle: "Тренировки по твоим ответам",
-            iconName: "message.fill"
+            imageName: "ic_onboarding_page_1"
         ),
         OnboardingPage(
             title: "Прогресс без стресса",
             subtitle: "Напоминает, поддерживает, адаптирует план",
-            iconName: "chart.line.uptrend.xyaxis"
+            imageName: "ic_onboarding_page_2"
+        ),
+        OnboardingPage(
+            title: "План питания",
+            subtitle: "Получай рекомендации по своему питанию для достижения целей",
+            imageName: "ic_onboarding_page_3"
         ),
     ]
 
@@ -35,23 +35,29 @@ struct OnboardingView: View {
             }
             .tabViewStyle(.page(indexDisplayMode: .always))
             .indexViewStyle(.page(backgroundDisplayMode: .always))
+            .tint(coralColor)
 
             VStack(spacing: 12) {
-                GymGenieButton(title: "Продолжить") {
+                GymGenieButton(
+                    title: "Продолжить",
+                    accentColor: coralColor,
+                    fontSize: 20,
+                    fontWeight: .bold
+                ) {
                     advancePage()
                 }
 
                 Button(action: { skipToPrivacy() }) {
                     Text("Пропустить")
-                        .font(.system(size: 14))
+                        .font(.system(size: 18))
                         .foregroundColor(.gray)
                 }
                 .padding(.bottom, 8)
             }
             .padding(.horizontal, 24)
-            .padding(.bottom, 24)
+            .padding(.bottom, 36)
         }
-        .background(Color(red: 0.961, green: 0.969, blue: 0.980)) // #F5F7FA
+        .background(Color.white)
         .edgesIgnoringSafeArea(.all)
     }
 
@@ -59,23 +65,18 @@ struct OnboardingView: View {
         VStack(spacing: 24) {
             Spacer()
 
-            ZStack {
-                RoundedRectangle(cornerRadius: 24)
-                    .fill(accentColor.opacity(0.15))
-                    .frame(width: 200, height: 200)
-
-                Image(systemName: page.iconName)
-                    .font(.system(size: 72))
-                    .foregroundColor(accentColor)
-            }
+            Image(page.imageName)
+                .resizable()
+                .aspectRatio(1, contentMode: .fit)
+                .padding(.horizontal, 40)
 
             Text(page.title)
-                .font(.system(size: 28, weight: .bold))
+                .font(.system(size: 31, weight: .bold))
                 .foregroundColor(Color(red: 0.1, green: 0.15, blue: 0.3))
                 .multilineTextAlignment(.center)
 
             Text(page.subtitle)
-                .font(.system(size: 16))
+                .font(.system(size: 21, weight: .medium))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
@@ -103,5 +104,5 @@ struct OnboardingView: View {
 private struct OnboardingPage {
     let title: String
     let subtitle: String
-    let iconName: String
+    let imageName: String
 }

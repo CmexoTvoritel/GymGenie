@@ -1,20 +1,21 @@
 package com.asc.gymgenie.feature.paywall
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,23 +28,36 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.asc.gymgenie.R
 import com.asc.gymgenie.feature.paywall.components.FeatureListItem
 import com.asc.gymgenie.feature.paywall.components.PlanCard
 import com.asc.gymgenie.presentation.PaywallViewModel
 import com.asc.gymgenie.presentation.PlanType
 import com.asc.gymgenie.ui.components.GymGenieButton
+import com.asc.gymgenie.ui.theme.Coral
 import com.asc.gymgenie.ui.theme.OnBackground
+import com.asc.gymgenie.user.UserApi
+import com.asc.gymgenie.user.UserProfileStore
 
 @Composable
 fun PaywallScreen(
+    userApi: UserApi,
+    userProfileStore: UserProfileStore,
     onPurchaseSuccess: () -> Unit,
     onSkip: () -> Unit,
 ) {
-    val viewModel = remember { PaywallViewModel() }
+    val viewModel = remember {
+        PaywallViewModel(
+            userApi = userApi,
+            userProfileStore = userProfileStore,
+        )
+    }
 
     DisposableEffect(Unit) {
         onDispose { viewModel.onCleared() }
@@ -58,76 +72,91 @@ fun PaywallScreen(
         }
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .verticalScroll(rememberScrollState())
-            .statusBarsPadding()
-            .padding(horizontal = 24.dp),
+            .background(Color.White),
     ) {
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Top bar
-        TopBar(onSkip = onSkip)
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // Title
-        Text(
-            text = "Получи доступ ко всем функциям",
-            style = MaterialTheme.typography.headlineMedium,
-            color = OnBackground,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth(),
+        Image(
+            painter = painterResource(id = R.drawable.ic_paywall_background),
+            contentDescription = null,
+            modifier = Modifier
+                .fillMaxHeight()
+                .align(Alignment.TopCenter),
+            contentScale = ContentScale.FillHeight,
         )
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(horizontal = 24.dp),
+        ) {
+            Spacer(modifier = Modifier.height(16.dp))
 
-        // Features
-        FeaturesList()
+            // Top bar
+            TopBar(onSkip = onSkip)
 
-        Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
-        // Plans
-        PlanCard(
-            isSelected = state.selectedPlan == PlanType.MONTHLY,
-            title = "1 Месяц",
-            price = "$7.99 / МО",
-            onClick = { viewModel.selectPlan(PlanType.MONTHLY) },
-        )
+            // Title
+            Text(
+                text = "Получи доступ ко всем функциям",
+                style = MaterialTheme.typography.headlineLarge,
+                color = OnBackground,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
 
-        Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.weight(1f))
 
-        PlanCard(
-            isSelected = state.selectedPlan == PlanType.YEARLY,
-            title = "1 Год",
-            price = "$59.99",
-            originalPrice = "$95.88",
-            badge = "ПОПУЛЯРНО",
-            subtitle = "$4.99 / МО",
-            onClick = { viewModel.selectPlan(PlanType.YEARLY) },
-        )
+            // Features (horizontally centered)
+            FeaturesList()
 
-        Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.weight(1f))
 
-        GymGenieButton(
-            text = "Получить полный доступ",
-            onClick = { viewModel.purchase() },
-            isLoading = state.isPurchasing,
-        )
+            // Plans
+            PlanCard(
+                isSelected = state.selectedPlan == PlanType.MONTHLY,
+                title = "1 Месяц",
+                price = "799 ₽ / МО",
+                onClick = { viewModel.selectPlan(PlanType.MONTHLY) },
+            )
 
-        Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-        Text(
-            text = "Автопродление. Отмена в любое время.",
-            style = MaterialTheme.typography.bodySmall,
-            color = Color.Gray,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth(),
-        )
+            PlanCard(
+                isSelected = state.selectedPlan == PlanType.YEARLY,
+                title = "1 Год",
+                price = "4 990 ₽",
+                originalPrice = "7 590 ₽",
+                badge = "ПОПУЛЯРНО",
+                subtitle = "416 ₽ / МО",
+                onClick = { viewModel.selectPlan(PlanType.YEARLY) },
+            )
 
-        Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(24.dp))
+
+            GymGenieButton(
+                text = "Получить полный доступ",
+                onClick = { viewModel.purchase() },
+                isLoading = state.isPurchasing,
+                containerColor = Coral,
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = "Автопродление. Отмена в любое время.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.Gray,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.navigationBarsPadding())
+        }
     }
 }
 
@@ -146,7 +175,7 @@ private fun TopBar(onSkip: () -> Unit) {
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = "\u2715",
+                text = "✕",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = OnBackground,
@@ -157,7 +186,7 @@ private fun TopBar(onSkip: () -> Unit) {
 
         Text(
             text = "Восстановить",
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.titleMedium,
             color = Color.Gray,
             modifier = Modifier.clickable {
                 // TODO:GymGenie - Replace with real restore logic
@@ -169,21 +198,24 @@ private fun TopBar(onSkip: () -> Unit) {
 @Composable
 private fun FeaturesList() {
     val features = listOf(
-        "Функция ИИ",
-        "Функция \u00ABПлан\u00BB",
-        "Функция \u00ABСледующий\u00BB",
-        "Функция \u00ABЕщё\u00BB",
+        "Личный ИИ-тренер",
+        "Сбалансированный план питания",
+        "Удобство, скорость и легкость",
+        "Анализ прогресса и рекомендации",
     )
 
-    Column(
-        modifier = Modifier.padding(horizontal = 16.dp),
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center,
     ) {
-        features.forEachIndexed { index, feature ->
-            FeatureListItem(
-                text = feature,
-                isFirst = index == 0,
-                isLast = index == features.size - 1,
-            )
+        Column {
+            features.forEachIndexed { index, feature ->
+                FeatureListItem(
+                    text = feature,
+                    isFirst = index == 0,
+                    isLast = index == features.size - 1,
+                )
+            }
         }
     }
 }

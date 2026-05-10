@@ -44,8 +44,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.asc.gymgenie.auth.AuthApi
-import com.asc.gymgenie.common.createAuthenticatedClient
 import com.asc.gymgenie.exercise.ExerciseApi
 import com.asc.gymgenie.exercise.ExerciseShortResponse
 import com.asc.gymgenie.feature.workouts.components.ExerciseCard
@@ -57,6 +55,7 @@ import com.asc.gymgenie.ui.theme.AccentOrange
 import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
 import com.asc.gymgenie.ui.theme.WarmOffWhite
+import org.koin.core.context.GlobalContext
 
 /**
  * Step 2 of the create-workout flow: picks the exercise.
@@ -77,12 +76,11 @@ fun ExercisePickerScreen(
     onBack: () -> Unit,
     onExerciseSelected: (ExerciseShortResponse) -> Unit,
 ) {
+    val koin = remember { GlobalContext.get() }
     val listViewModel = remember {
-        val authApi = AuthApi()
-        val client = createAuthenticatedClient(tokenStorage, authApi)
         WorkoutsViewModel(
-            workoutApi = WorkoutApi(client),
-            exerciseApi = ExerciseApi(client),
+            workoutApi = koin.get<WorkoutApi>(),
+            exerciseApi = koin.get<ExerciseApi>(),
             tokenStorage = tokenStorage,
         )
     }
@@ -249,10 +247,9 @@ private fun ExerciseDetailBottomSheetContent(
     exerciseId: String,
     tokenStorage: TokenStorage,
 ) {
+    val koin = remember { GlobalContext.get() }
     val viewModel = remember(exerciseId) {
-        val authApi = AuthApi()
-        val client = createAuthenticatedClient(tokenStorage, authApi)
-        ExerciseDetailViewModel(exerciseApi = ExerciseApi(client))
+        ExerciseDetailViewModel(exerciseApi = koin.get<ExerciseApi>())
     }
     DisposableEffect(exerciseId) { onDispose { viewModel.onCleared() } }
 

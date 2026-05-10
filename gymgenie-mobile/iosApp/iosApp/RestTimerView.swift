@@ -10,7 +10,7 @@ struct RestTimerView: View {
     @ObservedObject var sessionVM: WorkoutSessionViewModelWrapper
 
     private var totalRestSeconds: Int {
-        let configured = Int(sessionVM.vm.state.value?.session.restSeconds ?? 60)
+        let configured = Int((sessionVM.vm.state.value as? WorkoutSessionViewModel.State)?.session.restSeconds ?? 60)
         // Guard against negative ratios when the user adds time mid-rest.
         return max(configured, Int(sessionVM.restSecondsRemaining))
     }

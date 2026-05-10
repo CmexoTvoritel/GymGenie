@@ -9,8 +9,6 @@ struct PlanCard: View {
     var subtitle: String? = nil
     let onTap: () -> Void
 
-    private let accentColor = Color(red: 0.173, green: 0.757, blue: 0.890)
-    private let greenColor = Color(red: 0.180, green: 0.800, blue: 0.443)
     private let darkColor = Color(red: 0.102, green: 0.102, blue: 0.180)
 
     var body: some View {
@@ -24,7 +22,7 @@ struct PlanCard: View {
                             .padding(.horizontal, 8)
                             .padding(.vertical, 3)
                             .background(
-                                Capsule().fill(greenColor)
+                                Capsule().fill(Palette.coral)
                             )
                     }
 
@@ -60,7 +58,7 @@ struct PlanCard: View {
                     .fill(.white)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .stroke(isSelected ? accentColor : Color.clear, lineWidth: 2)
+                            .stroke(isSelected ? Palette.coral : Color.clear, lineWidth: 2)
                     )
             )
             .shadow(color: Color.black.opacity(0.05), radius: 4, y: 2)

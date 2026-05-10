@@ -13,11 +13,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -25,8 +27,12 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -46,12 +52,9 @@ import androidx.compose.ui.unit.sp
 import com.asc.gymgenie.exercise.ExerciseShortResponse
 import com.asc.gymgenie.feature.workouts.components.ExerciseCard
 import com.asc.gymgenie.feature.workouts.components.ExerciseSearchBar
-import com.asc.gymgenie.feature.workouts.components.FeaturedWorkoutCard
 import com.asc.gymgenie.feature.workouts.components.MuscleGroupFilterChips
-import com.asc.gymgenie.feature.workouts.components.WorkoutCardSmall
+import com.asc.gymgenie.ui.components.WorkoutPlanCard
 import com.asc.gymgenie.feature.workouts.components.WorkoutTabSelector
-import com.asc.gymgenie.auth.AuthApi
-import com.asc.gymgenie.common.createAuthenticatedClient
 import com.asc.gymgenie.exercise.ExerciseApi
 import com.asc.gymgenie.presentation.WorkoutsTab
 import com.asc.gymgenie.presentation.WorkoutsUiState
@@ -59,9 +62,11 @@ import com.asc.gymgenie.presentation.WorkoutsViewModel
 import com.asc.gymgenie.storage.TokenStorage
 import com.asc.gymgenie.workout.WorkoutApi
 import com.asc.gymgenie.ui.theme.AccentOrange
+import com.asc.gymgenie.ui.theme.Coral
 import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
 import com.asc.gymgenie.ui.theme.WarmOffWhite
+import org.koin.core.context.GlobalContext
 
 @Composable
 fun WorkoutsScreen(
@@ -70,14 +75,14 @@ fun WorkoutsScreen(
     onOpenExercise: (ExerciseShortResponse) -> Unit = {},
     onCreateWorkout: () -> Unit = {},
     onStartPlan: (planId: String, planName: String) -> Unit = { _, _ -> },
+    onViewPlan: (planId: String) -> Unit = {},
     reloadKey: Int = 0,
 ) {
+    val koin = remember { GlobalContext.get() }
     val viewModel = remember {
-        val authApi = AuthApi()
-        val client = createAuthenticatedClient(tokenStorage, authApi)
         WorkoutsViewModel(
-            workoutApi = WorkoutApi(client),
-            exerciseApi = ExerciseApi(client),
+            workoutApi = koin.get<WorkoutApi>(),
+            exerciseApi = koin.get<ExerciseApi>(),
             tokenStorage = tokenStorage,
             onLogout = onLogout,
         )
@@ -130,7 +135,9 @@ fun WorkoutsScreen(
                         WorkoutsTab.WORKOUTS -> WorkoutsTabContent(
                             state = state,
                             onStartPlan = onStartPlan,
+                            onViewPlan = onViewPlan,
                             onCreateWorkout = onCreateWorkout,
+                            onRefresh = viewModel::refresh,
                         )
                         WorkoutsTab.EXERCISES -> ExercisesTabContent(
                             state = state,
@@ -143,6 +150,7 @@ fun WorkoutsScreen(
                             onLoadMore = viewModel::loadMoreExercises,
                             onFilterMuscleGroup = viewModel::filterByMuscleGroup,
                             onExerciseClick = onOpenExercise,
+                            onRefresh = viewModel::refresh,
                         )
                     }
                 }
@@ -263,43 +271,58 @@ private fun ErrorContent(message: String, onRetry: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun WorkoutsTabContent(
     state: WorkoutsUiState,
     onStartPlan: (planId: String, planName: String) -> Unit,
+    onViewPlan: (planId: String) -> Unit,
     onCreateWorkout: () -> Unit,
+    onRefresh: () -> Unit,
 ) {
-    if (state.workoutPlans.isEmpty()) {
-        WorkoutsEmptyState(onCreateWorkout = onCreateWorkout)
-        return
-    }
-
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+    val refreshState = rememberPullToRefreshState()
+    PullToRefreshBox(
+        isRefreshing = state.isRefreshing,
+        onRefresh = onRefresh,
+        state = refreshState,
+        modifier = Modifier.fillMaxSize(),
+        indicator = {
+            PullToRefreshDefaults.Indicator(
+                state = refreshState,
+                isRefreshing = state.isRefreshing,
+                containerColor = Color.White,
+                color = Coral,
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+        },
     ) {
-        state.workoutPlans.firstOrNull()?.let { featured ->
-            item(span = { GridItemSpan(2) }) {
-                FeaturedWorkoutCard(
-                    plan = featured,
-                    onStart = { onStartPlan(featured.id, featured.name) },
+        if (state.workoutPlans.isEmpty()) {
+            // Empty state must remain pull-to-refresh-able; LazyColumn fills
+            // the viewport so the gesture has a target on every device.
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                item {
+                    WorkoutsEmptyState(onCreateWorkout = onCreateWorkout)
+                }
+            }
+            return@PullToRefreshBox
+        }
+
+        LazyColumn(
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            items(state.workoutPlans, key = { it.id }) { plan ->
+                WorkoutPlanCard(
+                    plan = plan,
+                    onView = { onViewPlan(plan.id) },
+                    onStart = { onStartPlan(plan.id, plan.name) },
                 )
             }
-        }
 
-        val otherPlans = state.workoutPlans.drop(1)
-        items(otherPlans, key = { it.id }) { plan ->
-            WorkoutCardSmall(
-                plan = plan,
-                onStart = { onStartPlan(plan.id, plan.name) },
-            )
-        }
-
-        // Reserve space at the bottom so the FAB does not cover last cards.
-        item(span = { GridItemSpan(2) }) {
-            Spacer(modifier = Modifier.height(80.dp))
+            // Reserve space at the bottom so the FAB does not cover last cards.
+            item {
+                Spacer(modifier = Modifier.height(80.dp))
+            }
         }
     }
 }
@@ -348,6 +371,7 @@ private fun WorkoutsEmptyState(onCreateWorkout: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ExercisesTabContent(
     state: WorkoutsUiState,
@@ -357,8 +381,10 @@ private fun ExercisesTabContent(
     onLoadMore: () -> Unit,
     onFilterMuscleGroup: (String?) -> Unit,
     onExerciseClick: (ExerciseShortResponse) -> Unit,
+    onRefresh: () -> Unit,
 ) {
     val gridState = rememberLazyGridState()
+    val refreshState = rememberPullToRefreshState()
 
     LaunchedEffect(gridState) {
         snapshotFlow {
@@ -390,44 +416,71 @@ private fun ExercisesTabContent(
             )
         }
 
-        val showEmpty = state.exercises.isEmpty() && !state.isLoading && !state.isLoadingMore
-        if (showEmpty) {
-            ExercisesEmptyState(
-                hasFilter = state.searchQuery.isNotBlank() || state.selectedMuscleGroup != null,
-            )
-        } else {
-            LazyVerticalGrid(
-                state = gridState,
-                columns = GridCells.Fixed(2),
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(state.exercises, key = { it.id }) { exercise ->
-                    ExerciseCard(
-                        exercise = exercise,
-                        onClick = { onExerciseClick(exercise) },
-                    )
-                }
-
-                if (state.isLoadingMore) {
+        // Pull-to-refresh covers the scrollable exercise grid area only —
+        // the search bar and filter chips above stay anchored. The refresh
+        // resets pagination to page 0 in the shared VM; subsequent
+        // infinite-scroll triggers continue from the freshly-loaded page.
+        PullToRefreshBox(
+            isRefreshing = state.isRefreshing,
+            onRefresh = onRefresh,
+            state = refreshState,
+            modifier = Modifier.fillMaxSize(),
+            indicator = {
+                PullToRefreshDefaults.Indicator(
+                    state = refreshState,
+                    isRefreshing = state.isRefreshing,
+                    containerColor = Color.White,
+                    color = Coral,
+                    modifier = Modifier.align(Alignment.TopCenter),
+                )
+            },
+        ) {
+            val showEmpty = state.exercises.isEmpty() && !state.isLoading && !state.isLoadingMore && !state.isRefreshing
+            if (showEmpty) {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    modifier = Modifier.fillMaxSize(),
+                ) {
                     item(span = { GridItemSpan(2) }) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            CircularProgressIndicator(
-                                color = AccentOrange,
-                                modifier = Modifier.size(24.dp),
-                            )
-                        }
+                        ExercisesEmptyState(
+                            hasFilter = state.searchQuery.isNotBlank() || state.selectedMuscleGroup != null,
+                        )
                     }
                 }
+            } else {
+                LazyVerticalGrid(
+                    state = gridState,
+                    columns = GridCells.Fixed(2),
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(state.exercises, key = { it.id }) { exercise ->
+                        ExerciseCard(
+                            exercise = exercise,
+                            onClick = { onExerciseClick(exercise) },
+                        )
+                    }
 
-                item(span = { GridItemSpan(2) }) {
-                    Spacer(modifier = Modifier.height(80.dp))
+                    if (state.isLoadingMore) {
+                        item(span = { GridItemSpan(2) }) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                CircularProgressIndicator(
+                                    color = AccentOrange,
+                                    modifier = Modifier.size(24.dp),
+                                )
+                            }
+                        }
+                    }
+
+                    item(span = { GridItemSpan(2) }) {
+                        Spacer(modifier = Modifier.height(80.dp))
+                    }
                 }
             }
         }

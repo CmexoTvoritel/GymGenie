@@ -94,12 +94,11 @@ struct WorkoutsView: View {
                 errorView(message: error)
                 Spacer()
             } else {
-                switch viewModel.selectedTab {
-                case .workouts:
+                if viewModel.selectedTab == .workouts {
                     workoutsTab
-                case .exercises:
+                } else if viewModel.selectedTab == .exercises {
                     exercisesTab
-                @unknown default:
+                } else {
                     workoutsTab
                 }
             }
@@ -113,26 +112,16 @@ struct WorkoutsView: View {
     }
 
     private var contentIsEmpty: Bool {
-        switch viewModel.selectedTab {
-        case .workouts:
-            return viewModel.workoutPlans.isEmpty
-        case .exercises:
-            return viewModel.exercises.isEmpty
-        @unknown default:
-            return true
-        }
+        if viewModel.selectedTab == .workouts { return viewModel.workoutPlans.isEmpty }
+        if viewModel.selectedTab == .exercises { return viewModel.exercises.isEmpty }
+        return true
     }
 
     /// Distinguishes "successful empty result" from "error while empty".
     private var isExpectedEmptyState: Bool {
-        switch viewModel.selectedTab {
-        case .workouts:
-            return viewModel.workoutPlansLoaded && viewModel.workoutPlans.isEmpty
-        case .exercises:
-            return viewModel.exercisesLoaded && viewModel.exercises.isEmpty && viewModel.errorMessage == nil
-        @unknown default:
-            return false
-        }
+        if viewModel.selectedTab == .workouts { return viewModel.workoutPlansLoaded && viewModel.workoutPlans.isEmpty }
+        if viewModel.selectedTab == .exercises { return viewModel.exercisesLoaded && viewModel.exercises.isEmpty && viewModel.errorMessage == nil }
+        return false
     }
 
     // MARK: - Header
@@ -183,20 +172,18 @@ struct WorkoutsView: View {
                 if viewModel.workoutPlans.isEmpty {
                     workoutsEmptyState
                 } else {
-                    if let featured = viewModel.workoutPlans.first {
-                        FeaturedWorkoutCard(plan: featured) {
-                            startSession(planId: featured.id, planName: featured.name)
-                        }
-                    }
-
-                    let otherPlans = Array(viewModel.workoutPlans.dropFirst())
-                    if !otherPlans.isEmpty {
-                        LazyVGrid(columns: columns, spacing: 12) {
-                            ForEach(otherPlans, id: \.id) { plan in
-                                WorkoutCardSmall(plan: plan) {
+                    LazyVStack(spacing: 12) {
+                        ForEach(viewModel.workoutPlans, id: \.id) { plan in
+                            WorkoutPlanCard(
+                                plan: plan,
+                                onView: {
+                                    // TODO: navigate to plan detail once the
+                                    // route is wired up on iOS.
+                                },
+                                onStart: {
                                     startSession(planId: plan.id, planName: plan.name)
                                 }
-                            }
+                            )
                         }
                     }
                 }
@@ -206,6 +193,8 @@ struct WorkoutsView: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
         }
+        .refreshable { await refreshAndWait() }
+        .tint(Palette.coral)
     }
 
     private var workoutsEmptyState: some View {
@@ -293,6 +282,34 @@ struct WorkoutsView: View {
                     Color.clear.frame(height: 96)
                 }
             }
+            .refreshable { await refreshAndWait() }
+            .tint(Palette.coral)
+        }
+    }
+
+    /// SwiftUI's `.refreshable` keeps the system spinner visible until the
+    /// async closure returns. We poll the wrapper's `isRefreshing` flag so the
+    /// indicator stays in sync with the underlying KMM state machine.
+    private func refreshAndWait() async {
+        viewModel.refresh()
+        let pollInterval: UInt64 = 50_000_000 // 50ms
+        // Wait briefly for the refresh to start (the wrapper observes the
+        // shared StateFlow on a 50ms tick, so the flag won't flip in the
+        // same run-loop turn).
+        let startWaitMaxNanos: UInt64 = 500_000_000 // 0.5s
+        var startWaited: UInt64 = 0
+        while !viewModel.isRefreshing && startWaited < startWaitMaxNanos {
+            try? await Task.sleep(nanoseconds: pollInterval)
+            startWaited += pollInterval
+        }
+        // Then wait for the refresh to complete, capped at a generous timeout
+        // so a stalled network call cannot leave the spinner permanently
+        // attached to the closure.
+        let maxWaitNanos: UInt64 = 15_000_000_000 // 15s safety cap
+        var elapsed: UInt64 = 0
+        while viewModel.isRefreshing && elapsed < maxWaitNanos {
+            try? await Task.sleep(nanoseconds: pollInterval)
+            elapsed += pollInterval
         }
     }
 

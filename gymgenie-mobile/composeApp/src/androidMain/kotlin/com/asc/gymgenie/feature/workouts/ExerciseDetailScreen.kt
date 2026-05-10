@@ -44,8 +44,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.asc.gymgenie.auth.AuthApi
-import com.asc.gymgenie.common.createAuthenticatedClient
 import com.asc.gymgenie.exercise.ExerciseApi
 import com.asc.gymgenie.exercise.ExerciseDetailResponse
 import com.asc.gymgenie.feature.workouts.components.muscleGroupEmoji
@@ -57,6 +55,7 @@ import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
 import com.asc.gymgenie.ui.theme.SoftCard
 import com.asc.gymgenie.ui.theme.WarmOffWhite
+import org.koin.core.context.GlobalContext
 
 @Composable
 fun ExerciseDetailScreen(
@@ -65,10 +64,9 @@ fun ExerciseDetailScreen(
     onBack: () -> Unit = {},
     onAddToWorkout: (ExerciseDetailResponse) -> Unit = {},
 ) {
+    val koin = remember { GlobalContext.get() }
     val viewModel = remember {
-        val authApi = AuthApi()
-        val client = createAuthenticatedClient(tokenStorage, authApi)
-        ExerciseDetailViewModel(exerciseApi = ExerciseApi(client))
+        ExerciseDetailViewModel(exerciseApi = koin.get<ExerciseApi>())
     }
     DisposableEffect(Unit) {
         onDispose { viewModel.onCleared() }

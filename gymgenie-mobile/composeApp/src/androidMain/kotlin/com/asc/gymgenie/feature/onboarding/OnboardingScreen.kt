@@ -1,11 +1,13 @@
 package com.asc.gymgenie.feature.onboarding
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -15,7 +17,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -24,29 +25,39 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.asc.gymgenie.R
 import com.asc.gymgenie.ui.components.GymGenieButton
-import com.asc.gymgenie.ui.theme.IllustrationBackground
+import com.asc.gymgenie.ui.theme.Coral
 import kotlinx.coroutines.launch
 
 data class OnboardingPage(
     val title: String,
     val subtitle: String,
+    val imageRes: Int,
 )
 
 private val pages = listOf(
     OnboardingPage(
         title = "Твой ИИ-тренер",
         subtitle = "Понимает цель и нагрузку",
-    ),
-    OnboardingPage(
-        title = "План в чате",
-        subtitle = "Тренировки по твоим ответам",
+        imageRes = R.drawable.ic_onboarding_page_1,
     ),
     OnboardingPage(
         title = "Прогресс без стресса",
         subtitle = "Напоминает, поддерживает, адаптирует план",
+        imageRes = R.drawable.ic_onboarding_page_2,
+    ),
+    OnboardingPage(
+        title = "План питания",
+        subtitle = "Получай рекомендации по своему питанию для достижения целей",
+        imageRes = R.drawable.ic_onboarding_page_3,
     ),
 )
 
@@ -60,7 +71,7 @@ fun OnboardingScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(Color.White)
             .statusBarsPadding(),
     ) {
         HorizontalPager(
@@ -85,7 +96,7 @@ fun OnboardingScreen(
                         .size(if (isSelected) 10.dp else 8.dp)
                         .clip(CircleShape)
                         .background(
-                            if (isSelected) MaterialTheme.colorScheme.primary
+                            if (isSelected) Coral
                             else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
                         ),
                 )
@@ -97,7 +108,7 @@ fun OnboardingScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp)
-                .padding(bottom = 32.dp),
+                .padding(bottom = 44.dp),
         ) {
             GymGenieButton(
                 text = "Продолжить",
@@ -110,6 +121,11 @@ fun OnboardingScreen(
                         onFinished()
                     }
                 },
+                containerColor = Coral,
+                textStyle = MaterialTheme.typography.labelLarge.copy(
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                ),
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -120,7 +136,7 @@ fun OnboardingScreen(
             ) {
                 Text(
                     text = "Пропустить",
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 16.sp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -137,27 +153,21 @@ private fun OnboardingPageContent(page: OnboardingPage) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        // Image placeholder
-        Box(
+        Image(
+            painter = painterResource(id = page.imageRes),
+            contentDescription = null,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(280.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(IllustrationBackground),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = "Illustration",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+                .padding(horizontal = 16.dp)
+                .aspectRatio(1f),
+            contentScale = ContentScale.Fit,
+        )
 
         Spacer(modifier = Modifier.height(40.dp))
 
         Text(
             text = page.title,
-            style = MaterialTheme.typography.headlineMedium,
+            style = MaterialTheme.typography.headlineMedium.copy(fontSize = 31.sp),
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onBackground,
         )
@@ -166,7 +176,10 @@ private fun OnboardingPageContent(page: OnboardingPage) {
 
         Text(
             text = page.subtitle,
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.bodyLarge.copy(
+                fontSize = 21.sp,
+                fontWeight = FontWeight.Medium,
+            ),
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

@@ -25,6 +25,7 @@ data class AuthUiState(
     val registerSuccess: Boolean = false,
     val accessToken: String? = null,
     val refreshToken: String? = null,
+    val subscriptionType: String = "FREE",
 )
 
 class AuthViewModel(
@@ -80,6 +81,7 @@ class AuthViewModel(
                             loginSuccess = true,
                             accessToken = tokenResponse.accessToken,
                             refreshToken = tokenResponse.refreshToken,
+                            subscriptionType = tokenResponse.user.subscriptionType,
                         )
                     }
                 },
@@ -125,6 +127,7 @@ class AuthViewModel(
                             registerSuccess = true,
                             accessToken = tokenResponse.accessToken,
                             refreshToken = tokenResponse.refreshToken,
+                            subscriptionType = tokenResponse.user.subscriptionType,
                         )
                     }
                 },

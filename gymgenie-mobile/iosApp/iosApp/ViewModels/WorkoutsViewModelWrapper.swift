@@ -8,6 +8,7 @@ final class WorkoutsViewModelWrapper: ObservableObject {
     @Published private(set) var selectedTab: Shared.WorkoutsTab = .workouts
     @Published private(set) var isLoading: Bool = false
     @Published private(set) var isLoadingMore: Bool = false
+    @Published private(set) var isRefreshing: Bool = false
     @Published private(set) var workoutPlans: [WorkoutPlanShortResponse] = []
     @Published private(set) var workoutPlansLoaded: Bool = false
     @Published private(set) var exercises: [ExerciseShortResponse] = []
@@ -21,22 +22,16 @@ final class WorkoutsViewModelWrapper: ObservableObject {
     private var observationTask: Task<Void, Never>?
 
     init() {
-        let tokenStorage = TokenStorageKt.createTokenStorage()
-        let authApi = AuthApi()
-        let client = AuthenticatedHttpClientKt.createAuthenticatedClient(
-            tokenStorage: tokenStorage,
-            authApi: authApi
-        )
+        weak var weakSelf: WorkoutsViewModelWrapper?
         self.vm = Shared.WorkoutsViewModel(
-            workoutApi: WorkoutApi(client: client),
-            exerciseApi: ExerciseApi(client: client),
-            tokenStorage: tokenStorage,
-            onLogout: { [weak self] in
-                Task { @MainActor in
-                    self?.isLoggedOut = true
-                }
+            workoutApi: KoinHelper.shared.getWorkoutApi(),
+            exerciseApi: KoinHelper.shared.getExerciseApi(),
+            tokenStorage: KoinHelper.shared.getTokenStorage(),
+            onLogout: {
+                Task { @MainActor in weakSelf?.isLoggedOut = true }
             }
         )
+        weakSelf = self
         startObserving()
     }
 
@@ -48,9 +43,10 @@ final class WorkoutsViewModelWrapper: ObservableObject {
                 self.selectedTab = state.selectedTab
                 self.isLoading = state.isLoading
                 self.isLoadingMore = state.isLoadingMore
-                self.workoutPlans = state.workoutPlans as? [WorkoutPlanShortResponse] ?? []
+                self.isRefreshing = state.isRefreshing
+                self.workoutPlans = state.workoutPlans as [WorkoutPlanShortResponse]
                 self.workoutPlansLoaded = state.workoutPlansLoaded
-                self.exercises = state.exercises as? [ExerciseShortResponse] ?? []
+                self.exercises = state.exercises as [ExerciseShortResponse]
                 self.exercisesLoaded = state.exercisesLoaded
                 self.searchQuery = state.searchQuery
                 self.selectedMuscleGroup = state.selectedMuscleGroup
@@ -92,6 +88,10 @@ final class WorkoutsViewModelWrapper: ObservableObject {
 
     func retry() {
         vm.retry()
+    }
+
+    func refresh() {
+        vm.refresh()
     }
 
     deinit {
