@@ -39,6 +39,7 @@ kotlin {
         androidMain.dependencies {
             api(libs.ktor.client.okhttp)
             implementation(libs.sqldelight.android.driver)
+            implementation(libs.koin.android)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)

@@ -50,14 +50,14 @@ fun MuscleGroupFilterChips(
             val isSelected = selected == value
             Text(
                 text = label,
-                fontSize = 12.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = if (isSelected) Color.White else DeepInk,
                 modifier = Modifier
                     .clip(RoundedCornerShape(50))
                     .background(if (isSelected) AccentOrange else SoftCard)
                     .clickable { onSelected(value) }
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
             )
         }
     }

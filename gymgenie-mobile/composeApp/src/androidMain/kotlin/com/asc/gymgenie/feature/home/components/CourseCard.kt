@@ -6,7 +6,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,16 +27,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
-
-/**
- * Vertical block of trainer courses for the Home screen:
- *  - one full-width featured card,
- *  - a 2-column grid of small cards,
- *  - a "see all" outline button at the bottom.
- *
- * Data is hardcoded for now until the backend exposes a courses endpoint.
- * Layout dimensions, colors and typography mirror the design spec exactly.
- */
 
 private val CardBorder = Color(0xFFEDEDEF)
 private val StarYellow = Color(0xFFD4A017)
@@ -143,7 +132,6 @@ private fun FeaturedCourseCard(course: FeaturedCourse) {
                     ),
                 ),
         ) {
-            // "популярное" frosted badge — top-left
             Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)
@@ -160,7 +148,6 @@ private fun FeaturedCourseCard(course: FeaturedCourse) {
                 )
             }
 
-            // Title + category overlay — bottom-left
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
@@ -183,7 +170,6 @@ private fun FeaturedCourseCard(course: FeaturedCourse) {
             }
         }
 
-        // Author row
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -262,7 +248,6 @@ private fun SmallCourseCard(course: SmallCourse) {
                     ),
                 ),
         ) {
-            // Duration badge — bottom-right
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)

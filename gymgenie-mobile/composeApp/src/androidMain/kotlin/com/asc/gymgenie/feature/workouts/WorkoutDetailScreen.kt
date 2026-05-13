@@ -61,7 +61,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.asc.gymgenie.exercise.ExerciseApi
 import com.asc.gymgenie.exercise.ExerciseShortResponse
 import com.asc.gymgenie.feature.create_workout.ExerciseConfigScreen
 import com.asc.gymgenie.feature.create_workout.ExercisePickerScreen
@@ -75,11 +74,10 @@ import com.asc.gymgenie.presentation.CreateWorkoutViewModel
 import com.asc.gymgenie.presentation.PendingExercise
 import com.asc.gymgenie.presentation.WorkoutDetailUiState
 import com.asc.gymgenie.presentation.WorkoutDetailViewModel
-import com.asc.gymgenie.storage.TokenStorage
-import com.asc.gymgenie.workout.WorkoutApi
 import com.asc.gymgenie.workout.WorkoutPlanResponse
 import com.asc.gymgenie.workout.WorkoutScheduleType
 import org.koin.core.context.GlobalContext
+import org.koin.core.parameter.parametersOf
 
 private val Coral = Color(0xFFFF5A3C)
 private val CoralDark = Color(0xFFE94A2C)
@@ -113,19 +111,12 @@ private val ScheduleDayLabels = listOf(
 @Composable
 fun WorkoutDetailScreen(
     planId: String,
-    tokenStorage: TokenStorage,
     onBack: () -> Unit,
-    onLogout: () -> Unit = {},
     onStartPlan: (planId: String, planName: String) -> Unit = { _, _ -> },
 ) {
     val koin = remember { GlobalContext.get() }
     val viewModel = remember(planId) {
-        WorkoutDetailViewModel(
-            planId = planId,
-            workoutApi = koin.get<WorkoutApi>(),
-            tokenStorage = tokenStorage,
-            onLogout = onLogout,
-        )
+        koin.get<WorkoutDetailViewModel> { parametersOf(planId) }
     }
     DisposableEffect(planId) {
         onDispose { viewModel.onCleared() }
@@ -168,7 +159,6 @@ fun WorkoutDetailScreen(
             )
             state.plan != null -> Content(
                 state = state,
-                tokenStorage = tokenStorage,
                 viewModel = viewModel,
                 onBack = onBack,
                 onStartPlan = onStartPlan,
@@ -235,7 +225,6 @@ private fun ErrorState(
 @Composable
 private fun Content(
     state: WorkoutDetailUiState,
-    tokenStorage: TokenStorage,
     viewModel: WorkoutDetailViewModel,
     onBack: () -> Unit,
     onStartPlan: (String, String) -> Unit,
@@ -294,7 +283,6 @@ private fun Content(
 
     if (showExercisePicker) {
         ExercisePickerOverlay(
-            tokenStorage = tokenStorage,
             onDismiss = { showExercisePicker = false },
             onConfirmed = { pending ->
                 viewModel.addPendingExercise(pending)
@@ -1320,20 +1308,11 @@ private fun DeleteConfirmDialog(
  */
 @Composable
 private fun ExercisePickerOverlay(
-    tokenStorage: TokenStorage,
     onDismiss: () -> Unit,
     onConfirmed: (PendingExercise) -> Unit,
 ) {
     val koin = remember { GlobalContext.get() }
-    val pickerVm = remember {
-        // Stateful ViewModel — kept per-overlay via remember{}, but its API
-        // dependencies must be the shared Koin singletons so refresh-token
-        // rotation does not race against the rest of the app.
-        CreateWorkoutViewModel(
-            exerciseApi = koin.get<ExerciseApi>(),
-            workoutApi = koin.get<WorkoutApi>(),
-        )
-    }
+    val pickerVm = remember { koin.get<CreateWorkoutViewModel>() }
     DisposableEffect(Unit) {
         pickerVm.loadMuscleGroups()
         onDispose { pickerVm.onCleared() }
@@ -1366,7 +1345,6 @@ private fun ExercisePickerOverlay(
             is PickerStep.Exercise -> ExercisePickerScreen(
                 muscleGroupKey = current.muscleKey,
                 muscleGroupNameRu = current.muscleNameRu,
-                tokenStorage = tokenStorage,
                 onBack = { step = PickerStep.MuscleGroup },
                 onExerciseSelected = { exercise ->
                     step = PickerStep.Config(

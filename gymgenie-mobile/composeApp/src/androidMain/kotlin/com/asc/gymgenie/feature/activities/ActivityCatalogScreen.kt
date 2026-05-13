@@ -39,7 +39,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.asc.gymgenie.activity.ActivityApi
 import com.asc.gymgenie.activity.ActivityCatalogResponse
 import com.asc.gymgenie.activity.ActivityKind
 import com.asc.gymgenie.activity.ActivityRing
@@ -63,7 +62,7 @@ import org.koin.core.context.GlobalContext
 @Composable
 fun ActivityCatalogScreen(onBack: () -> Unit) {
     val koin = remember { GlobalContext.get() }
-    val viewModel = remember { ActivityCatalogViewModel(koin.get<ActivityApi>()) }
+    val viewModel = remember { koin.get<ActivityCatalogViewModel>() }
     val state by viewModel.state.collectAsState()
     var query by remember { mutableStateOf("") }
 

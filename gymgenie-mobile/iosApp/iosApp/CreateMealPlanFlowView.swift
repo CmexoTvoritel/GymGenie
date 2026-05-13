@@ -25,7 +25,9 @@ struct CreateMealPlanFlowView: View {
     /// stable while the user reads it even if the wrapper has already
     /// cleared the underlying state.
     @State private var pendingError: String? = nil
+    @State private var didApplyInitialMealType: Bool = false
 
+    var initialMealType: String? = nil
     var onClose: () -> Void
     var onSaved: () -> Void
 
@@ -65,6 +67,12 @@ struct CreateMealPlanFlowView: View {
         .animation(.easeInOut(duration: 0.2), value: vm.isSaving)
         .onChange(of: vm.savedPlan?.id) { newValue in
             if newValue != nil { onSaved() }
+        }
+        .onChange(of: vm.isInitializing) { initializing in
+            applyInitialMealTypeIfNeeded(isInitializing: initializing)
+        }
+        .onAppear {
+            applyInitialMealTypeIfNeeded(isInitializing: vm.isInitializing)
         }
         .onChange(of: vm.errorMessage) { msg in
             // Keep showing the last error in an alert; if the user dismisses
@@ -149,6 +157,14 @@ struct CreateMealPlanFlowView: View {
             insertion: .move(edge: forward ? .trailing : .leading),
             removal: .move(edge: forward ? .leading : .trailing)
         )
+    }
+
+    private func applyInitialMealTypeIfNeeded(isInitializing: Bool) {
+        guard !didApplyInitialMealType, !isInitializing, let wire = initialMealType else { return }
+        if let kind = ManualMealKind.companion.fromWireValue(value: wire) {
+            vm.setMealKind(kind)
+        }
+        didApplyInitialMealType = true
     }
 }
 

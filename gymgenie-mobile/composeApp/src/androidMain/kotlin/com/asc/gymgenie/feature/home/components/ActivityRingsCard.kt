@@ -38,13 +38,6 @@ import com.asc.gymgenie.ui.theme.RingMind
 import com.asc.gymgenie.ui.theme.RingMove
 import com.asc.gymgenie.ui.theme.SoftCard
 
-/**
- * Triple-ring summary of today's activity progress.
- *
- * Receives the raw KMM payloads and computes the per-ring averages on the
- * fly, which keeps the card stateless and allows the parent screen to
- * recompose freely without re-fetching anything.
- */
 @Composable
 fun ActivityRingsCard(activities: List<ActivityTodayResponse>) {
     val (move, mind, life) = remember(activities) { computeRingProgress(activities) }
@@ -74,26 +67,12 @@ fun ActivityRingsCard(activities: List<ActivityTodayResponse>) {
     }
 }
 
-/**
- * Per-ring progress as a fraction in `[0f, 1f]` or `null` if the ring has no
- * activities planned for today. Keeping `null` separate from `0f` lets the
- * legend distinguish "no progress yet" from "nothing to do" — the latter
- * renders as `–` instead of `0%`.
- */
 private data class RingTotals(val move: Float?, val mind: Float?, val life: Float?)
 
 private operator fun RingTotals.component1() = move
 private operator fun RingTotals.component2() = mind
 private operator fun RingTotals.component3() = life
 
-/**
- * Aggregates the per-activity progress fractions into one number per ring by
- * averaging across the activities that belong to that ring. An empty ring
- * yields `null` so the UI can render a neutral placeholder.
- *
- * Activities whose `ring` field does not match any [ActivityRing] entry are
- * silently ignored — they cannot influence a ring they don't belong to.
- */
 private fun computeRingProgress(activities: List<ActivityTodayResponse>): RingTotals {
     fun average(target: ActivityRing): Float? {
         val group = activities.filter {
@@ -187,24 +166,24 @@ private fun LegendRow(color: Color, title: String, value: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
             modifier = Modifier
-                .size(10.dp)
+                .size(24.dp)
                 .clip(CircleShape)
                 .background(color),
         )
-        Spacer(modifier = Modifier.width(10.dp))
+        Spacer(modifier = Modifier.width(12.dp))
         Column {
             Text(
                 text = title,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
                 color = MutedText,
                 letterSpacing = 0.6.sp,
             )
-            Spacer(modifier = Modifier.height(2.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = value,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.ExtraBold,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.SemiBold,
                 color = DeepInk,
             )
         }

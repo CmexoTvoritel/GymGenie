@@ -53,7 +53,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.asc.gymgenie.nutrition.FoodCategory
 import com.asc.gymgenie.nutrition.FoodProduct
-import com.asc.gymgenie.nutrition.FoodProductApi
 import com.asc.gymgenie.nutrition.macrosForGrams
 import com.asc.gymgenie.presentation.FoodPickerViewModel
 import com.asc.gymgenie.ui.theme.AccentOrange
@@ -73,7 +72,7 @@ fun FoodPickerScreen(
     modifier: Modifier = Modifier,
 ) {
     val koin = remember { GlobalContext.get() }
-    val viewModel = remember { FoodPickerViewModel(foodProductApi = koin.get<FoodProductApi>()) }
+    val viewModel = remember { koin.get<FoodPickerViewModel>() }
     DisposableEffect(Unit) { onDispose { viewModel.onCleared() } }
 
     LaunchedEffect(Unit) { viewModel.load() }

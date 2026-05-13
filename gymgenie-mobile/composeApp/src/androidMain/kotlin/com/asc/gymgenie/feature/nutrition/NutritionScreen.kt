@@ -67,16 +67,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.asc.gymgenie.nutrition.MealGoal
 import com.asc.gymgenie.nutrition.MealPlanShortInfo
-import com.asc.gymgenie.nutrition.MealPlansApi
 import com.asc.gymgenie.nutrition.MealPlansListUiState
 import com.asc.gymgenie.nutrition.MealPlansListViewModel
-import com.asc.gymgenie.storage.TokenStorage
 import com.asc.gymgenie.ui.theme.AccentOrange
 import com.asc.gymgenie.ui.theme.Coral
 import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
 import com.asc.gymgenie.ui.theme.WarmOffWhite
-import com.asc.gymgenie.user.UserProfileStore
 import org.koin.core.context.GlobalContext
 
 private val NutritionCardBorder = Color(0xFFEDEDEF)
@@ -101,14 +98,10 @@ private val NutritionDeleteRed = Color(0xFFE53935)
  */
 @Composable
 fun NutritionScreen(
-    tokenStorage: TokenStorage,
-    userProfileStore: UserProfileStore,
     onBack: () -> Unit,
 ) {
     val koin = remember { GlobalContext.get() }
-    val viewModel = remember {
-        MealPlansListViewModel(mealPlansApi = koin.get<MealPlansApi>())
-    }
+    val viewModel = remember { koin.get<MealPlansListViewModel>() }
     DisposableEffect(Unit) { onDispose { viewModel.onCleared() } }
 
     val state by viewModel.state.collectAsState()
@@ -162,7 +155,6 @@ fun NutritionScreen(
             exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
         ) {
             AiMealFlowScreen(
-                userProfileStore = userProfileStore,
                 onDismiss = {
                     showAiCoach = false
                     // Refresh on dismiss so a freshly-saved plan shows up

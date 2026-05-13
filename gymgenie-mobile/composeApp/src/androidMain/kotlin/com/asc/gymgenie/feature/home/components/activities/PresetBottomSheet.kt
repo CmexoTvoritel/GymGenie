@@ -1,4 +1,4 @@
-package com.asc.gymgenie.feature.home.components
+package com.asc.gymgenie.feature.home.components.activities
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -31,26 +31,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.asc.gymgenie.activity.ActivityRing
 import com.asc.gymgenie.activity.ActivityTodayResponse
 import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
-import com.asc.gymgenie.ui.theme.RingLife
-import com.asc.gymgenie.ui.theme.RingMind
-import com.asc.gymgenie.ui.theme.RingMove
 import com.asc.gymgenie.ui.theme.SoftCard
 import com.asc.gymgenie.ui.theme.WarmOffWhite
 
-/**
- * Modal bottom sheet with quick preset values for a PRESET activity.
- *
- * Renders nothing while [activity] is `null`; the parent owns the visibility
- * state. Picking a preset calls [onPick] with the activity id and the picked
- * value; the parent is expected to dismiss after handling the pick.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PresetBottomSheet(
+internal fun PresetBottomSheet(
     activity: ActivityTodayResponse?,
     onDismiss: () -> Unit,
     onPick: (activityId: String, value: Int) -> Unit,
@@ -76,10 +65,6 @@ fun PresetBottomSheet(
             Spacer(modifier = Modifier.height(20.dp))
 
             if (presets.isEmpty()) {
-                // Defensive: server contract says PRESET activities always
-                // ship a preset list, but if a malformed payload sneaks
-                // through we still want to render something useful instead
-                // of an empty sheet.
                 Text(
                     text = "Нет вариантов для быстрого выбора",
                     fontSize = 14.sp,
@@ -206,11 +191,4 @@ private fun CancelButton(onClick: () -> Unit) {
             color = DeepInk,
         )
     }
-}
-
-private fun ringColorFor(ring: String): Color = when (ring) {
-    ActivityRing.MOVE.name -> RingMove
-    ActivityRing.MIND.name -> RingMind
-    ActivityRing.LIFE.name -> RingLife
-    else -> DeepInk
 }

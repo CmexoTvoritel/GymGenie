@@ -26,7 +26,7 @@ struct WorkoutTabSelector: View {
             withAnimation(.easeInOut(duration: 0.2)) { onTabSelected(tab) }
         }) {
             Text(title)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(selected ? .white : mutedText)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)

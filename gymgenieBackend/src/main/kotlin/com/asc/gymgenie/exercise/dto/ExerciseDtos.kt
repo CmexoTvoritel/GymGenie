@@ -29,7 +29,8 @@ data class ExerciseResponse(
     val techniqueTip: String?,
     val defaultRepsMin: Int?,
     val defaultRepsMax: Int?,
-    val defaultWeightPercentage: Double?
+    val defaultWeightPercentage: Double?,
+    val requiresWeight: Boolean
 )
 
 data class ExerciseShortResponse(
@@ -37,12 +38,14 @@ data class ExerciseShortResponse(
     val nameRu: String,
     val nameEn: String,
     val muscleGroup: MuscleGroup,
+    val secondaryMuscleGroups: List<MuscleGroup>,
     val category: ExerciseCategory,
     val difficultyLevel: DifficultyLevel,
     val durationMinutes: Int?,
     val caloriesBurned: Int?,
     val rating: Double?,
-    val imageUrl: String?
+    val imageUrl: String?,
+    val requiresWeight: Boolean
 )
 
 data class CreateExerciseRequest(
@@ -80,7 +83,9 @@ data class CreateExerciseRequest(
 
     @field:DecimalMin("0.0")
     @field:DecimalMax("100.0")
-    val defaultWeightPercentage: Double? = null
+    val defaultWeightPercentage: Double? = null,
+
+    val requiresWeight: Boolean = false
 )
 
 data class UpdateExerciseRequest(
@@ -116,7 +121,9 @@ data class UpdateExerciseRequest(
 
     @field:DecimalMin("0.0")
     @field:DecimalMax("100.0")
-    val defaultWeightPercentage: Double? = null
+    val defaultWeightPercentage: Double? = null,
+
+    val requiresWeight: Boolean? = null
 )
 
 data class PagedResponse<T>(

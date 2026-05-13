@@ -5,6 +5,7 @@ import com.asc.gymgenie.activity.ActivityCheckinRequest
 import com.asc.gymgenie.activity.ActivityHistoryDayResponse
 import com.asc.gymgenie.activity.ActivityTodayResponse
 import com.asc.gymgenie.common.ApiException
+import com.asc.gymgenie.common.SessionManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -40,12 +41,13 @@ data class ActivitiesUiState(
  *
  * Mirrors the [HomeViewModel] check-in semantics: optimistic update first,
  * server call second, automatic rollback on failure. Auth failures (401) are
- * forwarded to [onLogout] so the host can drop the user back to the login
- * surface — the screen itself never owns navigation state.
+ * routed through [SessionManager.triggerLogout] so the platform layer can
+ * drop the user back to the login surface — the screen itself never owns
+ * navigation state.
  */
 class ActivitiesViewModel(
     private val activityApi: ActivityApi,
-    private val onLogout: () -> Unit = {},
+    private val sessionManager: SessionManager,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val _state = MutableStateFlow(ActivitiesUiState())
@@ -65,7 +67,7 @@ class ActivitiesViewModel(
                 }
                 .onFailure { e ->
                     if (isUnauthorized(e)) {
-                        onLogout()
+                        sessionManager.triggerLogout()
                         return@launch
                     }
                     _state.update { it.copy(isLoading = false, error = e.message) }
@@ -90,7 +92,7 @@ class ActivitiesViewModel(
                 }
                 .onFailure { e ->
                     if (isUnauthorized(e)) {
-                        onLogout()
+                        sessionManager.triggerLogout()
                         return@launch
                     }
                     _state.update { it.copy(isHistoryLoading = false) }
@@ -123,7 +125,7 @@ class ActivitiesViewModel(
                 request = ActivityCheckinRequest(date = today, value = value),
             ).onFailure { e ->
                 if (isUnauthorized(e)) {
-                    onLogout()
+                    sessionManager.triggerLogout()
                     return@launch
                 }
                 applyLogValue(activityId, previousValue)

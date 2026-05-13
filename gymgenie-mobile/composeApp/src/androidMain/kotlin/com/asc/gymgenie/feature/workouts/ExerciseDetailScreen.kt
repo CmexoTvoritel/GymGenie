@@ -10,19 +10,29 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.FitnessCenter
+import androidx.compose.material.icons.outlined.LocalFireDepartment
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -40,15 +50,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.asc.gymgenie.exercise.ExerciseApi
 import com.asc.gymgenie.exercise.ExerciseDetailResponse
 import com.asc.gymgenie.feature.workouts.components.muscleGroupEmoji
 import com.asc.gymgenie.presentation.ExerciseDetailViewModel
-import com.asc.gymgenie.storage.TokenStorage
 import androidx.compose.foundation.layout.statusBarsPadding
 import com.asc.gymgenie.ui.theme.AccentOrange
 import com.asc.gymgenie.ui.theme.DeepInk
@@ -60,14 +69,11 @@ import org.koin.core.context.GlobalContext
 @Composable
 fun ExerciseDetailScreen(
     exerciseId: String,
-    tokenStorage: TokenStorage,
     onBack: () -> Unit = {},
     onAddToWorkout: (ExerciseDetailResponse) -> Unit = {},
 ) {
     val koin = remember { GlobalContext.get() }
-    val viewModel = remember {
-        ExerciseDetailViewModel(exerciseApi = koin.get<ExerciseApi>())
-    }
+    val viewModel = remember { koin.get<ExerciseDetailViewModel>() }
     DisposableEffect(Unit) {
         onDispose { viewModel.onCleared() }
     }
@@ -157,13 +163,10 @@ private fun ExerciseDetailContent(
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 96.dp),
+            contentPadding = PaddingValues(bottom = 120.dp),
         ) {
             item {
-                HeroSection(
-                    exercise = exercise,
-                    onBack = onBack,
-                )
+                HeroSection(exercise = exercise)
             }
 
             item {
@@ -171,31 +174,7 @@ private fun ExerciseDetailContent(
             }
         }
 
-        // Sticky bottom "Add to workout" button.
-        BottomAddButton(
-            onClick = onAddToWorkout,
-            modifier = Modifier.align(Alignment.BottomCenter),
-        )
-    }
-}
-
-@Composable
-private fun HeroSection(
-    exercise: ExerciseDetailResponse,
-    onBack: () -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(240.dp)
-            .background(SoftCard),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = muscleGroupEmoji(exercise.muscleGroup),
-            fontSize = 72.sp,
-        )
-
+        // Floating back button — always on top of scroll
         Box(
             modifier = Modifier
                 .align(Alignment.TopStart)
@@ -215,6 +194,28 @@ private fun HeroSection(
                 modifier = Modifier.size(20.dp),
             )
         }
+
+        // Sticky bottom "Add to workout" button.
+        BottomAddButton(
+            onClick = onAddToWorkout,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
+    }
+}
+
+@Composable
+private fun HeroSection(exercise: ExerciseDetailResponse) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(1f)
+            .background(SoftCard),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = muscleGroupEmoji(exercise.muscleGroup),
+            fontSize = 72.sp,
+        )
     }
 }
 
@@ -230,20 +231,29 @@ private fun ContentSheet(exercise: ExerciseDetailResponse) {
     ) {
         HeaderRow(exercise = exercise)
 
-        Spacer(modifier = Modifier.height(12.dp))
-
-        TagsRow(exercise = exercise)
-
-        val stats = buildList {
-            exercise.durationMinutes?.let { add("⏱ $it мин" to AccentOrange) }
-            if (exercise.difficultyLevel.isNotEmpty()) {
-                add("📊 ${difficultyLabel(exercise.difficultyLevel)}" to Color(0xFF4CAF50))
+        val statItems = buildList {
+            if (exercise.muscleGroup.isNotEmpty()) {
+                add(StatItem(Icons.Outlined.FitnessCenter, muscleGroupRu(exercise.muscleGroup), muscleGroupStatColor(exercise.muscleGroup)))
             }
-            exercise.caloriesBurned?.let { add("🔥 $it ккал" to Color(0xFFE53935)) }
+            exercise.durationMinutes?.let {
+                add(StatItem(Icons.Outlined.Schedule, "$it мин", AccentOrange))
+            }
+            if (exercise.difficultyLevel.isNotEmpty()) {
+                val diffColor = when (exercise.difficultyLevel.uppercase()) {
+                    "BEGINNER" -> Color(0xFF4CAF50)
+                    "INTERMEDIATE" -> AccentOrange
+                    "ADVANCED" -> Color(0xFFE53935)
+                    else -> MutedText
+                }
+                add(StatItem(Icons.Outlined.Speed, difficultyLabel(exercise.difficultyLevel), diffColor))
+            }
+            exercise.caloriesBurned?.let {
+                add(StatItem(Icons.Outlined.LocalFireDepartment, "$it ккал", Color(0xFFE53935)))
+            }
         }
-        if (stats.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(14.dp))
-            StatsRow(stats = stats)
+        if (statItems.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(12.dp))
+            StatsRow(stats = statItems)
         }
 
         exercise.description?.takeIf { it.isNotBlank() }?.let { description ->
@@ -252,9 +262,9 @@ private fun ContentSheet(exercise: ExerciseDetailResponse) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = description,
-                fontSize = 14.sp,
+                fontSize = 17.sp,
                 color = DeepInk,
-                lineHeight = 20.sp,
+                lineHeight = 22.sp,
             )
         }
 
@@ -283,9 +293,9 @@ private fun ContentSheet(exercise: ExerciseDetailResponse) {
             ) {
                 Text(
                     text = tip,
-                    fontSize = 14.sp,
+                    fontSize = 17.sp,
                     color = DeepInk,
-                    lineHeight = 20.sp,
+                    lineHeight = 22.sp,
                 )
             }
         }
@@ -301,12 +311,13 @@ private fun ContentSheet(exercise: ExerciseDetailResponse) {
                 exercise.equipment.forEach { item ->
                     Text(
                         text = item,
-                        fontSize = 12.sp,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
                         color = DeepInk,
                         modifier = Modifier
                             .clip(RoundedCornerShape(50))
-                            .border(1.dp, DeepInk.copy(alpha = 0.2f), RoundedCornerShape(50))
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                            .border(1.dp, DeepInk.copy(alpha = 0.25f), RoundedCornerShape(50))
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
                     )
                 }
             }
@@ -323,12 +334,13 @@ private fun ContentSheet(exercise: ExerciseDetailResponse) {
                 exercise.secondaryMuscleGroups.forEach { group ->
                     Text(
                         text = secondaryMuscleGroupRu(group),
-                        fontSize = 12.sp,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
                         color = DeepInk,
                         modifier = Modifier
                             .clip(RoundedCornerShape(50))
-                            .background(SoftCard)
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                            .border(1.dp, DeepInk.copy(alpha = 0.25f), RoundedCornerShape(50))
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
                     )
                 }
             }
@@ -338,124 +350,48 @@ private fun ContentSheet(exercise: ExerciseDetailResponse) {
 
 @Composable
 private fun HeaderRow(exercise: ExerciseDetailResponse) {
-    Row(
+    Text(
+        text = exercise.nameRu,
+        fontSize = 26.sp,
+        fontWeight = FontWeight.Bold,
+        color = DeepInk,
+        lineHeight = 32.sp,
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.Top,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = exercise.nameRu,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                color = DeepInk,
-                lineHeight = 28.sp,
-            )
-            if (exercise.nameEn.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = exercise.nameEn,
-                    fontSize = 14.sp,
-                    color = MutedText,
-                )
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-            val categoryText = buildString {
-                append(muscleGroupRu(exercise.muscleGroup))
-                if (exercise.category.isNotEmpty()) {
-                    append(" • ")
-                    append(categoryRu(exercise.category))
-                }
-            }
-            Text(
-                text = categoryText,
-                fontSize = 13.sp,
-                color = MutedText,
-            )
-        }
+    )
+}
 
-        exercise.rating?.let { rating ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = "⭐", fontSize = 14.sp)
+
+private data class StatItem(val icon: ImageVector, val text: String, val color: Color)
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun StatsRow(stats: List<StatItem>) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        stats.forEach { item ->
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(item.color.copy(alpha = 0.12f))
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = item.icon,
+                    contentDescription = null,
+                    tint = item.color,
+                    modifier = Modifier.size(16.dp),
+                )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = formatRating(rating),
-                    fontSize = 14.sp,
+                    text = item.text,
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = DeepInk,
+                    color = item.color,
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun TagsRow(exercise: ExerciseDetailResponse) {
-    Row(
-        modifier = Modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        if (exercise.muscleGroup.isNotEmpty()) {
-            Text(
-                text = muscleGroupRu(exercise.muscleGroup),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(AccentOrange)
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-            )
-        }
-        exercise.equipment.firstOrNull()?.let { equipment ->
-            Text(
-                text = equipment,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = DeepInk,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(50))
-                    .border(1.dp, DeepInk.copy(alpha = 0.25f), RoundedCornerShape(50))
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-            )
-        }
-        if (exercise.difficultyLevel.isNotEmpty()) {
-            val (label, color) = when (exercise.difficultyLevel.uppercase()) {
-                "BEGINNER" -> "Легко" to Color(0xFF4CAF50)
-                "INTERMEDIATE" -> "Средне" to AccentOrange
-                "ADVANCED" -> "Сложно" to Color(0xFFE53935)
-                else -> exercise.difficultyLevel to MutedText
-            }
-            Text(
-                text = label,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(color)
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun StatsRow(stats: List<Pair<String, Color>>) {
-    Row(
-        modifier = Modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        stats.forEach { (label, color) ->
-            Text(
-                text = label,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = color,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(color.copy(alpha = 0.1f))
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-            )
         }
     }
 }
@@ -464,7 +400,7 @@ private fun StatsRow(stats: List<Pair<String, Color>>) {
 private fun SectionTitle(title: String) {
     Text(
         text = title,
-        fontSize = 17.sp,
+        fontSize = 21.sp,
         fontWeight = FontWeight.Bold,
         color = DeepInk,
     )
@@ -490,9 +426,9 @@ private fun InstructionRow(index: Int, text: String) {
         Spacer(modifier = Modifier.width(10.dp))
         Text(
             text = text,
-            fontSize = 14.sp,
+            fontSize = 17.sp,
             color = DeepInk,
-            lineHeight = 20.sp,
+            lineHeight = 22.sp,
             modifier = Modifier.weight(1f),
         )
     }
@@ -514,7 +450,8 @@ private fun BottomAddButton(
                     ),
                 )
             )
-            .padding(horizontal = 20.dp, vertical = 16.dp),
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 16.dp),
     ) {
         Button(
             onClick = onClick,
@@ -528,8 +465,8 @@ private fun BottomAddButton(
             shape = RoundedCornerShape(16.dp),
         ) {
             Text(
-                text = "🏋 Добавить в тренировку",
-                fontSize = 16.sp,
+                text = "Добавить в тренировку",
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
             )
         }
@@ -574,7 +511,14 @@ internal fun difficultyLabel(level: String): String = when (level.uppercase()) {
     else -> level
 }
 
-private fun formatRating(rating: Double): String {
-    val oneDecimal = (kotlin.math.round(rating * 10) / 10.0)
-    return oneDecimal.toString()
+private fun muscleGroupStatColor(group: String): Color = when (group.uppercase()) {
+    "CHEST" -> Color(0xFFE94A2C)
+    "BACK" -> Color(0xFF3B5BDB)
+    "SHOULDERS" -> Color(0xFFE89B12)
+    "BICEPS", "TRICEPS", "FOREARMS" -> Color(0xFFB8860B)
+    "ABS" -> Color(0xFF6741D9)
+    "QUADRICEPS", "HAMSTRINGS", "GLUTES", "CALVES" -> Color(0xFF2F9E44)
+    "FULL_BODY" -> Color(0xFFFF5A3C)
+    "CARDIO" -> Color(0xFFC2255C)
+    else -> Color(0xFF76726A)
 }

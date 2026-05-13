@@ -1,8 +1,6 @@
 import SwiftUI
 import Shared
 
-// MARK: - Home screen (premium redesign)
-
 struct HomeView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var profileStore: UserProfileStoreWrapper
@@ -11,14 +9,11 @@ struct HomeView: View {
     @State private var showingSession = false
     @State private var activeSession: ActiveWorkoutSession? = nil
 
-    /// When non-nil, a full-screen meal-plan detail view is presented for that
-    /// plan. We use a single optional `String?` (planId) instead of two
-    /// separate flags so the presented sheet can never be open with a stale id
-    /// after a refetch.
     @State private var openMealPlanId: String? = nil
     @State private var showingAiCoach = false
     @State private var showingNutrition = false
     @State private var showingCreateMealPlan = false
+    @State private var createMealPlanInitialType: String? = nil
 
     var body: some View {
         NavigationStack {
@@ -35,9 +30,6 @@ struct HomeView: View {
                         .refreshable {
                             await refreshAndWait()
                         }
-                        // Tints the system pull-to-refresh spinner. Scoped to
-                        // the scrollable content so it does not leak into the
-                        // accent color of unrelated controls.
                         .tint(Palette.coral)
                         .alert(
                             "Ошибка обновления",
@@ -76,11 +68,8 @@ struct HomeView: View {
                     .environmentObject(profileStore)
             }
             .fullScreenCover(isPresented: $showingCreateMealPlan) {
-                // Manual meal-plan creation flow. The save branch dismisses
-                // the sheet AND triggers a targeted reload of the home
-                // meal-plan section so the new plan appears without a manual
-                // pull-to-refresh.
                 CreateMealPlanFlowView(
+                    initialMealType: createMealPlanInitialType,
                     onClose: { showingCreateMealPlan = false },
                     onSaved: {
                         showingCreateMealPlan = false
@@ -102,33 +91,22 @@ struct HomeView: View {
         }
     }
 
-    /// SwiftUI's `.refreshable` keeps the system spinner visible until the
-    /// async closure returns. We poll the wrapper's `isRefreshing` flag so the
-    /// indicator stays in sync with the underlying KMM state machine.
     private func refreshAndWait() async {
         viewModel.refresh()
-        let pollInterval: UInt64 = 50_000_000 // 50ms
-        // Wait briefly for the refresh to start (the wrapper observes the
-        // shared StateFlow on a 50ms tick, so the flag won't flip in the
-        // same run-loop turn).
-        let startWaitMaxNanos: UInt64 = 500_000_000 // 0.5s
+        let pollInterval: UInt64 = 50_000_000
+        let startWaitMaxNanos: UInt64 = 500_000_000
         var startWaited: UInt64 = 0
         while !viewModel.isRefreshing && startWaited < startWaitMaxNanos {
             try? await Task.sleep(nanoseconds: pollInterval)
             startWaited += pollInterval
         }
-        // Then wait for the refresh to complete, capped at a generous timeout
-        // so a stalled network call cannot leave the spinner permanently
-        // attached to the closure.
-        let maxWaitNanos: UInt64 = 15_000_000_000 // 15s safety cap
+        let maxWaitNanos: UInt64 = 15_000_000_000
         var elapsed: UInt64 = 0
         while viewModel.isRefreshing && elapsed < maxWaitNanos {
             try? await Task.sleep(nanoseconds: pollInterval)
             elapsed += pollInterval
         }
     }
-
-    // MARK: - Loading / error
 
     private var loadingView: some View {
         VStack(spacing: 16) {
@@ -162,16 +140,13 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - Content
-
     private var contentView: some View {
         let slot = HomeView.resolveTodaySlot(plans: viewModel.activeWorkoutPlans, today: HomeView.currentDayOfWeek())
 
         return ScrollView(showsIndicators: false) {
-            LazyVStack(alignment: .leading, spacing: 20) {
+            LazyVStack(alignment: .leading, spacing: 12) {
                 HomeHeaderSection(
-                    username: viewModel.username.isEmpty ? "друг" : viewModel.username,
-                    streakDays: Int(viewModel.streakDays)
+                    username: viewModel.username.isEmpty ? "друг" : viewModel.username
                 )
 
                 ActivitiesSectionHeader(
@@ -180,6 +155,7 @@ struct HomeView: View {
                     actionTitle: slot.showAll ? "Все" : nil,
                     destination: nil
                 )
+                .padding(.top, 24)
 
                 workoutSlotView(slot: slot)
 
@@ -189,6 +165,7 @@ struct HomeView: View {
                     actionTitle: "Ещё",
                     destination: AnyView(ActivitiesView())
                 )
+                .padding(.top, 12)
 
                 ActivityRingsCard(activities: viewModel.todayActivities)
 
@@ -203,14 +180,19 @@ struct HomeView: View {
 
                 MealPlanSection(
                     todayPlans: viewModel.todayMealPlans,
+                    isLoading: viewModel.isLoadingMealPlans,
+                    selectedDate: viewModel.selectedMealDate,
+                    onDateSelected: { date in viewModel.selectMealDate(date) },
                     onPlanTap: { planId in openMealPlanId = planId },
-                    // "Create plan" CTA on the home empty-state opens the
-                    // manual creation flow directly. The legacy AI-only
-                    // surface is reachable from `NutritionView`'s FAB.
-                    onCreatePlan: { showingCreateMealPlan = true }
+                    onCreatePlan: { mealType in
+                        createMealPlanInitialType = mealType
+                        showingCreateMealPlan = true
+                    }
                 )
+                .padding(.top, 12)
 
                 coursesSection
+                    .padding(.top, 12)
 
                 Spacer().frame(height: 24)
             }
@@ -218,8 +200,6 @@ struct HomeView: View {
             .padding(.top, 8)
         }
     }
-
-    // MARK: - Section: workout of the day
 
     @ViewBuilder
     private func workoutSlotView(slot: TodaySlot) -> some View {
@@ -229,9 +209,7 @@ struct HomeView: View {
             WorkoutTodayPager(
                 plans: slot.plans,
                 isRecommended: slot.isRecommended,
-                onView: { _ in
-                    // TODO: navigate to plan detail once the route is wired up on iOS.
-                },
+                onView: { _ in },
                 onStart: { plan in
                     activeSession = ActiveWorkoutSession(
                         planId: plan.id,
@@ -245,8 +223,6 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - Today-slot resolution
-
     private static let dayNamesRu: [String: String] = [
         "MONDAY": "понедельник",
         "TUESDAY": "вторник",
@@ -257,9 +233,6 @@ struct HomeView: View {
         "SUNDAY": "воскресенье",
     ]
 
-    /// Returns today's weekday using the same `DayOfWeek` enum-name casing the
-    /// backend emits in `WorkoutPlanShortResponse.scheduleDays`.
-    /// Gregorian: Sunday=1, Monday=2 … Saturday=7.
     static func currentDayOfWeek() -> String {
         let weekday = Calendar.current.component(.weekday, from: Date())
         switch weekday {
@@ -310,26 +283,22 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - Section: courses
-
     private var coursesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .center, spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text("Курсы тренеров")
-                        .font(.system(size: 20, weight: .heavy))
+                        .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(Palette.deepInk)
                     Text("От профи под твои цели")
-                        .font(.system(size: 13))
+                        .font(.system(size: 16, weight: .regular))
                         .foregroundColor(Palette.mutedText)
                 }
-                Spacer()
-                HStack(spacing: 4) {
-                    Text("Все")
-                    Text("→")
-                }
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(Palette.accentOrange)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Text("Все")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(Palette.accentOrange)
             }
 
             CoursesBlock()
@@ -337,44 +306,30 @@ struct HomeView: View {
     }
 }
 
-// MARK: - Header
-
 private struct HomeHeaderSection: View {
     let username: String
-    let streakDays: Int
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            // Avatar — coral background to match the redesigned identity.
             ZStack {
                 Circle().fill(Palette.coral)
                 Text(String(username.prefix(1)).uppercased())
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(.white)
             }
-            .frame(width: 44, height: 44)
+            .frame(width: 48, height: 48)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(Self.currentDateString())
-                    .font(.system(size: 12))
+                    .font(.system(size: 16, weight: .regular))
                     .foregroundColor(Palette.mutedText)
                 Text("Привет, \(username)!")
-                    .font(.system(size: 24, weight: .heavy))
+                    .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(Palette.deepInk)
                     .lineLimit(1)
             }
 
             Spacer()
-
-            HStack(spacing: 4) {
-                Text("🔥")
-                Text("\(streakDays)")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(.white)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(Capsule().fill(Palette.accentOrange))
 
             Button(action: {}) {
                 Image(systemName: "bell")
@@ -394,8 +349,6 @@ private struct HomeHeaderSection: View {
     }
 }
 
-// MARK: - Today slot model
-
 struct TodaySlot {
     let title: String
     let subtitle: String
@@ -404,15 +357,10 @@ struct TodaySlot {
     let isRecommended: Bool
 }
 
-private let cardBorder = Color(red: 0.929, green: 0.929, blue: 0.937) // #EDEDEF
-
-// MARK: - Workout pager
+private let cardBorder = Color(red: 0.929, green: 0.929, blue: 0.937)
 
 private struct WorkoutTodayPager: View {
     let plans: [WorkoutPlanShortResponse]
-    /// Kept for parity with the today-slot resolution surface; the shared
-    /// `WorkoutPlanCard` handles its own visual treatment so this flag is not
-    /// currently consumed but is part of the public contract for future use.
     let isRecommended: Bool
     let onView: (WorkoutPlanShortResponse) -> Void
     let onStart: (WorkoutPlanShortResponse) -> Void
@@ -429,12 +377,10 @@ private struct WorkoutTodayPager: View {
                         onStart: { onStart(plan) }
                     )
                     .tag(index)
-                    .padding(.horizontal, 1) // avoid clipped shadow on edges
+                    .padding(.horizontal, 1)
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            // The card itself adapts to content; allocate enough vertical space
-            // for the full layout (chips + footer button + dual-line text).
             .frame(height: cardHeight)
 
             if plans.count > 1 {
@@ -451,14 +397,9 @@ private struct WorkoutTodayPager: View {
     }
 
     private var cardHeight: CGFloat {
-        // Approximate heuristic — keeps the page-style TabView from clipping
-        // the chips/footer button. We prefer a fixed value over GeometryReader
-        // to avoid introducing layout instability when the page index changes.
         220
     }
 }
-
-// MARK: - No workout placeholder
 
 private struct NoWorkoutPlaceholder: View {
     let onCreate: () -> Void
@@ -502,8 +443,6 @@ private struct NoWorkoutPlaceholder: View {
     }
 }
 
-// MARK: - Activities section header
-
 struct ActivitiesSectionHeader: View {
     let title: String
     let subtitle: String?
@@ -511,42 +450,33 @@ struct ActivitiesSectionHeader: View {
     let destination: AnyView?
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(alignment: .center, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.system(size: 20, weight: .heavy))
+                    .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(Palette.deepInk)
                 if let subtitle = subtitle {
                     Text(subtitle)
-                        .font(.system(size: 13))
+                        .font(.system(size: 16, weight: .regular))
                         .foregroundColor(Palette.mutedText)
                 }
             }
-
-            Spacer()
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             if let actionTitle = actionTitle {
                 if let destination = destination {
                     NavigationLink {
                         destination
                     } label: {
-                        HStack(spacing: 4) {
-                            Text(actionTitle)
-                            Text("→")
-                        }
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(Palette.accentOrange)
+                        Text(actionTitle)
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(Palette.accentOrange)
                     }
                 } else {
-                    // Plain label when no destination is wired up yet (the
-                    // recurring-today slot intentionally has no list route).
                     Button(action: {}) {
-                        HStack(spacing: 4) {
-                            Text(actionTitle)
-                            Text("→")
-                        }
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(Palette.accentOrange)
+                        Text(actionTitle)
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(Palette.accentOrange)
                     }
                 }
             }
@@ -554,18 +484,6 @@ struct ActivitiesSectionHeader: View {
     }
 }
 
-// MARK: - Activity DTO bridging
-
-/// Conformance hoisted onto the KMM-generated type so SwiftUI bindings such
-/// as `sheet(item:)` and `ForEach` can use it directly without wrapping.
-/// `activityId` is the canonical primary key of the response.
-///
-/// The conformance is intentionally retroactive — both the type
-/// (`ActivityTodayResponse`, declared in the `Shared` framework) and the
-/// protocol (`Identifiable`, declared in the standard library) live in
-/// foreign modules. Swift 6 emits a warning unless this is annotated with
-/// `@retroactive`; older toolchains tolerate the bare form, so we guard the
-/// annotation behind a Swift-version check to keep both happy.
 #if swift(>=6.0)
 extension Shared.ActivityTodayResponse: @retroactive Identifiable {
     public var id: String { activityId }
@@ -576,13 +494,6 @@ extension ActivityTodayResponse: Identifiable {
 }
 #endif
 
-// MARK: - Activity rings card
-
-/// Triple-ring card driven by today's activity feed.
-///
-/// Each ring averages the per-activity completion fractions over the
-/// activities that belong to that ring. An empty ring renders as `–`
-/// instead of `0%` to distinguish "nothing planned" from "no progress yet".
 struct ActivityRingsCard: View {
     let activities: [ActivityTodayResponse]
 
@@ -651,9 +562,6 @@ private extension Float {
     func toCGFloat() -> CGFloat { CGFloat(self) }
 }
 
-/// Three concentric arc rings — outer = MOVE, middle = MIND, inner = LIFE.
-/// Drawn with Circle + trim so the rounded cap sits flush against the
-/// progress endpoint, matching the prototype.
 struct ThreeRingsView: View {
     let move: CGFloat
     let mind: CGFloat
@@ -695,26 +603,21 @@ private struct RingLegendRow: View {
     let value: String
 
     var body: some View {
-        HStack(spacing: 10) {
-            Circle().fill(color).frame(width: 10, height: 10)
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(alignment: .center, spacing: 12) {
+            Circle().fill(color).frame(width: 24, height: 24)
+            VStack(alignment: .leading, spacing: 8) {
                 Text(title)
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundColor(Palette.mutedText)
                     .tracking(0.6)
                 Text(value)
-                    .font(.system(size: 16, weight: .heavy))
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundColor(Palette.deepInk)
             }
         }
     }
 }
 
-// MARK: - Activity rows card
-
-/// Filterable list of today's activities with one-tap / long-press / preset
-/// check-in interactions. Sheet/filter state is local; data flows top-down
-/// from the home screen so the parent stays the single source of truth.
 struct ActivityRowsCard: View {
     let activities: [ActivityTodayResponse]
     let onCheckIn: (String, Int) -> Void
@@ -730,7 +633,6 @@ struct ActivityRowsCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ActivityFilterChips(
-                activities: activities,
                 active: activeFilter,
                 onSelect: { activeFilter = $0 }
             )
@@ -773,7 +675,6 @@ private func ringColor(for ring: String) -> Color {
 }
 
 private struct ActivityFilterChips: View {
-    let activities: [ActivityTodayResponse]
     let active: String
     let onSelect: (String) -> Void
 
@@ -782,28 +683,24 @@ private struct ActivityFilterChips: View {
             HStack(spacing: 8) {
                 FilterChip(
                     label: "Все",
-                    count: activities.count,
                     isActive: active == ActivityFilter.all,
                     activeColor: Palette.deepInk,
                     onTap: { onSelect(ActivityFilter.all) }
                 )
                 FilterChip(
                     label: "Движение",
-                    count: activities.filter { $0.ring == "MOVE" }.count,
                     isActive: active == "MOVE",
                     activeColor: Palette.ringMove,
                     onTap: { onSelect("MOVE") }
                 )
                 FilterChip(
                     label: "Разум",
-                    count: activities.filter { $0.ring == "MIND" }.count,
                     isActive: active == "MIND",
                     activeColor: Palette.ringMind,
                     onTap: { onSelect("MIND") }
                 )
                 FilterChip(
                     label: "Режим",
-                    count: activities.filter { $0.ring == "LIFE" }.count,
                     isActive: active == "LIFE",
                     activeColor: Palette.ringLife,
                     onTap: { onSelect("LIFE") }
@@ -815,32 +712,26 @@ private struct ActivityFilterChips: View {
 
 private struct FilterChip: View {
     let label: String
-    let count: Int
     let isActive: Bool
     let activeColor: Color
     let onTap: () -> Void
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 6) {
-                Text(label)
-                    .font(.system(size: 12.5, weight: .bold))
-                    .foregroundColor(isActive ? .white : Palette.deepInk)
-                Text("\(count)")
-                    .font(.system(size: 12.5, weight: .bold))
-                    .foregroundColor(isActive ? .white.opacity(0.85) : Palette.mutedText)
-            }
-            .padding(.horizontal, 13)
-            .padding(.vertical, 7)
-            .background(
-                Capsule().fill(isActive ? activeColor : .white)
-            )
-            .overlay(
-                Capsule().strokeBorder(
-                    isActive ? Color.clear : Palette.activityCardBorder,
-                    lineWidth: 1.5
+            Text(label)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(isActive ? .white : Palette.deepInk)
+                .padding(.horizontal, 13)
+                .padding(.vertical, 7)
+                .background(
+                    Capsule().fill(isActive ? activeColor : .white)
                 )
-            )
+                .overlay(
+                    Capsule().strokeBorder(
+                        isActive ? Color.clear : Palette.activityCardBorder,
+                        lineWidth: 1.5
+                    )
+                )
         }
         .buttonStyle(.plain)
     }
@@ -881,7 +772,7 @@ private struct ActivityCardRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(activity.name)
-                    .font(.system(size: 14.5, weight: .bold))
+                    .font(.system(size: 18, weight: .bold))
                     .foregroundColor(titleColor)
 
                 ActivitySubtitleView(
@@ -910,8 +801,6 @@ private struct ActivityCardRow: View {
             RoundedRectangle(cornerRadius: 18)
                 .strokeBorder(borderColor, lineWidth: 1.5)
         )
-        // The done state gets a subtle outer halo via an additional shadow,
-        // matching the prototype's `box-shadow: 0 0 0 3px ringColor/8%`.
         .shadow(
             color: isDone ? ring.opacity(0.08) : .clear,
             radius: 0,
@@ -927,9 +816,6 @@ private struct ActivityCardRow: View {
     }
 }
 
-/// Swift mirror of the KMM `ActivityKind` enum, kept local so SwiftUI views
-/// can switch on a regular Swift enum. Mapping is done in
-/// `ActivityCardRow.kindEnum` from the raw string value of the response.
 private enum ActivityKindLocal {
     case binary, counter, preset
 }
@@ -961,12 +847,12 @@ private struct ActivitySubtitleView: View {
         switch kind {
         case .binary:
             Text(binaryText())
-                .font(.system(size: 12.5, weight: .medium))
+                .font(.system(size: 16, weight: .medium))
                 .foregroundColor(isDone ? ring : Palette.mutedText)
         case .counter, .preset:
             VStack(alignment: .leading, spacing: 6) {
                 Text(counterLabel())
-                    .font(.system(size: 12.5, weight: .medium))
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundColor(isDone ? ring : Palette.mutedText)
                 ProgressBarView(progress: fraction, color: ring)
                     .frame(height: 4)
@@ -982,8 +868,6 @@ private struct ActivitySubtitleView: View {
     }
 
     private func counterLabel() -> String {
-        // Kotlin `Int?` is exposed as `KotlinInt?` in Swift, so we unbox via
-        // `intValue` (matches the convention used elsewhere in the iOS app).
         let goalValue = activity.goal?.intValue ?? 0
         let unit = activity.unit ?? ""
         return "\(activity.logValue) / \(goalValue) \(unit)".trimmingCharacters(in: .whitespaces)
@@ -1043,11 +927,6 @@ private struct ActionButtonView: View {
             .buttonStyle(.plain)
 
         case .counter:
-            // We render the button manually instead of using `Button` so we
-            // can attach both a tap (increment) and a long-press (decrement)
-            // gesture without one stealing the events from the other. SwiftUI's
-            // `Button` consumes tap gestures internally and would suppress
-            // either the tap or the long-press depending on order.
             ZStack {
                 Circle().fill(isDone ? ring : Palette.deepInk)
                 Image(systemName: "plus")
@@ -1078,9 +957,6 @@ private struct ActionButtonView: View {
     }
 }
 
-/// Toggles a BINARY activity. See KMM `toggleBinary` for full semantics —
-/// regular activities flip 0 ↔ 1, inverse activities flip the meaning so
-/// `0` is treated as "done" by default.
 private func toggleBinary(
     activity: ActivityTodayResponse,
     onCheckIn: (String, Int) -> Void
@@ -1096,8 +972,6 @@ private func toggleBinary(
     onCheckIn(activity.activityId, next)
 }
 
-// MARK: - Preset bottom sheet
-
 private struct PresetSheetView: View {
     let activity: ActivityTodayResponse
     let onPick: (String, Int) -> Void
@@ -1106,8 +980,6 @@ private struct PresetSheetView: View {
     private var ring: Color { ringColor(for: activity.ring) }
     private var presets: [Int] {
         guard let raw = activity.presets else { return [] }
-        // Kotlin `List<Int>` lands in Swift as `[KotlinInt]`; unbox each
-        // entry via `intValue` so the SwiftUI grid sees a plain `[Int]`.
         return raw.map { $0.intValue }
     }
 
@@ -1198,8 +1070,6 @@ private struct PresetSheetView: View {
     }
 }
 
-// MARK: - Add activity button
-
 struct AddActivityButton: View {
     let destination: AnyView
 
@@ -1211,7 +1081,7 @@ struct AddActivityButton: View {
                 Image(systemName: "plus")
                 Text("Добавить активность")
             }
-            .font(.system(size: 15, weight: .semibold))
+            .font(.system(size: 18, weight: .semibold))
             .foregroundColor(Palette.deepInk)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
@@ -1226,10 +1096,7 @@ struct AddActivityButton: View {
     }
 }
 
-// MARK: - AI tip
-
 struct AiTipCard: View {
-    // TODO: replace with AI-generated tip from backend.
     private let tip = "Ты на правильном пути! 3-й день подряд без пропусков. Ещё 4 дня — и новый рекорд твоего стрика. Не сдавайся 💪"
 
     var body: some View {
@@ -1265,14 +1132,6 @@ struct AiTipCard: View {
     }
 }
 
-// MARK: - Courses block
-
-/// Vertical block of trainer courses for the Home screen:
-///  - one full-width featured card,
-///  - a 2-column grid of small cards,
-///  - a "see all" outline button at the bottom.
-///
-/// Data is hardcoded for now until the backend exposes a courses endpoint.
 private struct CoursesBlock: View {
     private let featured = FeaturedCourseModel(
         title: "Утреннее пробуждение",
@@ -1281,8 +1140,8 @@ private struct CoursesBlock: View {
         duration: "25 мин",
         author: "Мария Л.",
         rating: "4.9",
-        gradientStart: Color(red: 1.0, green: 0.529, blue: 0.455), // #FF8674
-        gradientEnd: Color(red: 1.0, green: 0.353, blue: 0.235)    // #FF5A3C
+        gradientStart: Color(red: 1.0, green: 0.529, blue: 0.455),
+        gradientEnd: Color(red: 1.0, green: 0.353, blue: 0.235)
     )
 
     private let smallCourses: [SmallCourseModel] = [
@@ -1292,8 +1151,8 @@ private struct CoursesBlock: View {
             duration: "20 мин",
             rating: "5.0",
             badge: "Интенсив",
-            gradientStart: Color(red: 1.0, green: 0.667, blue: 0.541),   // #FFAA8A
-            gradientEnd: Color(red: 0.914, green: 0.290, blue: 0.173)    // #E94A2C
+            gradientStart: Color(red: 1.0, green: 0.667, blue: 0.541),
+            gradientEnd: Color(red: 0.914, green: 0.290, blue: 0.173)
         ),
         SmallCourseModel(
             title: "Сила и мощь",
@@ -1301,8 +1160,8 @@ private struct CoursesBlock: View {
             duration: "20 мин",
             rating: "5.0",
             badge: "Интенсив",
-            gradientStart: Color(red: 0.239, green: 0.239, blue: 0.271), // #3D3D45
-            gradientEnd: Color(red: 0.039, green: 0.039, blue: 0.039)    // #0A0A0A
+            gradientStart: Color(red: 0.239, green: 0.239, blue: 0.271),
+            gradientEnd: Color(red: 0.039, green: 0.039, blue: 0.039)
         ),
     ]
 
@@ -1317,9 +1176,7 @@ private struct CoursesBlock: View {
                 }
             }
 
-            SeeAllCoursesButton(action: {
-                // TODO: hook up courses screen once backend exposes the list.
-            })
+            SeeAllCoursesButton(action: { })
         }
     }
 }
@@ -1346,11 +1203,11 @@ private struct SmallCourseModel: Identifiable {
     let gradientEnd: Color
 }
 
-private let courseCardBorder = Color(red: 0.929, green: 0.929, blue: 0.937) // #EDEDEF
+private let courseCardBorder = Color(red: 0.929, green: 0.929, blue: 0.937)
 private let starYellow = Color(red: 0.831, green: 0.627, blue: 0.090)
-private let ratingPillBg = Color(red: 1.0, green: 0.965, blue: 0.839)       // #FFF6D6
-private let smallCourseBadgeBg = Color(red: 0.882, green: 0.945, blue: 1.0) // #E1F1FF
-private let smallCourseBadgeFg = Color(red: 0.039, green: 0.518, blue: 1.0) // #0A84FF
+private let ratingPillBg = Color(red: 1.0, green: 0.965, blue: 0.839)
+private let smallCourseBadgeBg = Color(red: 0.882, green: 0.945, blue: 1.0)
+private let smallCourseBadgeFg = Color(red: 0.039, green: 0.518, blue: 1.0)
 
 private struct FeaturedCourseCard: View {
     let course: FeaturedCourseModel
@@ -1365,7 +1222,6 @@ private struct FeaturedCourseCard: View {
                 )
                 .frame(height: 170)
 
-                // Title + category overlay — bottom-left
                 VStack(alignment: .leading, spacing: 2) {
                     Spacer()
                     Text(course.title)
@@ -1380,7 +1236,6 @@ private struct FeaturedCourseCard: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .frame(height: 170, alignment: .bottomLeading)
 
-                // "популярное" frosted badge — top-left
                 Text(course.tag)
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(.black)
@@ -1395,7 +1250,6 @@ private struct FeaturedCourseCard: View {
             .frame(height: 170)
             .clipped()
 
-            // Author row
             HStack(spacing: 8) {
                 Circle()
                     .fill(
@@ -1540,86 +1394,252 @@ private struct SeeAllCoursesButton: View {
     }
 }
 
-// MARK: - Meal plan section
+private let mealCardBorder = Color(red: 0.929, green: 0.929, blue: 0.937)
 
-private let mealCardBorder = Color(red: 0.929, green: 0.929, blue: 0.937) // #EDEDEF
-
-/// Identifiable wrapper around the planId String — `fullScreenCover(item:)`
-/// requires an `Identifiable` payload, so we lift the raw id into a tiny
-/// holder rather than coloring the public KMM `String` with a conformance.
 struct MealPlanIdHolder: Identifiable {
     let value: String
     var id: String { value }
 }
 
-/// Home meal-plan section.
-///
-/// Two rendering branches driven entirely by [todayPlans]:
-///  - empty list → empty-state CTA that opens the manual creation flow,
-///  - non-empty   → one row per (meal × plan) card; tap raises [onPlanTap]
-///    so the parent can present the detail screen.
-///
-/// The section is intentionally state-free; the real source of truth is the
-/// shared `HomeViewModel`. Everything beyond layout flows top-down from the
-/// parent.
 struct MealPlanSection: View {
     let todayPlans: [TodayMealPlanCard]
+    let isLoading: Bool
+    let selectedDate: Date
+    let onDateSelected: (Date) -> Void
     let onPlanTap: (String) -> Void
-    let onCreatePlan: () -> Void
+    let onCreatePlan: (String?) -> Void
+
+    private static let standardSlots: [String] = ["BREAKFAST", "LUNCH", "DINNER"]
 
     private var totalKcal: Int {
-        // `estimatedCalories` is `KotlinInt?` in Swift (Kotlin `Int?`); unbox
-        // via `intValue` (returns `Int32`) and widen to `Int` so the
-        // accumulator stays in the platform-native integer type. Null
-        // estimates count as zero so a card without one does not break the
-        // running sum.
         todayPlans.reduce(0) { acc, card in
             acc + Int(card.estimatedCalories?.intValue ?? 0)
         }
     }
 
     private var subtitle: String {
-        if todayPlans.isEmpty {
-            return "Сегодня нет запланированных приёмов пищи"
-        }
+        if isLoading { return "Загрузка..." }
+        if todayPlans.isEmpty { return "Нет планов на эту дату" }
         return "\(todayPlans.count) \(Self.pluralizeMeals(todayPlans.count)) · \(totalKcal) ккал"
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("План питания")
-                    .font(.system(size: 20, weight: .heavy))
-                    .foregroundColor(Palette.deepInk)
-                Text(subtitle)
-                    .font(.system(size: 13))
-                    .foregroundColor(Palette.mutedText)
-                    .lineLimit(1)
-            }
+            ActivitiesSectionHeader(
+                title: "План питания",
+                subtitle: subtitle,
+                actionTitle: nil,
+                destination: nil
+            )
 
-            if todayPlans.isEmpty {
-                EmptyMealPlanCard(onCreate: onCreatePlan)
+            MealDatePicker(
+                selectedDate: selectedDate,
+                onDateSelected: onDateSelected
+            )
+
+            if isLoading {
+                MealPlansLoadingState()
+            } else if todayPlans.isEmpty {
+                EmptyMealPlanCard(onCreate: { onCreatePlan(nil) })
             } else {
                 VStack(spacing: 10) {
-                    ForEach(todayPlans, id: \.planId) { card in
-                        TodayMealPlanRow(
-                            card: card,
-                            onTap: { onPlanTap(card.planId) }
-                        )
+                    ForEach(Self.standardSlots, id: \.self) { slot in
+                        if let card = todayPlans.first(where: { $0.mealType.uppercased() == slot }) {
+                            TodayMealPlanRow(
+                                card: card,
+                                onTap: { onPlanTap(card.planId) }
+                            )
+                        } else {
+                            EmptyMealSlotCard(
+                                mealType: slot,
+                                onTap: { onCreatePlan(slot) }
+                            )
+                        }
                     }
                 }
             }
         }
     }
 
-    /// Russian noun pluralization for "приём пищи". Public-static so the
-    /// section header and the list summary stay consistent.
     private static func pluralizeMeals(_ count: Int) -> String {
         let mod10 = count % 10
         let mod100 = count % 100
         if mod10 == 1 && mod100 != 11 { return "приём пищи" }
         if (2...4).contains(mod10) && !(12...14).contains(mod100) { return "приёма пищи" }
         return "приёмов пищи"
+    }
+}
+
+private struct MealPlansLoadingState: View {
+    private static let slots = ["BREAKFAST", "LUNCH", "DINNER"]
+
+    var body: some View {
+        VStack(spacing: 8) {
+            ForEach(Self.slots, id: \.self) { slot in
+                SkeletonMealCard(mealType: slot)
+            }
+        }
+    }
+}
+
+private struct SkeletonMealCard: View {
+    let mealType: String
+
+    var body: some View {
+        EmptyMealSlotCard(mealType: mealType, onTap: {})
+            .redacted(reason: .placeholder)
+            .allowsHitTesting(false)
+    }
+}
+
+private struct MealDatePicker: View {
+    let selectedDate: Date
+    let onDateSelected: (Date) -> Void
+
+    @State private var showDatePicker: Bool = false
+
+    private var label: String {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let target = calendar.startOfDay(for: selectedDate)
+
+        if calendar.isDate(target, inSameDayAs: today) { return "Сегодня" }
+        if let yesterday = calendar.date(byAdding: .day, value: -1, to: today),
+           calendar.isDate(target, inSameDayAs: yesterday) {
+            return "Вчера"
+        }
+        if let tomorrow = calendar.date(byAdding: .day, value: 1, to: today),
+           calendar.isDate(target, inSameDayAs: tomorrow) {
+            return "Завтра"
+        }
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ru_RU")
+        formatter.dateFormat = "d MMMM"
+        return formatter.string(from: target)
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            arrowButton(symbol: "chevron.left") {
+                shift(by: -1)
+            }
+
+            Text(label)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(Palette.deepInk)
+                .frame(maxWidth: .infinity)
+                .multilineTextAlignment(.center)
+                .lineLimit(1)
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
+                .onTapGesture { showDatePicker = true }
+
+            arrowButton(symbol: "chevron.right") {
+                shift(by: 1)
+            }
+        }
+        .sheet(isPresented: $showDatePicker) {
+            datePickerSheet
+        }
+    }
+
+    private var datePickerSheet: some View {
+        VStack(spacing: 16) {
+            DatePicker(
+                "",
+                selection: Binding(
+                    get: { selectedDate },
+                    set: { newValue in
+                        onDateSelected(newValue)
+                    }
+                ),
+                displayedComponents: .date
+            )
+            .datePickerStyle(.graphical)
+            .labelsHidden()
+            .environment(\.locale, Locale(identifier: "ru_RU"))
+
+            Button(action: { showDatePicker = false }) {
+                Text("Готово")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(RoundedRectangle(cornerRadius: 14).fill(Palette.coral))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(20)
+        .presentationDetents([.medium, .large])
+    }
+
+    private func shift(by days: Int) {
+        let calendar = Calendar.current
+        guard let next = calendar.date(byAdding: .day, value: days, to: selectedDate) else { return }
+        onDateSelected(next)
+    }
+
+    private func arrowButton(symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            ZStack {
+                Circle().fill(Color(red: 0.957, green: 0.957, blue: 0.965))
+                Image(systemName: symbol)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(Color(red: 0.039, green: 0.039, blue: 0.039))
+            }
+            .frame(width: 40, height: 40)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct EmptyMealSlotCard: View {
+    let mealType: String
+    let onTap: () -> Void
+
+    private var palette: MealPalette { MealPalette.forType(mealType) }
+    private var displayName: String { MealPalette.displayName(mealType) }
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12).fill(palette.iconBg)
+                    Text(palette.emoji).font(.system(size: 18))
+                }
+                .frame(width: 42, height: 42)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(displayName)
+                        .font(.system(size: 16.5, weight: .bold))
+                        .foregroundColor(Palette.deepInk)
+                    Text("Ещё не составлено — добавь сейчас")
+                        .font(.system(size: 14))
+                        .foregroundColor(Palette.mutedText)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Spacer().frame(width: 16)
+
+                ZStack {
+                    Circle().fill(Palette.deepInk)
+                    Image(systemName: "plus")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.white)
+                }
+                .frame(width: 24, height: 24)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(RoundedRectangle(cornerRadius: 18).fill(.white))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18)
+                    .strokeBorder(mealCardBorder, lineWidth: 1.5)
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -1634,7 +1654,7 @@ private struct EmptyMealPlanCard: View {
             }
             .frame(width: 56, height: 56)
 
-            Text("Нет плана питания на сегодня")
+            Text("Нет плана питания на эту дату")
                 .font(.system(size: 15, weight: .bold))
                 .foregroundColor(Palette.deepInk)
 
@@ -1664,12 +1684,6 @@ private struct EmptyMealPlanCard: View {
     }
 }
 
-/// Single home-meal row backed by a [TodayMealPlanCard].
-///
-/// Renders meal-type emoji + display name, the parent plan's name, a short
-/// dish summary, and the meal's estimated calorie count when available.
-/// Tap surface is the entire row; the parent handles navigation to the
-/// per-plan detail view.
 private struct TodayMealPlanRow: View {
     let card: TodayMealPlanCard
     let onTap: () -> Void
@@ -1699,15 +1713,15 @@ private struct TodayMealPlanRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 8) {
                         Text(displayName)
-                            .font(.system(size: 14.5, weight: .bold))
+                            .font(.system(size: 16.5, weight: .bold))
                             .foregroundColor(Palette.deepInk)
                         Text(card.planName)
-                            .font(.system(size: 11.5))
-                            .foregroundColor(Palette.mutedText)
+                            .font(.system(size: 13.5))
+                            .foregroundColor(Palette.deepInk)
                             .lineLimit(1)
                     }
                     Text(dishSummary)
-                        .font(.system(size: 12))
+                        .font(.system(size: 14))
                         .foregroundColor(Palette.mutedText)
                         .lineLimit(1)
                 }
@@ -1717,10 +1731,10 @@ private struct TodayMealPlanRow: View {
                 if let kcal = card.estimatedCalories {
                     VStack(alignment: .trailing, spacing: 0) {
                         Text("\(kcal.intValue)")
-                            .font(.system(size: 14, weight: .heavy))
+                            .font(.system(size: 16, weight: .heavy))
                             .foregroundColor(Palette.deepInk)
                         Text("ККАЛ")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(Palette.mutedText)
                     }
                 }
@@ -1737,9 +1751,6 @@ private struct TodayMealPlanRow: View {
     }
 }
 
-/// Static palette + label resolution for a meal type. Kept in the view layer
-/// because palettes / Russian display names are pure presentation concerns —
-/// the KMM domain model only carries the wire string.
 private struct MealPalette {
     let iconBg: Color
     let iconFg: Color
@@ -1790,14 +1801,3 @@ private struct MealPalette {
         }
     }
 }
-
-// MARK: - Legacy mock detail view (retired)
-//
-// The previous file shipped a hardcoded `MealDetailView` + supporting mock
-// models (`MealRow`, `MealDetailModel`, `DishItem`, `MacroItem`, `lunchModel`,
-// `DishRow`, `MacroCard`). They were the placeholder used while the real
-// meal-plan API was not exposed; the new home wiring opens the real
-// `MealPlanDetailView(planId:)` instead, so all of that mock surface has been
-// removed in this file. Search history (`git log -- HomeView.swift`) for the
-// old implementation if a reference is needed.
-

@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
+    alias(libs.plugins.kotlinSerialization)
 }
 
 kotlin {
@@ -20,6 +21,8 @@ kotlin {
             implementation(libs.androidx.activity.compose)
             implementation(libs.androidx.datastore.preferences)
             implementation(libs.koin.android)
+            implementation(libs.essenty.lifecycle)
+            implementation(libs.essenty.backhandler)
         }
         commonMain.dependencies {
             implementation(libs.compose.runtime)
@@ -32,6 +35,10 @@ kotlin {
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
             implementation(libs.kotlinx.coroutines.core)
+            implementation(libs.kotlinx.datetime)
+            implementation(libs.kotlinx.serialization.json)
+            implementation(libs.decompose)
+            implementation(libs.decompose.extensions.compose)
             implementation(projects.shared)
         }
         commonTest.dependencies {
@@ -55,6 +62,9 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+    }
+    buildFeatures {
+        buildConfig = true
     }
     buildTypes {
         getByName("release") {

@@ -73,9 +73,7 @@ import com.asc.gymgenie.nutrition.CreateMealPlanViewModel
 import com.asc.gymgenie.nutrition.FoodCategory
 import com.asc.gymgenie.nutrition.FoodPortionMacros
 import com.asc.gymgenie.nutrition.FoodProduct
-import com.asc.gymgenie.nutrition.FoodProductApi
 import com.asc.gymgenie.nutrition.ManualMealKind
-import com.asc.gymgenie.nutrition.ManualMealPlanApi
 import com.asc.gymgenie.nutrition.ManualScheduleMode
 import com.asc.gymgenie.nutrition.macrosForGrams
 import com.asc.gymgenie.ui.theme.Coral
@@ -106,18 +104,19 @@ private val CardBorder = Color(0xFFEDEDEF)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateMealPlanFlowScreen(
+    initialMealType: String? = null,
     onDismiss: () -> Unit,
     onSaved: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val koin = remember { GlobalContext.get() }
-    val viewModel = remember {
-        CreateMealPlanViewModel(
-            foodProductApi = koin.get<FoodProductApi>(),
-            manualMealPlanApi = koin.get<ManualMealPlanApi>(),
-        )
-    }
+    val viewModel = remember { koin.get<CreateMealPlanViewModel>() }
     DisposableEffect(Unit) { onDispose { viewModel.onCleared() } }
+
+    LaunchedEffect(Unit) {
+        val kind = ManualMealKind.fromWireValue(initialMealType)
+        if (kind != null) viewModel.setMealKind(kind)
+    }
 
     val state by viewModel.state.collectAsState()
 

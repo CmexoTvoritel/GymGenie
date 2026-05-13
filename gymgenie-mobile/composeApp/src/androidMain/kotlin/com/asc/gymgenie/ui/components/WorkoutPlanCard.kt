@@ -94,78 +94,56 @@ fun WorkoutPlanCard(
         }
 
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
-            HeaderRow(
-                plan = plan,
-                muscleColors = muscleColors,
-                isAi = isAi,
-            )
+            // Row 1: image + title + badge
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(muscleColors.background),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(text = "🏋️", fontSize = 22.sp)
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = plan.name,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = InkBlack,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                SourceBadge(isAi = isAi)
+            }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            ChipsRow(
-                plan = plan,
-                isRecurring = isRecurring,
-            )
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            FooterActions(
-                onView = onView,
-                onStart = onStart,
-            )
-        }
-    }
-}
-
-@Composable
-private fun HeaderRow(
-    plan: WorkoutPlanShortResponse,
-    muscleColors: MuscleGroupColors,
-    isAi: Boolean,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(muscleColors.background),
-            contentAlignment = Alignment.Center,
-        ) {
+            // Row 2: description (always reserves 2-line height)
+            val desc = plan.description?.takeIf { it.isNotBlank() }
             Text(
-                text = muscleGroupCardEmoji(plan.primaryMuscleGroup),
-                fontSize = 22.sp,
-            )
-        }
-
-        Spacer(modifier = Modifier.width(12.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = plan.name,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = InkBlack,
+                text = desc ?: "",
+                fontSize = 14.sp,
+                color = if (desc != null) MutedManualText else Color.Transparent,
+                minLines = 2,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(),
             )
-            plan.description?.takeIf { it.isNotBlank() }?.let { desc ->
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = desc,
-                    fontSize = 12.sp,
-                    color = InkMuted,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            ChipsRow(plan = plan, isRecurring = isRecurring)
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            FooterActions(onView = onView, onStart = onStart)
         }
-
-        Spacer(modifier = Modifier.width(8.dp))
-
-        SourceBadge(isAi = isAi)
     }
 }
 
@@ -174,24 +152,24 @@ private fun SourceBadge(isAi: Boolean) {
     if (isAi) {
         Text(
             text = "✦ AI",
-            fontSize = 11.sp,
+            fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
             color = Color.White,
             modifier = Modifier
                 .clip(RoundedCornerShape(20.dp))
                 .background(Coral)
-                .padding(horizontal = 9.dp, vertical = 5.dp),
+                .padding(horizontal = 8.dp, vertical = 4.dp),
         )
     } else {
         Text(
             text = "Ручная",
-            fontSize = 11.sp,
+            fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
             color = MutedManualText,
             modifier = Modifier
                 .clip(RoundedCornerShape(20.dp))
                 .background(SoftGray)
-                .padding(horizontal = 9.dp, vertical = 5.dp),
+                .padding(horizontal = 8.dp, vertical = 4.dp),
         )
     }
 }
@@ -233,12 +211,12 @@ private fun InfoChip(
             imageVector = icon,
             contentDescription = null,
             tint = ChipText,
-            modifier = Modifier.size(13.dp),
+            modifier = Modifier.size(15.dp),
         )
         Spacer(modifier = Modifier.width(4.dp))
         Text(
             text = text,
-            fontSize = 12.sp,
+            fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
             color = ChipText,
         )
@@ -276,12 +254,12 @@ private fun ScheduleChip(
             imageVector = icon,
             contentDescription = null,
             tint = foreground,
-            modifier = Modifier.size(13.dp),
+            modifier = Modifier.size(15.dp),
         )
         Spacer(modifier = Modifier.width(4.dp))
         Text(
             text = label,
-            fontSize = 12.sp,
+            fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
             color = foreground,
         )
@@ -331,12 +309,12 @@ private fun FooterActions(
                     imageVector = Icons.Filled.PlayArrow,
                     contentDescription = null,
                     tint = Color.White,
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.size(20.dp),
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "Начать",
-                    fontSize = 15.sp,
+                    text = "Начать тренировку",
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
                 )
@@ -358,12 +336,12 @@ private fun FooterActions(
                 imageVector = Icons.Filled.PlayArrow,
                 contentDescription = null,
                 tint = Color.White,
-                modifier = Modifier.size(16.dp),
+                modifier = Modifier.size(18.dp),
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = "Начать тренировку",
-                fontSize = 15.sp,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
             )

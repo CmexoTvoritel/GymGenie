@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -30,18 +29,6 @@ import com.asc.gymgenie.workout.WorkoutPlanShortResponse
 
 private val InactiveDot = androidx.compose.ui.graphics.Color(0xFFD5D5DB)
 
-/**
- * Horizontally pageable list of workout cards for the day.
- *
- * Renders one [WorkoutPlanCard] per plan and shows a pill/dot indicator when
- * more than one plan is available. Single-plan callers get a clean card with
- * no indicator overhead, so the component is safe to use in both the
- * recurring and recommendation slots.
- *
- * [isRecommended] is kept on the public surface so the today-slot resolution
- * stays untouched; the home pager uses [WorkoutPlanCard]'s "no view" footer
- * variant, which already styles itself correctly for both slot types.
- */
 @Composable
 fun WorkoutTodayPager(
     plans: List<WorkoutPlanShortResponse>,
@@ -108,15 +95,6 @@ private fun DotIndicators(count: Int, selected: Int) {
     }
 }
 
-/**
- * Builds the today/recommendation slot from the active plan list.
- *
- * The selection rules live here (and not in the ViewModel) by design — the
- * filtering depends on the device's day-of-week clock, which is a UI concern
- * and would force the shared layer to take a system-clock dependency just for
- * this view. The contract is documented on the `today*` parameters so it can
- * be unit-tested if it grows further.
- */
 data class TodaySlot(
     val title: String,
     val subtitle: String,

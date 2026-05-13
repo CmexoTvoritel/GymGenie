@@ -14,7 +14,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import com.asc.gymgenie.exercise.ExerciseShortResponse
 import com.asc.gymgenie.presentation.CreateWorkoutViewModel
-import com.asc.gymgenie.storage.TokenStorage
 import com.asc.gymgenie.ui.theme.WarmOffWhite
 
 /**
@@ -44,7 +43,6 @@ sealed class CreateWorkoutStep {
 @Composable
 fun CreateWorkoutFlowScreen(
     viewModel: CreateWorkoutViewModel,
-    tokenStorage: TokenStorage,
     onDismiss: () -> Unit,
     onSaved: () -> Unit,
     modifier: Modifier = Modifier,
@@ -102,7 +100,6 @@ fun CreateWorkoutFlowScreen(
             is CreateWorkoutStep.ExercisePicker -> ExercisePickerScreen(
                 muscleGroupKey = step.muscleGroupKey,
                 muscleGroupNameRu = step.nameRu,
-                tokenStorage = tokenStorage,
                 onBack = { stack.removeAt(stack.lastIndex) },
                 onExerciseSelected = { exercise ->
                     stack.add(CreateWorkoutStep.ExerciseConfig(exercise))

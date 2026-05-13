@@ -31,9 +31,44 @@ struct WorkoutPlanCard: View {
                     .frame(height: 3)
             }
 
-            VStack(alignment: .leading, spacing: 14) {
-                header
+            VStack(alignment: .leading, spacing: 0) {
+                // Row 1: image + title + badge
+                HStack(alignment: .center, spacing: 8) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(visual.bg)
+                        Text("🏋️").font(.system(size: 22))
+                    }
+                    .frame(width: 48, height: 48)
+
+                    Text(plan.name)
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(Palette.deepInk)
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    sourceBadge
+                }
+
+                Spacer().frame(height: 8)
+
+                // Row 2: description (always reserves 2-line height)
+                let descText: String = {
+                    guard let d = plan.description_, !d.trimmingCharacters(in: .whitespaces).isEmpty else { return "\n" }
+                    return d
+                }()
+                Text(descText)
+                    .font(.system(size: 14))
+                    .foregroundColor(descText == "\n" ? .clear : Color(red: 0.361, green: 0.361, blue: 0.388))
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Spacer().frame(height: 12)
+
                 chipsRow
+
+                Spacer().frame(height: 12)
+
                 footer
             }
             .padding(16)
@@ -55,50 +90,23 @@ struct WorkoutPlanCard: View {
         )
     }
 
-    // MARK: - Header
-
-    private var header: some View {
-        HStack(alignment: .center, spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(visual.bg)
-                Text(visual.emoji).font(.system(size: 22))
-            }
-            .frame(width: 48, height: 48)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(plan.name)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(Palette.deepInk)
-                    .lineLimit(2)
-                if let desc = plan.description_, !desc.isEmpty {
-                    Text(desc)
-                        .font(.system(size: 12))
-                        .foregroundColor(Palette.mutedText)
-                        .lineLimit(1)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            sourceBadge
-        }
-    }
+    // MARK: - Source badge
 
     private var sourceBadge: some View {
         Group {
             if isAi {
                 Text("✦ AI")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 5)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
                     .background(Capsule().fill(Palette.coral))
             } else {
                 Text("Ручная")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundColor(Color(red: 0.361, green: 0.361, blue: 0.388))
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 5)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
                     .background(Capsule().fill(Color(red: 0.957, green: 0.957, blue: 0.965)))
             }
         }
@@ -119,16 +127,16 @@ struct WorkoutPlanCard: View {
             if isRecurring {
                 let days = formatScheduleDays(Array(plan.scheduleDays))
                 HStack(spacing: 4) {
-                    Image(systemName: "repeat").font(.system(size: 11, weight: .semibold))
-                    Text(days).font(.system(size: 12, weight: .semibold))
+                    Image(systemName: "repeat").font(.system(size: 13, weight: .semibold))
+                    Text(days).font(.system(size: 14, weight: .semibold))
                 }
                 .foregroundColor(Color(red: 0.914, green: 0.290, blue: 0.173))
                 .padding(.horizontal, 10).padding(.vertical, 5)
                 .background(RoundedRectangle(cornerRadius: 10).fill(Color(red: 1.0, green: 0.957, blue: 0.941)))
             } else {
                 HStack(spacing: 4) {
-                    Image(systemName: "clock").font(.system(size: 11, weight: .semibold))
-                    Text("Разовая").font(.system(size: 12, weight: .semibold))
+                    Image(systemName: "clock").font(.system(size: 13, weight: .semibold))
+                    Text("Разовая").font(.system(size: 14, weight: .semibold))
                 }
                 .foregroundColor(Color(red: 0.227, green: 0.227, blue: 0.251))
                 .padding(.horizontal, 10).padding(.vertical, 5)
@@ -162,7 +170,7 @@ struct WorkoutPlanCard: View {
                 Button(action: onStart) {
                     HStack(spacing: 6) {
                         Image(systemName: "play.fill").font(.system(size: 14, weight: .bold))
-                        Text("Начать").font(.system(size: 15, weight: .bold))
+                        Text("Начать тренировку").font(.system(size: 18, weight: .bold))
                     }
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
@@ -175,7 +183,7 @@ struct WorkoutPlanCard: View {
             Button(action: onStart) {
                 HStack(spacing: 8) {
                     Image(systemName: "play.fill").font(.system(size: 14, weight: .bold))
-                    Text("Начать тренировку").font(.system(size: 15, weight: .bold))
+                    Text("Начать тренировку").font(.system(size: 18, weight: .bold))
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
@@ -195,8 +203,8 @@ private struct InfoChip: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            Image(systemName: icon).font(.system(size: 11, weight: .semibold))
-            Text(text).font(.system(size: 12, weight: .semibold))
+            Image(systemName: icon).font(.system(size: 13, weight: .semibold))
+            Text(text).font(.system(size: 14, weight: .semibold))
         }
         .foregroundColor(Color(red: 0.227, green: 0.227, blue: 0.251))
         .padding(.horizontal, 10).padding(.vertical, 5)

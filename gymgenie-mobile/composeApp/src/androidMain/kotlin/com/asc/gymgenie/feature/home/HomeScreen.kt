@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -44,10 +43,8 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.asc.gymgenie.activity.ActivityApi
 import com.asc.gymgenie.activity.ActivityTodayResponse
 import com.asc.gymgenie.feature.home.components.ActivityRingsCard
 import com.asc.gymgenie.feature.home.components.ActivityRowsCard
@@ -55,12 +52,11 @@ import com.asc.gymgenie.feature.home.components.CoursesBlock
 import com.asc.gymgenie.feature.home.components.HomeHeaderSection
 import com.asc.gymgenie.feature.home.components.MealPlanSection
 import com.asc.gymgenie.feature.home.components.NoWorkoutPlaceholder
+import com.asc.gymgenie.feature.home.components.SectionHeaderPremium
 import com.asc.gymgenie.feature.home.components.WorkoutTodayPager
 import com.asc.gymgenie.feature.home.components.resolveTodaySlot
-import com.asc.gymgenie.nutrition.MealPlansApi
 import com.asc.gymgenie.nutrition.TodayMealPlanCard
 import com.asc.gymgenie.presentation.HomeViewModel
-import com.asc.gymgenie.storage.TokenStorage
 import com.asc.gymgenie.ui.ScreenState
 import com.asc.gymgenie.ui.theme.AccentOrange
 import com.asc.gymgenie.ui.theme.Coral
@@ -68,56 +64,27 @@ import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
 import com.asc.gymgenie.ui.theme.SoftCard
 import com.asc.gymgenie.ui.theme.WarmOffWhite
-import com.asc.gymgenie.user.UserApi
-import com.asc.gymgenie.user.UserProfileStore
 import com.asc.gymgenie.workout.ActiveWorkoutSession
-import com.asc.gymgenie.workout.WorkoutApi
 import com.asc.gymgenie.workout.WorkoutPlanShortResponse
+import kotlinx.datetime.LocalDate
 import org.koin.core.context.GlobalContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/**
- * Home screen — premium redesign.
- *
- * Keeps the existing KMM [HomeViewModel] contract intact and only changes
- * the UI layer. Navigation to Activities / ActivityCatalog is hoisted to
- * the parent ([com.asc.gymgenie.feature.main.MainScreen]) via callbacks, so
- * this screen stays agnostic of the surrounding navigation container.
- */
 @Composable
 fun HomeScreen(
-    tokenStorage: TokenStorage,
-    userProfileStore: UserProfileStore,
-    onLogout: () -> Unit,
     onOpenActivities: () -> Unit,
     onOpenCatalog: () -> Unit,
     onViewPlan: (WorkoutPlanShortResponse) -> Unit,
     onSessionReady: (ActiveWorkoutSession) -> Unit,
-    onCreateMealPlan: () -> Unit,
+    onCreateMealPlan: (mealType: String?) -> Unit,
     onViewMealPlan: (planId: String) -> Unit,
-    /**
-     * Bumped by the parent whenever a meal-plan was created or deleted in a
-     * pushed surface (manual creation flow, AI coach, ...). Each new value
-     * triggers a targeted reload of the meal-plan section without re-fetching
-     * the rest of the dashboard.
-     */
     mealPlansReloadKey: Int = 0,
     modifier: Modifier = Modifier,
 ) {
     val koin = remember { GlobalContext.get() }
-    val viewModel = remember {
-        HomeViewModel(
-            userApi = koin.get<UserApi>(),
-            workoutApi = koin.get<WorkoutApi>(),
-            activityApi = koin.get<ActivityApi>(),
-            mealPlansApi = koin.get<MealPlansApi>(),
-            tokenStorage = tokenStorage,
-            userProfileStore = userProfileStore,
-            onLogout = onLogout,
-        )
-    }
+    val viewModel = remember { koin.get<HomeViewModel>() }
 
     DisposableEffect(Unit) {
         onDispose { viewModel.onCleared() }
@@ -131,9 +98,6 @@ fun HomeScreen(
         }
     }
 
-    // Targeted refresh after a meal-plan mutation in a pushed surface. The
-    // initial composition starts at `0` and the very first `load()` already
-    // covers it, so we skip the leading edge to avoid a double fetch.
     LaunchedEffect(mealPlansReloadKey) {
         if (mealPlansReloadKey > 0) {
             viewModel.refreshMealPlans()
@@ -178,10 +142,10 @@ fun HomeScreen(
                     onOpenActivities = onOpenActivities,
                     onOpenCatalog = onOpenCatalog,
                     onViewMealPlan = onViewMealPlan,
-                    // Meal plan creation is hoisted to the parent so the
-                    // navigation tree owns the manual / AI flow surfaces.
                     onCreateMealPlan = onCreateMealPlan,
                     onCheckIn = viewModel::checkIn,
+                    selectedMealDate = state.selectedMealDate,
+                    onMealDateSelected = viewModel::selectMealDate,
                 )
             }
         }
@@ -198,8 +162,10 @@ private fun ContentWithPullToRefresh(
     onOpenActivities: () -> Unit,
     onOpenCatalog: () -> Unit,
     onViewMealPlan: (planId: String) -> Unit,
-    onCreateMealPlan: () -> Unit,
+    onCreateMealPlan: (mealType: String?) -> Unit,
     onCheckIn: (String, Int) -> Unit,
+    selectedMealDate: LocalDate,
+    onMealDateSelected: (LocalDate) -> Unit,
 ) {
     val refreshState = rememberPullToRefreshState()
     PullToRefreshBox(
@@ -219,10 +185,12 @@ private fun ContentWithPullToRefresh(
     ) {
         HomeContent(
             username = state.username.ifBlank { "друг" },
-            streakDays = state.streakDays,
             activePlans = state.activeWorkoutPlans,
             todayActivities = state.todayActivities,
             todayMealPlans = state.todayMealPlans,
+            isLoadingMealPlans = state.isLoadingMealPlans,
+            selectedMealDate = selectedMealDate,
+            onMealDateSelected = onMealDateSelected,
             onViewPlan = onViewPlan,
             onStartPlan = onStartPlan,
             onOpenActivities = onOpenActivities,
@@ -279,16 +247,18 @@ private fun ErrorState(message: String, onRetry: () -> Unit) {
 @Composable
 private fun HomeContent(
     username: String,
-    streakDays: Int,
     activePlans: List<WorkoutPlanShortResponse>,
     todayActivities: List<ActivityTodayResponse>,
     todayMealPlans: List<TodayMealPlanCard>,
+    isLoadingMealPlans: Boolean,
+    selectedMealDate: LocalDate,
+    onMealDateSelected: (LocalDate) -> Unit,
     onViewPlan: (WorkoutPlanShortResponse) -> Unit,
     onStartPlan: (WorkoutPlanShortResponse) -> Unit,
     onOpenActivities: () -> Unit,
     onOpenCatalog: () -> Unit,
     onViewMealPlan: (planId: String) -> Unit,
-    onCreateMealPlan: () -> Unit,
+    onCreateMealPlan: (mealType: String?) -> Unit,
     onCheckIn: (String, Int) -> Unit,
     isLoadingSession: Boolean,
     sessionError: String?,
@@ -302,12 +272,11 @@ private fun HomeContent(
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
             HomeHeaderSection(
                 username = username,
-                streakDays = streakDays,
                 date = remember { currentDateLabel() },
             )
         }
@@ -318,14 +287,15 @@ private fun HomeContent(
                 subtitle = todaySlot.subtitle,
                 actionTitle = if (todaySlot.showAll) "Все" else null,
                 onAction = if (todaySlot.showAll) {
-                    { /* TODO: navigate to plans list when route is available */ }
+                    { }
                 } else null,
+                modifier = Modifier.padding(top = 24.dp),
             )
         }
 
         item {
             if (todaySlot.plans.isEmpty()) {
-                NoWorkoutPlaceholder(onCreate = { /* TODO: hook up creation route */ })
+                NoWorkoutPlaceholder(onCreate = { })
             } else {
                 WorkoutTodayPager(
                     plans = todaySlot.plans,
@@ -351,6 +321,7 @@ private fun HomeContent(
                 subtitle = "Отметить вручную — без умных часов",
                 actionTitle = "Ещё",
                 onAction = onOpenActivities,
+                modifier = Modifier.padding(top = 12.dp),
             )
         }
 
@@ -365,8 +336,12 @@ private fun HomeContent(
         item {
             MealPlanSection(
                 todayPlans = todayMealPlans,
+                isLoading = isLoadingMealPlans,
+                selectedDate = selectedMealDate,
+                onDateSelected = onMealDateSelected,
                 onPlanTap = onViewMealPlan,
                 onCreatePlan = onCreateMealPlan,
+                modifier = Modifier.padding(top = 12.dp),
             )
         }
 
@@ -375,7 +350,8 @@ private fun HomeContent(
                 title = "Курсы тренеров",
                 subtitle = "От профи под твои цели",
                 actionTitle = "Все",
-                onAction = { /* TODO: hook up courses screen once backend exposes the list */ },
+                onAction = { },
+                modifier = Modifier.padding(top = 12.dp),
             )
         }
 
@@ -420,61 +396,6 @@ private fun SessionStatusBanner(isLoading: Boolean, errorMessage: String?) {
 }
 
 @Composable
-fun SectionHeaderPremium(
-    title: String,
-    subtitle: String? = null,
-    actionTitle: String? = null,
-    onAction: (() -> Unit)? = null,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.widthIn(max = 260.dp)) {
-            Text(
-                text = title,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = DeepInk,
-            )
-            if (subtitle != null) {
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = subtitle,
-                    fontSize = 13.sp,
-                    color = MutedText,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        Spacer(modifier = Modifier.weight(1f))
-        if (actionTitle != null && onAction != null) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable { onAction() }
-                    .padding(6.dp),
-            ) {
-                Text(
-                    text = actionTitle,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = AccentOrange,
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "→",
-                    fontSize = 14.sp,
-                    color = AccentOrange,
-                )
-            }
-        }
-    }
-}
-
-@Composable
 private fun AddActivityButton(onClick: () -> Unit) {
     val dashEffect = PathEffect.dashPathEffect(floatArrayOf(18f, 10f), 0f)
 
@@ -488,11 +409,11 @@ private fun AddActivityButton(onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
-        Text(text = "+", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = DeepInk)
+        Text(text = "+", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = DeepInk)
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = "Добавить активность",
-            fontSize = 15.sp,
+            fontSize = 18.sp,
             fontWeight = FontWeight.SemiBold,
             color = DeepInk,
         )
@@ -529,14 +450,6 @@ private fun currentDateLabel(): String {
     return formatter.format(Date())
 }
 
-/**
- * Returns the current weekday in `DayOfWeek` enum-name form (e.g. `MONDAY`)
- * — matches the casing used by the backend / [WorkoutPlanShortResponse.scheduleDays].
- *
- * `java.util.Calendar` uses `SUNDAY = 1 … SATURDAY = 7`; we map it to the
- * Java/Kotlin `DayOfWeek` ordering so the comparison in `resolveTodaySlot`
- * is unambiguous.
- */
 private fun currentDayOfWeek(): String {
     val calendar = java.util.Calendar.getInstance()
     return when (calendar.get(java.util.Calendar.DAY_OF_WEEK)) {

@@ -23,19 +23,28 @@ interface ExerciseRepository : JpaRepository<ExerciseEntity, UUID> {
         SELECT e FROM ExerciseEntity e
         WHERE (cast(:muscleGroup as string) IS NULL OR e.muscleGroup = :muscleGroup)
         AND (cast(:category as string) IS NULL OR e.category = :category)
-        AND (cast(:difficultyLevel as string) IS NULL OR e.difficultyLevel = :difficultyLevel)
+        AND (:difficultyLevels IS NULL OR e.difficultyLevel IN :difficultyLevels)
+        AND (:requiresWeight IS NULL OR e.requiresWeight = :requiresWeight)
     """)
     fun findWithFilters(
         @Param("muscleGroup") muscleGroup: MuscleGroup?,
         @Param("category") category: ExerciseCategory?,
-        @Param("difficultyLevel") difficultyLevel: DifficultyLevel?,
+        @Param("difficultyLevels") difficultyLevels: Collection<DifficultyLevel>?,
+        @Param("requiresWeight") requiresWeight: Boolean?,
         pageable: Pageable
     ): Page<ExerciseEntity>
 
     @Query("""
         SELECT e FROM ExerciseEntity e
-        WHERE LOWER(e.nameRu) LIKE LOWER(CONCAT('%', :query, '%'))
-        OR LOWER(e.nameEn) LIKE LOWER(CONCAT('%', :query, '%'))
+        WHERE (LOWER(e.nameRu) LIKE LOWER(CONCAT('%', :query, '%'))
+            OR LOWER(e.nameEn) LIKE LOWER(CONCAT('%', :query, '%')))
+        AND (:difficultyLevels IS NULL OR e.difficultyLevel IN :difficultyLevels)
+        AND (:requiresWeight IS NULL OR e.requiresWeight = :requiresWeight)
     """)
-    fun search(@Param("query") query: String, pageable: Pageable): Page<ExerciseEntity>
+    fun search(
+        @Param("query") query: String,
+        @Param("difficultyLevels") difficultyLevels: Collection<DifficultyLevel>?,
+        @Param("requiresWeight") requiresWeight: Boolean?,
+        pageable: Pageable
+    ): Page<ExerciseEntity>
 }

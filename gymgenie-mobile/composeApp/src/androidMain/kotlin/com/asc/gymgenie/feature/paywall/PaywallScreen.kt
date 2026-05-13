@@ -42,22 +42,15 @@ import com.asc.gymgenie.presentation.PlanType
 import com.asc.gymgenie.ui.components.GymGenieButton
 import com.asc.gymgenie.ui.theme.Coral
 import com.asc.gymgenie.ui.theme.OnBackground
-import com.asc.gymgenie.user.UserApi
-import com.asc.gymgenie.user.UserProfileStore
+import org.koin.core.context.GlobalContext
 
 @Composable
 fun PaywallScreen(
-    userApi: UserApi,
-    userProfileStore: UserProfileStore,
     onPurchaseSuccess: () -> Unit,
     onSkip: () -> Unit,
 ) {
-    val viewModel = remember {
-        PaywallViewModel(
-            userApi = userApi,
-            userProfileStore = userProfileStore,
-        )
-    }
+    val koin = remember { GlobalContext.get() }
+    val viewModel = remember { koin.get<PaywallViewModel>() }
 
     DisposableEffect(Unit) {
         onDispose { viewModel.onCleared() }

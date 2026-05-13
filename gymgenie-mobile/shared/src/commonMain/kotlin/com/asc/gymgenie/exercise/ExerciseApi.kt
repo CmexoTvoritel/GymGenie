@@ -18,6 +18,10 @@ class ExerciseApi(
     suspend fun getExercises(
         muscleGroup: String? = null,
         category: String? = null,
+        difficultyLevels: List<String> = emptyList(),
+        requiresEquipment: Boolean? = null,
+        sortByDifficulty: String? = null,
+        sortByCalories: String? = null,
         page: Int = 0,
         size: Int = 20,
     ): Result<PagedResponse<ExerciseShortResponse>> {
@@ -25,6 +29,10 @@ class ExerciseApi(
             val response = client.get("$baseUrl/api/v1/exercises") {
                 muscleGroup?.let { parameter("muscleGroup", it) }
                 category?.let { parameter("category", it) }
+                difficultyLevels.forEach { parameter("difficultyLevels", it) }
+                requiresEquipment?.let { parameter("requiresEquipment", it) }
+                sortByDifficulty?.let { parameter("sortByDifficulty", it) }
+                sortByCalories?.let { parameter("sortByCalories", it) }
                 parameter("page", page)
                 parameter("size", size)
             }
@@ -40,12 +48,20 @@ class ExerciseApi(
 
     suspend fun searchExercises(
         query: String,
+        difficultyLevels: List<String> = emptyList(),
+        requiresEquipment: Boolean? = null,
+        sortByDifficulty: String? = null,
+        sortByCalories: String? = null,
         page: Int = 0,
         size: Int = 20,
     ): Result<PagedResponse<ExerciseShortResponse>> {
         return try {
             val response = client.get("$baseUrl/api/v1/exercises/search") {
                 parameter("query", query)
+                difficultyLevels.forEach { parameter("difficultyLevels", it) }
+                requiresEquipment?.let { parameter("requiresEquipment", it) }
+                sortByDifficulty?.let { parameter("sortByDifficulty", it) }
+                sortByCalories?.let { parameter("sortByCalories", it) }
                 parameter("page", page)
                 parameter("size", size)
             }

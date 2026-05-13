@@ -27,19 +27,57 @@ class ExerciseService(
     fun getAll(
         muscleGroup: MuscleGroup?,
         category: ExerciseCategory?,
-        difficultyLevel: DifficultyLevel?,
+        difficultyLevels: List<DifficultyLevel>,
+        requiresEquipment: Boolean?,
+        sortByDifficulty: String?,
+        sortByCalories: String?,
         page: Int,
         size: Int
     ): PagedResponse<ExerciseShortResponse> {
-        val pageable = PageRequest.of(page, size, Sort.by("nameRu").ascending())
-        val result = exerciseRepository.findWithFilters(muscleGroup, category, difficultyLevel, pageable)
+        val pageable = PageRequest.of(page, size, resolveSort(sortByDifficulty, sortByCalories))
+        val result = exerciseRepository.findWithFilters(
+            muscleGroup = muscleGroup,
+            category = category,
+            difficultyLevels = difficultyLevels.ifEmpty { null },
+            requiresWeight = requiresEquipment,
+            pageable = pageable
+        )
         return result.toPagedShortResponse()
     }
 
-    fun search(query: String, page: Int, size: Int): PagedResponse<ExerciseShortResponse> {
-        val pageable = PageRequest.of(page, size, Sort.by("nameRu").ascending())
-        val result = exerciseRepository.search(query, pageable)
+    fun search(
+        query: String,
+        difficultyLevels: List<DifficultyLevel>,
+        requiresEquipment: Boolean?,
+        sortByDifficulty: String?,
+        sortByCalories: String?,
+        page: Int,
+        size: Int
+    ): PagedResponse<ExerciseShortResponse> {
+        val pageable = PageRequest.of(page, size, resolveSort(sortByDifficulty, sortByCalories))
+        val result = exerciseRepository.search(
+            query = query,
+            difficultyLevels = difficultyLevels.ifEmpty { null },
+            requiresWeight = requiresEquipment,
+            pageable = pageable
+        )
         return result.toPagedShortResponse()
+    }
+
+    private fun resolveSort(sortByDifficulty: String?, sortByCalories: String?): Sort {
+        val orders = mutableListOf<Sort.Order>()
+        if (sortByDifficulty != null) {
+            val direction = if (sortByDifficulty.uppercase() == "ASC") Sort.Direction.ASC else Sort.Direction.DESC
+            orders.add(Sort.Order(direction, "difficultyOrder"))
+        }
+        if (sortByCalories != null) {
+            if (sortByCalories.uppercase() == "ASC") {
+                orders.add(Sort.Order.asc("caloriesBurned").nullsLast())
+            } else {
+                orders.add(Sort.Order.desc("caloriesBurned").nullsLast())
+            }
+        }
+        return if (orders.isEmpty()) Sort.by(Sort.Order.asc("nameRu")) else Sort.by(orders)
     }
 
     fun getMuscleGroups(): List<MuscleGroupInfo> {
@@ -73,7 +111,8 @@ class ExerciseService(
             techniqueTip = request.techniqueTip,
             defaultRepsMin = request.defaultRepsMin,
             defaultRepsMax = request.defaultRepsMax,
-            defaultWeightPercentage = request.defaultWeightPercentage
+            defaultWeightPercentage = request.defaultWeightPercentage,
+            requiresWeight = request.requiresWeight
         )
         return exerciseRepository.save(exercise).toResponse()
     }
@@ -100,6 +139,7 @@ class ExerciseService(
         request.defaultRepsMin?.let { exercise.defaultRepsMin = it }
         request.defaultRepsMax?.let { exercise.defaultRepsMax = it }
         request.defaultWeightPercentage?.let { exercise.defaultWeightPercentage = it }
+        request.requiresWeight?.let { exercise.requiresWeight = it }
 
         return exerciseRepository.save(exercise).toResponse()
     }
@@ -136,7 +176,8 @@ class ExerciseService(
         techniqueTip = techniqueTip,
         defaultRepsMin = defaultRepsMin,
         defaultRepsMax = defaultRepsMax,
-        defaultWeightPercentage = defaultWeightPercentage
+        defaultWeightPercentage = defaultWeightPercentage,
+        requiresWeight = requiresWeight
     )
 
     private fun ExerciseEntity.toShortResponse() = ExerciseShortResponse(
@@ -144,12 +185,14 @@ class ExerciseService(
         nameRu = nameRu,
         nameEn = nameEn,
         muscleGroup = muscleGroup,
+        secondaryMuscleGroups = secondaryMuscleGroups,
         category = category,
         difficultyLevel = difficultyLevel,
         durationMinutes = durationMinutes,
         caloriesBurned = caloriesBurned,
         rating = rating,
-        imageUrl = imageUrl
+        imageUrl = imageUrl,
+        requiresWeight = requiresWeight
     )
 
     private fun Page<ExerciseEntity>.toPagedShortResponse() = PagedResponse(

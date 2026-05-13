@@ -1,6 +1,7 @@
 package com.asc.gymgenie.presentation
 
 import com.asc.gymgenie.common.ApiException
+import com.asc.gymgenie.common.SessionManager
 import com.asc.gymgenie.exercise.ExerciseShortResponse
 import com.asc.gymgenie.storage.TokenStorage
 import com.asc.gymgenie.workout.SimpleWorkoutExerciseItem
@@ -56,14 +57,14 @@ data class WorkoutDetailUiState(
  * used by [com.asc.gymgenie.presentation.ExerciseDetailViewModel].
  *
  * 401 responses are treated as a session-level signal — tokens are cleared and
- * the supplied [onLogout] callback is invoked. All other failures surface as
- * an [WorkoutDetailUiState.errorMessage] so the UI can present a retry path.
+ * [SessionManager.triggerLogout] is invoked. All other failures surface as an
+ * [WorkoutDetailUiState.errorMessage] so the UI can present a retry path.
  */
 class WorkoutDetailViewModel(
     private val planId: String,
     private val workoutApi: WorkoutApi,
     private val tokenStorage: TokenStorage,
-    private val onLogout: () -> Unit = {},
+    private val sessionManager: SessionManager,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val _state = MutableStateFlow(WorkoutDetailUiState())
@@ -324,7 +325,7 @@ class WorkoutDetailViewModel(
         val noToken = tokenStorage.getAccessToken() == null
         return if (is401 || noToken) {
             tokenStorage.clearTokens()
-            onLogout()
+            sessionManager.triggerLogout()
             true
         } else {
             false

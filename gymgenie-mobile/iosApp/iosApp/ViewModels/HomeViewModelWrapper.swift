@@ -25,11 +25,13 @@ final class HomeViewModelWrapper: ObservableObject {
     @Published private(set) var activeWorkoutPlans: [WorkoutPlanShortResponse] = []
     @Published private(set) var todayActivities: [ActivityTodayResponse] = []
     @Published private(set) var todayMealPlans: [TodayMealPlanCard] = []
+    @Published private(set) var selectedMealDate: Date = Calendar.current.startOfDay(for: Date())
     @Published private(set) var isLoadingMealPlans: Bool = false
     @Published private(set) var userProfile: UserProfileResponse? = nil
     @Published private(set) var isLoggedOut: Bool = false
 
     private var observationTask: Task<Void, Never>?
+    private var logoutSubscription: SessionSubscription?
 
     /// Reference to the app-scoped profile store, kept for legacy
     /// `setProfileStore` callers and to bridge fresh profile snapshots into
@@ -40,7 +42,6 @@ final class HomeViewModelWrapper: ObservableObject {
     init() {
         let profileStore = KoinHelper.shared.getUserProfileStore()
         self.sharedProfileStore = profileStore
-        weak var weakSelf: HomeViewModelWrapper?
         self.vm = Shared.HomeViewModel(
             userApi: KoinHelper.shared.getUserApi(),
             workoutApi: KoinHelper.shared.getWorkoutApi(),
@@ -48,12 +49,18 @@ final class HomeViewModelWrapper: ObservableObject {
             mealPlansApi: KoinHelper.shared.getMealPlansApi(),
             tokenStorage: KoinHelper.shared.getTokenStorage(),
             userProfileStore: profileStore,
-            onLogout: {
-                Task { @MainActor in weakSelf?.isLoggedOut = true }
-            }
+            sessionManager: KoinHelper.shared.getSessionManager()
         )
-        weakSelf = self
         startObserving()
+
+        // Mirrors the Android `App.kt` listener: every `SessionManager`
+        // emission flips `isLoggedOut` so SwiftUI surfaces can route back
+        // to login. Both forced (network 401) and explicit (Profile screen)
+        // logouts now flow through a single signal.
+        let sessionManager = KoinHelper.shared.getSessionManager()
+        logoutSubscription = sessionManager.observeLogout { [weak self] in
+            Task { @MainActor in self?.isLoggedOut = true }
+        }
     }
 
     /// Source-compatibility shim — callers (e.g. `HomeView.onAppear`) still
@@ -84,6 +91,7 @@ final class HomeViewModelWrapper: ObservableObject {
                 self.activeWorkoutPlans = state.activeWorkoutPlans as [WorkoutPlanShortResponse]
                 self.todayActivities = state.todayActivities as [ActivityTodayResponse]
                 self.todayMealPlans = state.todayMealPlans as [TodayMealPlanCard]
+                self.selectedMealDate = Self.toDate(state.selectedMealDate)
                 self.isLoadingMealPlans = state.isLoadingMealPlans
                 self.userProfile = state.userProfile
 
@@ -139,17 +147,44 @@ final class HomeViewModelWrapper: ObservableObject {
         vm.checkIn(activityId: activityId, value: Int32(value))
     }
 
+    /// Switches the meal-plan section to a different calendar day.
+    ///
+    /// SwiftUI works with `Date`; the KMM presenter expects
+    /// `kotlinx.datetime.LocalDate`. The mapping lives here so call sites
+    /// remain free of KMM date types.
+    func selectMealDate(_ date: Date) {
+        let local = Self.toLocalDate(date)
+        vm.selectMealDate(date: local)
+    }
+
+    private static func toLocalDate(_ date: Date) -> Kotlinx_datetimeLocalDate {
+        let components = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        return Kotlinx_datetimeLocalDate(
+            year: Int32(components.year ?? 1970),
+            monthNumber: Int32(components.month ?? 1),
+            dayOfMonth: Int32(components.day ?? 1)
+        )
+    }
+
+    private static func toDate(_ local: Kotlinx_datetimeLocalDate) -> Date {
+        var components = DateComponents()
+        components.year = Int(local.year)
+        components.month = Int(local.monthNumber)
+        components.day = Int(local.dayOfMonth)
+        return Calendar.current.date(from: components) ?? Date()
+    }
+
     func logout() {
-        Task {
-            let tokenStorage = KoinHelper.shared.getTokenStorage()
-            try? await tokenStorage.clearTokens()
-            sharedProfileStore?.clear()
-            isLoggedOut = true
-        }
+        // Token clearance and profile-store reset are now centralised in
+        // the SessionManager listener at the App level. This method only
+        // signals the intent — the same path used for forced (network 401)
+        // logouts.
+        KoinHelper.shared.getSessionManager().triggerLogout()
     }
 
     deinit {
         observationTask?.cancel()
+        logoutSubscription?.cancel()
         vm.onCleared()
     }
 }

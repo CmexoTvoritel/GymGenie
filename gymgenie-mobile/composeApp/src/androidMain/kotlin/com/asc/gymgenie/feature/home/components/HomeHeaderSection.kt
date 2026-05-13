@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.Icon
@@ -27,19 +26,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Color
-import com.asc.gymgenie.ui.theme.AccentOrange
 import com.asc.gymgenie.ui.theme.Coral
 import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
 import com.asc.gymgenie.ui.theme.SoftCard
 
-/**
- * Premium home header: avatar, date + greeting, streak pill, notifications button.
- */
 @Composable
 fun HomeHeaderSection(
     username: String,
-    streakDays: Int,
     date: String,
 ) {
     Row(
@@ -50,41 +44,26 @@ fun HomeHeaderSection(
 
         Spacer(modifier = Modifier.width(12.dp))
 
-        Column(modifier = Modifier.weight(1f)) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.Center,
+        ) {
             Text(
                 text = date,
-                fontSize = 12.sp,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Normal,
                 color = MutedText,
             )
-            Spacer(modifier = Modifier.height(2.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "Привет, $username!",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.ExtraBold,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
                 color = DeepInk,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .clip(RoundedCornerShape(50))
-                .background(AccentOrange)
-                .padding(horizontal = 10.dp, vertical = 6.dp),
-        ) {
-            Text(text = "🔥", fontSize = 13.sp)
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text = streakDays.toString(),
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-            )
-        }
-
-        Spacer(modifier = Modifier.width(8.dp))
 
         IconButton(
             onClick = {},
@@ -107,7 +86,7 @@ private fun Avatar(username: String) {
     val initial = username.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "?"
     Box(
         modifier = Modifier
-            .size(44.dp)
+            .size(48.dp)
             .clip(CircleShape)
             .background(Coral),
         contentAlignment = Alignment.Center,
@@ -120,4 +99,3 @@ private fun Avatar(username: String) {
         )
     }
 }
-

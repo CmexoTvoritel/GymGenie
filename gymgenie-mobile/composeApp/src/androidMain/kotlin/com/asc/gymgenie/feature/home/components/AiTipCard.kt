@@ -24,12 +24,8 @@ import androidx.compose.ui.unit.sp
 import com.asc.gymgenie.ui.theme.AccentOrange
 import com.asc.gymgenie.ui.theme.DeepInk
 
-/**
- * AI tip — hardcoded body until the backend exposes a tip endpoint.
- */
 @Composable
 fun AiTipCard() {
-    // TODO: replace with a backend-provided tip string.
     val tip =
         "Ты на правильном пути! 3-й день подряд без пропусков. " +
             "Ещё 4 дня — и новый рекорд твоего стрика. Не сдавайся 💪"

@@ -75,7 +75,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.asc.gymgenie.nutrition.AiMealApi
 import com.asc.gymgenie.nutrition.AiMealChatMessage
 import com.asc.gymgenie.nutrition.AiMealFlowStep
 import com.asc.gymgenie.nutrition.AiMealProfileData
@@ -84,7 +83,6 @@ import com.asc.gymgenie.nutrition.MealGoal
 import com.asc.gymgenie.ui.theme.Coral
 import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.WarmOffWhite
-import com.asc.gymgenie.user.UserProfileStore
 import org.koin.core.context.GlobalContext
 
 // Local palette — mirrors `AiFlowScreen.kt` so the meal flow has the same
@@ -115,13 +113,10 @@ private val MealGreenText = Color(0xFF16A34A)
  */
 @Composable
 fun AiMealFlowScreen(
-    userProfileStore: UserProfileStore,
     onDismiss: () -> Unit,
 ) {
     val koin = remember { GlobalContext.get() }
-    val viewModel = remember {
-        AiMealViewModel(koin.get<AiMealApi>(), userProfileStore)
-    }
+    val viewModel = remember { koin.get<AiMealViewModel>() }
     DisposableEffect(Unit) { onDispose { viewModel.onCleared() } }
 
     val state by viewModel.state.collectAsState()

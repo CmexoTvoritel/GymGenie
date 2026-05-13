@@ -44,13 +44,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.asc.gymgenie.exercise.ExerciseApi
 import com.asc.gymgenie.exercise.ExerciseShortResponse
 import com.asc.gymgenie.feature.workouts.components.ExerciseCard
 import com.asc.gymgenie.presentation.ExerciseDetailViewModel
 import com.asc.gymgenie.presentation.WorkoutsViewModel
-import com.asc.gymgenie.storage.TokenStorage
-import com.asc.gymgenie.workout.WorkoutApi
 import com.asc.gymgenie.ui.theme.AccentOrange
 import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
@@ -72,18 +69,11 @@ import org.koin.core.context.GlobalContext
 fun ExercisePickerScreen(
     muscleGroupKey: String,
     muscleGroupNameRu: String,
-    tokenStorage: TokenStorage,
     onBack: () -> Unit,
     onExerciseSelected: (ExerciseShortResponse) -> Unit,
 ) {
     val koin = remember { GlobalContext.get() }
-    val listViewModel = remember {
-        WorkoutsViewModel(
-            workoutApi = koin.get<WorkoutApi>(),
-            exerciseApi = koin.get<ExerciseApi>(),
-            tokenStorage = tokenStorage,
-        )
-    }
+    val listViewModel = remember { koin.get<WorkoutsViewModel>() }
     DisposableEffect(Unit) { onDispose { listViewModel.onCleared() } }
 
     LaunchedEffect(muscleGroupKey) {
@@ -145,7 +135,6 @@ fun ExercisePickerScreen(
         ) {
             ExerciseDetailBottomSheetContent(
                 exerciseId = detailExerciseId!!,
-                tokenStorage = tokenStorage,
             )
         }
     }
@@ -245,12 +234,9 @@ private fun InfoBadge(
 @Composable
 private fun ExerciseDetailBottomSheetContent(
     exerciseId: String,
-    tokenStorage: TokenStorage,
 ) {
     val koin = remember { GlobalContext.get() }
-    val viewModel = remember(exerciseId) {
-        ExerciseDetailViewModel(exerciseApi = koin.get<ExerciseApi>())
-    }
+    val viewModel = remember(exerciseId) { koin.get<ExerciseDetailViewModel>() }
     DisposableEffect(exerciseId) { onDispose { viewModel.onCleared() } }
 
     LaunchedEffect(exerciseId) { viewModel.load(exerciseId) }

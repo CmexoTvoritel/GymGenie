@@ -28,10 +28,6 @@ import com.asc.gymgenie.ui.theme.MutedText
 
 private val CardBorder = Color(0xFFEDEDEF)
 
-/**
- * Empty-day placeholder used when the user has neither a recurring workout
- * for today nor any one-off plans queued up.
- */
 @Composable
 fun NoWorkoutPlaceholder(
     onCreate: () -> Unit,

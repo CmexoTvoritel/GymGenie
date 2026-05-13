@@ -15,24 +15,29 @@ final class WorkoutsViewModelWrapper: ObservableObject {
     @Published private(set) var exercisesLoaded: Bool = false
     @Published private(set) var searchQuery: String = ""
     @Published private(set) var selectedMuscleGroup: String? = nil
+    @Published private(set) var selectedDifficulties: [String] = []
+    @Published private(set) var requiresEquipment: Bool? = nil
+    @Published private(set) var sortByDifficulty: String? = nil
+    @Published private(set) var sortByCalories: String? = nil
     @Published private(set) var errorMessage: String? = nil
     @Published private(set) var hasMoreExercises: Bool = true
     @Published private(set) var isLoggedOut: Bool = false
 
     private var observationTask: Task<Void, Never>?
+    private var logoutSubscription: SessionSubscription?
 
     init() {
-        weak var weakSelf: WorkoutsViewModelWrapper?
         self.vm = Shared.WorkoutsViewModel(
             workoutApi: KoinHelper.shared.getWorkoutApi(),
             exerciseApi: KoinHelper.shared.getExerciseApi(),
             tokenStorage: KoinHelper.shared.getTokenStorage(),
-            onLogout: {
-                Task { @MainActor in weakSelf?.isLoggedOut = true }
-            }
+            sessionManager: KoinHelper.shared.getSessionManager()
         )
-        weakSelf = self
         startObserving()
+        let sessionManager = KoinHelper.shared.getSessionManager()
+        logoutSubscription = sessionManager.observeLogout { [weak self] in
+            Task { @MainActor in self?.isLoggedOut = true }
+        }
     }
 
     private func startObserving() {
@@ -50,6 +55,12 @@ final class WorkoutsViewModelWrapper: ObservableObject {
                 self.exercisesLoaded = state.exercisesLoaded
                 self.searchQuery = state.searchQuery
                 self.selectedMuscleGroup = state.selectedMuscleGroup
+                self.selectedDifficulties = state.selectedDifficulties as? [String] ?? []
+                // KMM `Boolean?` is bridged as `KotlinBoolean?` — unwrap to
+                // the native optional Bool for SwiftUI bindings.
+                self.requiresEquipment = state.requiresEquipment?.boolValue
+                self.sortByDifficulty = state.sortByDifficulty
+                self.sortByCalories = state.sortByCalories
                 self.errorMessage = state.errorMessage
                 self.hasMoreExercises = state.hasMoreExercises
 
@@ -74,6 +85,15 @@ final class WorkoutsViewModelWrapper: ObservableObject {
         vm.filterByMuscleGroup(group: group)
     }
 
+    func applyFilters(difficulties: [String], requiresEquipment: Bool?, sortByDifficulty: String?, sortByCalories: String?) {
+        vm.applyFilters(
+            difficulties: difficulties,
+            requiresEquipment: requiresEquipment.map { KotlinBoolean(bool: $0) },
+            sortByDifficulty: sortByDifficulty,
+            sortByCalories: sortByCalories
+        )
+    }
+
     func loadExercises(reset: Bool = false) {
         vm.loadExercises(reset: reset)
     }
@@ -96,6 +116,7 @@ final class WorkoutsViewModelWrapper: ObservableObject {
 
     deinit {
         observationTask?.cancel()
+        logoutSubscription?.cancel()
         vm.onCleared()
     }
 }

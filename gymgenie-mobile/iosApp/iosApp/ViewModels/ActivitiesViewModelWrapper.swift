@@ -19,17 +19,18 @@ final class ActivitiesViewModelWrapper: ObservableObject {
     @Published private(set) var isLoggedOut: Bool = false
 
     private var observationTask: Task<Void, Never>?
+    private var logoutSubscription: SessionSubscription?
 
     init() {
-        weak var weakSelf: ActivitiesViewModelWrapper?
         self.vm = Shared.ActivitiesViewModel(
             activityApi: KoinHelper.shared.getActivityApi(),
-            onLogout: {
-                Task { @MainActor in weakSelf?.isLoggedOut = true }
-            }
+            sessionManager: KoinHelper.shared.getSessionManager()
         )
-        weakSelf = self
         startObserving()
+        let sessionManager = KoinHelper.shared.getSessionManager()
+        logoutSubscription = sessionManager.observeLogout { [weak self] in
+            Task { @MainActor in self?.isLoggedOut = true }
+        }
     }
 
     private func startObserving() {
@@ -63,6 +64,7 @@ final class ActivitiesViewModelWrapper: ObservableObject {
 
     deinit {
         observationTask?.cancel()
+        logoutSubscription?.cancel()
         vm.onCleared()
     }
 }

@@ -36,7 +36,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.asc.gymgenie.activity.ActivityApi
 import com.asc.gymgenie.activity.ActivityHistoryDayResponse
 import com.asc.gymgenie.activity.ActivityLogResponse
 import com.asc.gymgenie.feature.home.components.ActivityRowsCard
@@ -78,7 +77,7 @@ fun ActivitiesScreen(
     refreshSignal: Int = 0,
 ) {
     val koin = remember { GlobalContext.get() }
-    val viewModel = remember { ActivitiesViewModel(koin.get<ActivityApi>()) }
+    val viewModel = remember { koin.get<ActivitiesViewModel>() }
     val state by viewModel.state.collectAsState()
     var selectedTab by remember { mutableStateOf(ActivityTab.TODAY) }
 

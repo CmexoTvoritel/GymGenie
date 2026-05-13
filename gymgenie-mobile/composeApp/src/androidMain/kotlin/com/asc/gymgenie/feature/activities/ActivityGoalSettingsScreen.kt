@@ -45,6 +45,7 @@ import com.asc.gymgenie.ui.theme.AccentOrange
 import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
 import com.asc.gymgenie.ui.theme.WarmOffWhite
+import kotlinx.serialization.Serializable
 
 /**
  * Configuration for a single activity goal.
@@ -52,6 +53,7 @@ import com.asc.gymgenie.ui.theme.WarmOffWhite
  * Kept as a UI-only model local to this feature because the screen is purely
  * local-state (no backend persistence yet).
  */
+@Serializable
 data class GoalCategory(
     val emoji: String,
     val title: String,

@@ -3,6 +3,7 @@ package com.asc.gymgenie.presentation
 import com.asc.gymgenie.activity.ActivityApi
 import com.asc.gymgenie.activity.ActivityCatalogResponse
 import com.asc.gymgenie.common.ApiException
+import com.asc.gymgenie.common.SessionManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -37,7 +38,7 @@ data class ActivityCatalogUiState(
  */
 class ActivityCatalogViewModel(
     private val activityApi: ActivityApi,
-    private val onLogout: () -> Unit = {},
+    private val sessionManager: SessionManager,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val _state = MutableStateFlow(ActivityCatalogUiState())
@@ -50,7 +51,7 @@ class ActivityCatalogViewModel(
             val catalogResult = activityApi.getCatalog()
             val catalog = catalogResult.getOrElse { e ->
                 if (isUnauthorized(e)) {
-                    onLogout()
+                    sessionManager.triggerLogout()
                     return@launch
                 }
                 _state.update { it.copy(isLoading = false, error = e.message) }
@@ -64,7 +65,7 @@ class ActivityCatalogViewModel(
                 onSuccess = { today -> today.map { it.activityId }.toSet() },
                 onFailure = { e ->
                     if (isUnauthorized(e)) {
-                        onLogout()
+                        sessionManager.triggerLogout()
                         return@launch
                     }
                     emptySet()
@@ -93,7 +94,7 @@ class ActivityCatalogViewModel(
             }
             result.onFailure { e ->
                 if (isUnauthorized(e)) {
-                    onLogout()
+                    sessionManager.triggerLogout()
                     return@launch
                 }
                 // Revert the optimistic update.

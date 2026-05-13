@@ -21,7 +21,7 @@ import org.koin.mp.KoinPlatform
 fun initKoin() {
     runCatching { KoinPlatform.getKoin() }.onSuccess { return }
     startKoin {
-        modules(networkModule, profileModule)
+        modules(networkModule, profileModule, databaseModule, viewModelModule)
     }
 }
 

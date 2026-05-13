@@ -81,17 +81,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.asc.gymgenie.R
-import com.asc.gymgenie.ai.AiApi
 import com.asc.gymgenie.ai.AiChatMessage
 import com.asc.gymgenie.ai.AiFlowStep
 import com.asc.gymgenie.ai.AiProfileData
 import com.asc.gymgenie.ai.AiViewModel
 import com.asc.gymgenie.feature.nutrition.AiMealFlowScreen
-import com.asc.gymgenie.storage.TokenStorage
 import com.asc.gymgenie.ui.theme.Coral
 import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.WarmOffWhite
-import com.asc.gymgenie.user.UserProfileStore
 import org.koin.core.context.GlobalContext
 
 private val OffWhite = WarmOffWhite
@@ -103,14 +100,9 @@ private val GreenLight = Color(0xFFF0FDF4)
 private val GreenText = Color(0xFF16A34A)
 
 @Composable
-fun AiFlowScreen(
-    tokenStorage: TokenStorage,
-    userProfileStore: UserProfileStore,
-) {
+fun AiFlowScreen() {
     val koin = remember { GlobalContext.get() }
-    val viewModel = remember {
-        AiViewModel(koin.get<AiApi>(), userProfileStore)
-    }
+    val viewModel = remember { koin.get<AiViewModel>() }
     DisposableEffect(Unit) { onDispose { viewModel.onCleared() } }
 
     val state by viewModel.state.collectAsState()
@@ -131,7 +123,6 @@ fun AiFlowScreen(
     ) { step ->
         when (step) {
             AiFlowStep.CHOOSE -> ChooseScreen(
-                userProfileStore = userProfileStore,
                 onNext = { viewModel.goTo(AiFlowStep.PROFILE) },
             )
             AiFlowStep.PROFILE -> ProfileScreen(
@@ -170,7 +161,6 @@ fun AiFlowScreen(
 
 @Composable
 private fun ChooseScreen(
-    userProfileStore: UserProfileStore,
     onNext: () -> Unit,
 ) {
     // Local presentation flag for the AI meal flow. The meal flow is
@@ -230,7 +220,6 @@ private fun ChooseScreen(
 
     if (showMealFlow) {
         AiMealFlowScreen(
-            userProfileStore = userProfileStore,
             onDismiss = { showMealFlow = false },
         )
     }

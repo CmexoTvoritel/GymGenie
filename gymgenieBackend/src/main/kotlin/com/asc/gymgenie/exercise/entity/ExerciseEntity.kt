@@ -2,6 +2,7 @@ package com.asc.gymgenie.exercise.entity
 
 import jakarta.persistence.*
 import org.hibernate.annotations.CreationTimestamp
+import org.hibernate.annotations.Formula
 import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.annotations.UpdateTimestamp
 import org.hibernate.type.SqlTypes
@@ -71,6 +72,9 @@ class ExerciseEntity(
 
     var defaultWeightPercentage: Double? = null,
 
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    var requiresWeight: Boolean = false,
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     var createdAt: Instant = Instant.now(),
@@ -78,4 +82,10 @@ class ExerciseEntity(
     @UpdateTimestamp
     @Column(nullable = false)
     var updatedAt: Instant = Instant.now()
-)
+) {
+    // Computed via SQL CASE so that Hibernate can sort by semantic difficulty order
+    // (BEGINNER=1, INTERMEDIATE=2, ADVANCED=3) rather than alphabetical enum name.
+    // SpringPhysicalNamingStrategy maps difficultyLevel → difficulty_level.
+    @Formula("CASE difficulty_level WHEN 'BEGINNER' THEN 1 WHEN 'INTERMEDIATE' THEN 2 WHEN 'ADVANCED' THEN 3 ELSE 4 END")
+    var difficultyOrder: Int = 0
+}

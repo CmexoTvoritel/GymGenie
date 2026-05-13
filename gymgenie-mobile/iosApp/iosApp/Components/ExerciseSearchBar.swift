@@ -12,8 +12,8 @@ struct ExerciseSearchBar: View {
 
             TextField("Поиск упражнений...", text: $searchQuery)
                 .font(.system(size: 15))
-                .autocapitalization(.none)
-                .disableAutocorrection(true)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
                 .onSubmit {
                     onSubmit()
                 }
@@ -27,11 +27,8 @@ struct ExerciseSearchBar: View {
         }
         .padding(.horizontal, 14)
         .frame(height: 44)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(.white)
-        )
-        .padding(.horizontal, 20)
-        .padding(.vertical, 8)
+        .background(Color.white)
+        .clipShape(Capsule())
+        .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
     }
 }

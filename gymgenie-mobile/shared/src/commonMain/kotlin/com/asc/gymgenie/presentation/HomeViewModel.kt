@@ -4,6 +4,7 @@ import com.asc.gymgenie.activity.ActivityApi
 import com.asc.gymgenie.activity.ActivityCheckinRequest
 import com.asc.gymgenie.activity.ActivityTodayResponse
 import com.asc.gymgenie.common.ApiException
+import com.asc.gymgenie.common.SessionManager
 import com.asc.gymgenie.nutrition.MealPlansApi
 import com.asc.gymgenie.nutrition.TodayMealPlanCard
 import com.asc.gymgenie.nutrition.toTodayCards
@@ -30,6 +31,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
@@ -67,6 +69,7 @@ data class HomeUiState(
      * dinner) coming from different plans.
      */
     val todayMealPlans: List<TodayMealPlanCard> = emptyList(),
+    val selectedMealDate: LocalDate = todayLocalDate(),
     val isLoadingMealPlans: Boolean = false,
     val userProfile: UserProfileResponse? = null,
     val pendingSession: ActiveWorkoutSession? = null,
@@ -107,7 +110,7 @@ class HomeViewModel(
     private val mealPlansApi: MealPlansApi,
     private val tokenStorage: TokenStorage,
     private val userProfileStore: UserProfileStore,
-    private val onLogout: () -> Unit = {},
+    private val sessionManager: SessionManager,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val _state = MutableStateFlow(HomeUiState())
@@ -140,7 +143,7 @@ class HomeViewModel(
         loadJob = scope.launch {
             try {
                 if (tokenStorage.getAccessToken() == null) {
-                    onLogout()
+                    sessionManager.triggerLogout()
                     return@launch
                 }
 
@@ -158,7 +161,7 @@ class HomeViewModel(
                 awaitAll(
                     async { fetchActivePlans() },
                     async { fetchTodayActivities() },
-                    async { fetchTodayMealPlans() },
+                    async { fetchMealPlansForDate(_state.value.selectedMealDate) },
                 )
 
                 _state.update {
@@ -206,7 +209,7 @@ class HomeViewModel(
         scope.launch {
             if (tokenStorage.getAccessToken() == null) {
                 _state.update { it.copy(isRefreshing = false) }
-                onLogout()
+                sessionManager.triggerLogout()
                 return@launch
             }
 
@@ -214,7 +217,7 @@ class HomeViewModel(
                 async { fetchProfile(fatalOnFailure = false) },
                 async { fetchActivePlans() },
                 async { fetchTodayActivities() },
-                async { fetchTodayMealPlans() },
+                async { fetchMealPlansForDate(_state.value.selectedMealDate) },
             )
 
             _state.update { it.copy(isRefreshing = false) }
@@ -235,10 +238,27 @@ class HomeViewModel(
         _state.update { it.copy(errorMessage = null) }
         scope.launch {
             if (tokenStorage.getAccessToken() == null) {
-                onLogout()
+                sessionManager.triggerLogout()
                 return@launch
             }
-            fetchTodayMealPlans()
+            fetchMealPlansForDate(_state.value.selectedMealDate)
+        }
+    }
+
+    /**
+     * Switches the meal-plan section to a different calendar day. Idempotent
+     * for the same value. Clears the currently-displayed cards immediately so
+     * the previous date's slots do not flash while the new fetch is in flight.
+     */
+    fun selectMealDate(date: LocalDate) {
+        if (date == _state.value.selectedMealDate) return
+        _state.update { it.copy(selectedMealDate = date, todayMealPlans = emptyList()) }
+        scope.launch {
+            if (tokenStorage.getAccessToken() == null) {
+                sessionManager.triggerLogout()
+                return@launch
+            }
+            fetchMealPlansForDate(date)
         }
     }
 
@@ -264,7 +284,7 @@ class HomeViewModel(
         scope.launch {
             if (tokenStorage.getAccessToken() == null) {
                 _state.update { it.copy(isLoadingSession = false) }
-                onLogout()
+                sessionManager.triggerLogout()
                 return@launch
             }
             workoutApi.getPlanById(planId).fold(
@@ -280,7 +300,7 @@ class HomeViewModel(
                     if (shouldLogOut(error)) {
                         tokenStorage.clearTokens()
                         _state.update { it.copy(isLoadingSession = false) }
-                        onLogout()
+                        sessionManager.triggerLogout()
                         return@fold
                     }
                     _state.update {
@@ -326,7 +346,7 @@ class HomeViewModel(
                 onFailure = { error ->
                     if (shouldLogOut(error)) {
                         tokenStorage.clearTokens()
-                        onLogout()
+                        sessionManager.triggerLogout()
                         return@fold
                     }
                     _state.update {
@@ -366,7 +386,7 @@ class HomeViewModel(
             onFailure = { error ->
                 if (shouldLogOut(error)) {
                     tokenStorage.clearTokens()
-                    onLogout()
+                    sessionManager.triggerLogout()
                     abort = true
                     return@fold
                 }
@@ -405,7 +425,7 @@ class HomeViewModel(
             onFailure = { error ->
                 if (shouldLogOut(error)) {
                     tokenStorage.clearTokens()
-                    onLogout()
+                    sessionManager.triggerLogout()
                     return@fold
                 }
                 if (_state.value.errorMessage == null) {
@@ -425,7 +445,7 @@ class HomeViewModel(
             onFailure = { error ->
                 if (shouldLogOut(error)) {
                     tokenStorage.clearTokens()
-                    onLogout()
+                    sessionManager.triggerLogout()
                     return@fold
                 }
                 _state.update {
@@ -441,7 +461,7 @@ class HomeViewModel(
     }
 
     /**
-     * Loads today's meal-plan cards via [MealPlansApi.getTodayPlans] and
+     * Loads meal-plan cards for [date] via [MealPlansApi.getTodayPlans] and
      * flattens each detail into the presentation-ready [TodayMealPlanCard]
      * shape. Cards are ordered by meal type (BREAKFAST → LUNCH → DINNER →
      * SNACK → other) so the UI renders a stable, chronological strip even
@@ -451,9 +471,9 @@ class HomeViewModel(
      * transient banner is set unless one is already present (we never
      * overwrite a more important error from a sibling fetch).
      */
-    private suspend fun fetchTodayMealPlans() {
+    private suspend fun fetchMealPlansForDate(date: LocalDate) {
         _state.update { it.copy(isLoadingMealPlans = true) }
-        mealPlansApi.getTodayPlans(today = todayLocalDate()).fold(
+        mealPlansApi.getTodayPlans(today = date).fold(
             onSuccess = { plans ->
                 val cards = plans
                     .flatMap { it.toTodayCards() }
@@ -469,7 +489,7 @@ class HomeViewModel(
                 if (shouldLogOut(error)) {
                     tokenStorage.clearTokens()
                     _state.update { it.copy(isLoadingMealPlans = false) }
-                    onLogout()
+                    sessionManager.triggerLogout()
                     return@fold
                 }
                 _state.update {

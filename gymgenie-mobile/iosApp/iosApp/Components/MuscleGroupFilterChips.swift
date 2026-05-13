@@ -37,10 +37,10 @@ struct MuscleGroupFilterChips: View {
         let isSelected = value == selected
         Button(action: { onSelected(value) }) {
             Text(label)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(isSelected ? .white : deepInk)
                 .padding(.horizontal, 14)
-                .padding(.vertical, 8)
+                .padding(.vertical, 6)
                 .background(Capsule().fill(isSelected ? orange : softCard))
         }
         .buttonStyle(.plain)

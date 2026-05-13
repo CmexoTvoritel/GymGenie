@@ -1,6 +1,7 @@
 package com.asc.gymgenie.presentation
 
 import com.asc.gymgenie.common.ApiException
+import com.asc.gymgenie.common.SessionManager
 import com.asc.gymgenie.exercise.ExerciseApi
 import com.asc.gymgenie.exercise.ExerciseShortResponse
 import com.asc.gymgenie.storage.TokenStorage
@@ -11,6 +12,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,6 +36,10 @@ data class WorkoutsUiState(
     val exercisesLoaded: Boolean = false,
     val searchQuery: String = "",
     val selectedMuscleGroup: String? = null,
+    val selectedDifficulties: List<String> = emptyList(),
+    val requiresEquipment: Boolean? = null,
+    val sortByDifficulty: String? = null,
+    val sortByCalories: String? = null,
     val errorMessage: String? = null,
     val hasMoreExercises: Boolean = true,
     val currentExercisePage: Int = 0,
@@ -42,7 +49,7 @@ class WorkoutsViewModel(
     private val workoutApi: WorkoutApi,
     private val exerciseApi: ExerciseApi,
     private val tokenStorage: TokenStorage,
-    private val onLogout: () -> Unit = {},
+    private val sessionManager: SessionManager,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val _state = MutableStateFlow(WorkoutsUiState())
@@ -82,6 +89,29 @@ class WorkoutsViewModel(
         loadExercises(reset = true)
     }
 
+    fun applyFilters(
+        difficulties: List<String>,
+        requiresEquipment: Boolean?,
+        sortByDifficulty: String?,
+        sortByCalories: String?,
+    ) {
+        val s = _state.value
+        if (s.selectedDifficulties.toSet() == difficulties.toSet() &&
+            s.requiresEquipment == requiresEquipment &&
+            s.sortByDifficulty == sortByDifficulty &&
+            s.sortByCalories == sortByCalories
+        ) return
+        _state.update {
+            it.copy(
+                selectedDifficulties = difficulties,
+                requiresEquipment = requiresEquipment,
+                sortByDifficulty = sortByDifficulty,
+                sortByCalories = sortByCalories,
+            )
+        }
+        loadExercises(reset = true)
+    }
+
     fun loadExercises(reset: Boolean = false) {
         // A pull-to-refresh is the source of truth while in flight: it owns
         // the page reset, so we must not race a parallel pagination/first-load
@@ -89,11 +119,16 @@ class WorkoutsViewModel(
         if (_state.value.isRefreshing) return
 
         if (reset) {
+            // Cancel any in-flight load and clear loading flags so the new
+            // request can start. Keep `exercises` intact so the UI does not
+            // unmount the search bar / filter chips while the next page loads.
+            loadJob?.cancel()
             _state.update {
                 it.copy(
                     currentExercisePage = 0,
-                    exercises = emptyList(),
                     hasMoreExercises = true,
+                    isLoading = false,
+                    isLoadingMore = false,
                 )
             }
         }
@@ -101,10 +136,13 @@ class WorkoutsViewModel(
         val state = _state.value
         if (state.isLoading || state.isLoadingMore || !state.hasMoreExercises) return
 
-        if (state.currentExercisePage == 0) {
+        // Pick the indicator based on whether we already have something to show:
+        // first ever load → full-screen spinner; refresh of existing list →
+        // footer spinner so the header and current items stay on screen.
+        if (state.currentExercisePage == 0 && state.exercises.isEmpty()) {
             _state.update { it.copy(isLoading = true, errorMessage = null) }
         } else {
-            _state.update { it.copy(isLoadingMore = true) }
+            _state.update { it.copy(isLoadingMore = true, errorMessage = null) }
         }
 
         loadJob = scope.launch { runExercisesLoad(isRefresh = false) }
@@ -179,7 +217,7 @@ class WorkoutsViewModel(
             onFailure = { error ->
                 if (shouldLogOut(error)) {
                     tokenStorage.clearTokens()
-                    onLogout()
+                    sessionManager.triggerLogout()
                     return
                 }
                 _state.update {
@@ -199,16 +237,30 @@ class WorkoutsViewModel(
         val result = if (query.isEmpty()) {
             exerciseApi.getExercises(
                 muscleGroup = _state.value.selectedMuscleGroup,
+                difficultyLevels = _state.value.selectedDifficulties,
+                requiresEquipment = _state.value.requiresEquipment,
+                sortByDifficulty = _state.value.sortByDifficulty,
+                sortByCalories = _state.value.sortByCalories,
                 page = page,
                 size = 20,
             )
         } else {
             exerciseApi.searchExercises(
                 query = query,
+                difficultyLevels = _state.value.selectedDifficulties,
+                requiresEquipment = _state.value.requiresEquipment,
+                sortByDifficulty = _state.value.sortByDifficulty,
+                sortByCalories = _state.value.sortByCalories,
                 page = page,
                 size = 20,
             )
         }
+
+        // If the user switched category/query while the request was in flight,
+        // the surrounding job has been cancelled but cooperative cancellation
+        // does not interrupt a completed suspending call. Check here before
+        // mutating state so a stale result cannot overwrite the new selection.
+        currentCoroutineContext().ensureActive()
 
         result.fold(
             onSuccess = { pagedResponse ->
@@ -232,7 +284,7 @@ class WorkoutsViewModel(
             onFailure = { error ->
                 if (shouldLogOut(error)) {
                     tokenStorage.clearTokens()
-                    onLogout()
+                    sessionManager.triggerLogout()
                     return
                 }
                 _state.update {

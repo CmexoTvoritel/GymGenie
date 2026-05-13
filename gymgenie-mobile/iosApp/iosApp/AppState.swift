@@ -17,10 +17,38 @@ final class AppState: ObservableObject {
 
     private let onboardingCompletedKey = "onboarding_completed"
     private let tokenStorage: TokenStorage
+    private let userProfileStore: UserProfileStore
+    private var logoutSubscription: SessionSubscription?
 
     init() {
         self.tokenStorage = KoinHelper.shared.getTokenStorage()
+        self.userProfileStore = KoinHelper.shared.getUserProfileStore()
         resolveInitialScreen()
+        startObservingLogout()
+    }
+
+    deinit {
+        logoutSubscription?.cancel()
+    }
+
+    /// Single source of truth for forced and explicit logout on iOS.
+    ///
+    /// Mirrors the Android `App.kt` listener: any emission on
+    /// `SessionManager.logoutEvent` clears the in-memory user state (tokens
+    /// + profile cache) and routes back to the login screen. Per-wrapper
+    /// `isLoggedOut` flags still drive view-local navigation reactions
+    /// inside individual screens, but the canonical state reset happens
+    /// here so it cannot be missed.
+    private func startObservingLogout() {
+        let sessionManager = KoinHelper.shared.getSessionManager()
+        logoutSubscription = sessionManager.observeLogout { [weak self] in
+            guard let self else { return }
+            Task { @MainActor in
+                try? await self.tokenStorage.clearTokens()
+                self.userProfileStore.clear()
+                self.navigate(to: .login)
+            }
+        }
     }
 
     func navigate(to screen: AppScreen) {

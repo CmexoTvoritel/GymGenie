@@ -31,20 +31,48 @@ class ExerciseController(
     fun getAll(
         @RequestParam(required = false) muscleGroup: MuscleGroup?,
         @RequestParam(required = false) category: ExerciseCategory?,
-        @RequestParam(required = false) difficultyLevel: DifficultyLevel?,
+        @RequestParam(required = false) difficultyLevels: List<DifficultyLevel>? = null,
+        @RequestParam(required = false) requiresEquipment: Boolean?,
+        @RequestParam(required = false) sortByDifficulty: String?,
+        @RequestParam(required = false) sortByCalories: String?,
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "20") size: Int
     ): ResponseEntity<PagedResponse<ExerciseShortResponse>> {
-        return ResponseEntity.ok(exerciseService.getAll(muscleGroup, category, difficultyLevel, page, size))
+        return ResponseEntity.ok(
+            exerciseService.getAll(
+                muscleGroup = muscleGroup,
+                category = category,
+                difficultyLevels = difficultyLevels ?: emptyList(),
+                requiresEquipment = requiresEquipment,
+                sortByDifficulty = sortByDifficulty,
+                sortByCalories = sortByCalories,
+                page = page,
+                size = size
+            )
+        )
     }
 
     @GetMapping("/search")
     fun search(
         @RequestParam query: String,
+        @RequestParam(required = false) difficultyLevels: List<DifficultyLevel>? = null,
+        @RequestParam(required = false) requiresEquipment: Boolean?,
+        @RequestParam(required = false) sortByDifficulty: String?,
+        @RequestParam(required = false) sortByCalories: String?,
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "20") size: Int
     ): ResponseEntity<PagedResponse<ExerciseShortResponse>> {
-        return ResponseEntity.ok(exerciseService.search(query, page, size))
+        return ResponseEntity.ok(
+            exerciseService.search(
+                query = query,
+                difficultyLevels = difficultyLevels ?: emptyList(),
+                requiresEquipment = requiresEquipment,
+                sortByDifficulty = sortByDifficulty,
+                sortByCalories = sortByCalories,
+                page = page,
+                size = size
+            )
+        )
     }
 
     @PostMapping

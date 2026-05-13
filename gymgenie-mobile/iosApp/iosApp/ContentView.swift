@@ -8,8 +8,7 @@ struct ContentView: View {
         Group {
             switch appState.currentScreen {
             case .splash:
-                Color(red: 0.961, green: 0.969, blue: 0.980)
-                    .edgesIgnoringSafeArea(.all)
+                SplashView()
 
             case .onboarding:
                 OnboardingView()

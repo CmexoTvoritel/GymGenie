@@ -1,103 +1,180 @@
 package com.asc.gymgenie.feature.workouts
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.asc.gymgenie.exercise.ExerciseShortResponse
+import com.asc.gymgenie.feature.workouts.components.CreateWorkoutFab
+import com.asc.gymgenie.feature.workouts.components.ErrorContent
 import com.asc.gymgenie.feature.workouts.components.ExerciseCard
+import com.asc.gymgenie.feature.workouts.components.ExerciseFilterBottomSheet
 import com.asc.gymgenie.feature.workouts.components.ExerciseSearchBar
+import com.asc.gymgenie.feature.workouts.components.ExercisesEmptyState
+import com.asc.gymgenie.feature.workouts.components.LoadingContent
 import com.asc.gymgenie.feature.workouts.components.MuscleGroupFilterChips
-import com.asc.gymgenie.ui.components.WorkoutPlanCard
 import com.asc.gymgenie.feature.workouts.components.WorkoutTabSelector
-import com.asc.gymgenie.exercise.ExerciseApi
+import com.asc.gymgenie.feature.workouts.components.WorkoutsEmptyState
 import com.asc.gymgenie.presentation.WorkoutsTab
 import com.asc.gymgenie.presentation.WorkoutsUiState
-import com.asc.gymgenie.presentation.WorkoutsViewModel
-import com.asc.gymgenie.storage.TokenStorage
-import com.asc.gymgenie.workout.WorkoutApi
-import com.asc.gymgenie.ui.theme.AccentOrange
+import com.asc.gymgenie.ui.components.GymGenieToolbar
+import com.asc.gymgenie.ui.components.WorkoutPlanCard
 import com.asc.gymgenie.ui.theme.Coral
-import com.asc.gymgenie.ui.theme.DeepInk
-import com.asc.gymgenie.ui.theme.MutedText
+import com.asc.gymgenie.ui.theme.AccentOrange
 import com.asc.gymgenie.ui.theme.WarmOffWhite
-import org.koin.core.context.GlobalContext
+
+private val TabOrder: List<WorkoutsTab> = listOf(WorkoutsTab.WORKOUTS, WorkoutsTab.EXERCISES)
+private val ExercisesCollapsibleHeight = 110.dp
 
 @Composable
 fun WorkoutsScreen(
-    tokenStorage: TokenStorage,
-    onLogout: () -> Unit = {},
     onOpenExercise: (ExerciseShortResponse) -> Unit = {},
     onCreateWorkout: () -> Unit = {},
     onStartPlan: (planId: String, planName: String) -> Unit = { _, _ -> },
     onViewPlan: (planId: String) -> Unit = {},
     reloadKey: Int = 0,
+    isTabActive: Boolean = true,
 ) {
-    val koin = remember { GlobalContext.get() }
-    val viewModel = remember {
-        WorkoutsViewModel(
-            workoutApi = koin.get<WorkoutApi>(),
-            exerciseApi = koin.get<ExerciseApi>(),
-            tokenStorage = tokenStorage,
-            onLogout = onLogout,
-        )
-    }
-
-    DisposableEffect(Unit) {
-        onDispose { viewModel.onCleared() }
-    }
-
+    val viewModel = rememberWorkoutsViewModel()
     val state by viewModel.state.collectAsState()
+    val coroutineScope = rememberCoroutineScope()
 
-    // Reload the plan list whenever `reloadKey` changes. This is how the
-    // create-workout flow tells the screen that a new plan was saved.
+    // Hoisted to survive Exercises tab leaving composition when the user
+    // switches to the Workouts tab. Owned here so scroll position and
+    // collapsible-header offset are preserved across tab switches.
+    val exercisesGridState = rememberLazyGridState()
+    var exercisesScrollOffsetPx by remember { mutableFloatStateOf(0f) }
+
+    // Filter bottom sheet visibility is screen-local UI concern; the underlying
+    // filter values live in the shared ViewModel state so they survive
+    // tab switches and process death-equivalent recompositions.
+    var showFilterSheet by remember { mutableStateOf(false) }
+
     LaunchedEffect(reloadKey) {
         viewModel.loadWorkoutPlans()
+    }
+
+    // Stable key — pagerState is never recreated due to tab changes.
+    // This prevents the feedback loop where a 0-dp viewport (TabHost hiding
+    // the composable) causes an incorrect page emission → ViewModel update →
+    // wrong initial page on the next visit.
+    val pagerState = rememberPagerState(
+        initialPage = 0,
+        pageCount = { TabOrder.size },
+    )
+
+    // When the tab becomes visible: first snap the pager to the ViewModel's selected
+    // tab (corrects any wrong page from the 0dp TabHost), then start listening for
+    // user swipes. .drop(1) skips the initial snapshotFlow emission (the page we
+    // just snapped to), so neither the 0dp-induced page nor the correction itself
+    // can corrupt ViewModel state. The two concerns are sequential in one coroutine,
+    // eliminating the race condition that existed when they were separate effects.
+    LaunchedEffect(isTabActive) {
+        if (!isTabActive) return@LaunchedEffect
+        val targetPage = TabOrder.indexOf(state.selectedTab).coerceAtLeast(0)
+        if (pagerState.currentPage != targetPage) {
+            pagerState.scrollToPage(targetPage)
+        }
+        snapshotFlow { pagerState.currentPage }
+            .drop(1)
+            .collect { page ->
+                val tab = TabOrder.getOrNull(page) ?: return@collect
+                viewModel.selectTab(tab)
+            }
+    }
+
+    val currentTab = TabOrder.getOrNull(pagerState.currentPage) ?: WorkoutsTab.WORKOUTS
+
+    // Stable lambdas keyed on the ViewModel — without these, every recomposition
+    // hands fresh function references to ExerciseSearchBar / MuscleGroupFilterChips
+    // and they cannot skip recomposition, defeating the no-unmount goal when
+    // filters or the query change.
+    val onSearchQueryChanged: (String) -> Unit = remember(viewModel) { viewModel::onSearchQueryChanged }
+    val onSearch: () -> Unit = remember(viewModel) { viewModel::searchExercises }
+    val onClearSearch: () -> Unit = remember(viewModel) {
+        {
+            viewModel.onSearchQueryChanged("")
+            viewModel.loadExercises(reset = true)
+        }
+    }
+    val onFilterMuscleGroup: (String?) -> Unit = remember(viewModel) { viewModel::filterByMuscleGroup }
+    val onLoadMore: () -> Unit = remember(viewModel) { viewModel::loadMoreExercises }
+    val onShowFilters: () -> Unit = remember { { showFilterSheet = true } }
+    val onDismissFilters: () -> Unit = remember { { showFilterSheet = false } }
+    val onApplyFilters: (List<String>, Boolean?, String?, String?) -> Unit = remember(viewModel) {
+        { difficulties, requiresEquipment, sortByDifficulty, sortByCalories ->
+            viewModel.applyFilters(difficulties, requiresEquipment, sortByDifficulty, sortByCalories)
+        }
+    }
+
+    // Count non-default filter dimensions for the active-state indicator on the
+    // filter button. Plain derivation is fine because `state` is already a
+    // snapshot-observed value read by collectAsState; recomputing on every
+    // recomposition is cheap.
+    val activeFiltersCount = run {
+        var count = 0
+        if (state.selectedDifficulties.isNotEmpty()) count++
+        if (state.requiresEquipment != null) count++
+        if (state.sortByDifficulty != null) count++
+        if (state.sortByCalories != null) count++
+        count
     }
 
     Box(
@@ -106,168 +183,146 @@ fun WorkoutsScreen(
             .background(WarmOffWhite),
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            HeaderSection()
+            GymGenieToolbar(title = "Тренировки")
 
             Spacer(modifier = Modifier.height(4.dp))
 
             WorkoutTabSelector(
-                selectedTab = state.selectedTab,
-                onTabSelected = viewModel::selectTab,
+                selectedTab = currentTab,
+                onTabSelected = { tab ->
+                    coroutineScope.launch {
+                        pagerState.animateScrollToPage(TabOrder.indexOf(tab))
+                    }
+                    viewModel.selectTab(tab)
+                },
                 modifier = Modifier.padding(horizontal = 20.dp),
             )
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            when {
-                state.isLoading && contentIsEmpty(state) -> {
-                    LoadingContent()
-                }
-
-                state.errorMessage != null && contentIsEmpty(state) && !isExpectedEmptyState(state) -> {
-                    ErrorContent(
-                        message = state.errorMessage ?: "",
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+            ) { page ->
+                when (TabOrder[page]) {
+                    WorkoutsTab.WORKOUTS -> WorkoutsPage(
+                        state = state,
+                        onStartPlan = onStartPlan,
+                        onViewPlan = onViewPlan,
+                        onCreateWorkout = onCreateWorkout,
                         onRetry = viewModel::retry,
+                        onRefresh = viewModel::refresh,
                     )
-                }
-
-                else -> {
-                    when (state.selectedTab) {
-                        WorkoutsTab.WORKOUTS -> WorkoutsTabContent(
-                            state = state,
-                            onStartPlan = onStartPlan,
-                            onViewPlan = onViewPlan,
-                            onCreateWorkout = onCreateWorkout,
-                            onRefresh = viewModel::refresh,
-                        )
-                        WorkoutsTab.EXERCISES -> ExercisesTabContent(
-                            state = state,
-                            onSearchQueryChanged = viewModel::onSearchQueryChanged,
-                            onSearch = viewModel::searchExercises,
-                            onClearSearch = {
-                                viewModel.onSearchQueryChanged("")
-                                viewModel.loadExercises(reset = true)
-                            },
-                            onLoadMore = viewModel::loadMoreExercises,
-                            onFilterMuscleGroup = viewModel::filterByMuscleGroup,
-                            onExerciseClick = onOpenExercise,
-                            onRefresh = viewModel::refresh,
-                        )
-                    }
+                    WorkoutsTab.EXERCISES -> ExercisesPage(
+                        state = state,
+                        gridState = exercisesGridState,
+                        scrollOffsetPx = exercisesScrollOffsetPx,
+                        onScrollOffsetChange = { exercisesScrollOffsetPx = it },
+                        onSearchQueryChanged = onSearchQueryChanged,
+                        onSearch = onSearch,
+                        onClearSearch = onClearSearch,
+                        onLoadMore = onLoadMore,
+                        onFilterMuscleGroup = onFilterMuscleGroup,
+                        onExerciseClick = onOpenExercise,
+                        onRetry = viewModel::retry,
+                        onRefresh = viewModel::refresh,
+                        onShowFilters = onShowFilters,
+                        activeFiltersCount = activeFiltersCount,
+                    )
                 }
             }
         }
 
-        CreateWorkoutFab(
-            onClick = onCreateWorkout,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 20.dp, bottom = 20.dp),
-        )
-    }
-}
-
-@Composable
-private fun HeaderSection() {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .statusBarsPadding()
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-    ) {
-        Text(
-            text = "Тренировки",
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
-            color = DeepInk,
-        )
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            text = "Твои планы и каталог упражнений",
-            fontSize = 13.sp,
-            color = MutedText,
-        )
-    }
-}
-
-@Composable
-private fun CreateWorkoutFab(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier
-            .size(56.dp)
-            .shadow(elevation = 8.dp, shape = CircleShape, clip = false)
-            .clip(CircleShape)
-            .background(AccentOrange)
-            .clickable { onClick() },
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = Icons.Filled.Add,
-            contentDescription = "Создать план",
-            tint = Color.White,
-            modifier = Modifier.size(28.dp),
-        )
-    }
-}
-
-private fun contentIsEmpty(state: WorkoutsUiState): Boolean {
-    return when (state.selectedTab) {
-        WorkoutsTab.WORKOUTS -> state.workoutPlans.isEmpty()
-        WorkoutsTab.EXERCISES -> state.exercises.isEmpty()
-    }
-}
-
-/**
- * When the server successfully returned an empty page we should render the empty state,
- * not the generic error view. This avoids the bug where an empty plans list was shown as
- * an error simply because a prior errorMessage lingered in state.
- */
-private fun isExpectedEmptyState(state: WorkoutsUiState): Boolean {
-    return when (state.selectedTab) {
-        WorkoutsTab.WORKOUTS -> state.workoutPlansLoaded && state.workoutPlans.isEmpty()
-        WorkoutsTab.EXERCISES -> state.exercisesLoaded && state.exercises.isEmpty() && state.errorMessage == null
-    }
-}
-
-@Composable
-private fun LoadingContent() {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(20.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        CircularProgressIndicator(color = AccentOrange)
-    }
-}
-
-@Composable
-private fun ErrorContent(message: String, onRetry: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(40.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text(text = "⚠️", fontSize = 36.sp)
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = message,
-            fontSize = 14.sp,
-            color = MutedText,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Button(
-            onClick = onRetry,
-            colors = ButtonDefaults.buttonColors(containerColor = AccentOrange),
-            shape = RoundedCornerShape(50),
-        ) {
-            Text("Повторить")
+        if (currentTab == WorkoutsTab.WORKOUTS) {
+            CreateWorkoutFab(
+                onClick = onCreateWorkout,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 20.dp, bottom = 20.dp),
+            )
         }
+    }
+
+    if (showFilterSheet) {
+        ExerciseFilterBottomSheet(
+            currentDifficulties = state.selectedDifficulties,
+            currentRequiresEquipment = state.requiresEquipment,
+            currentSortByDifficulty = state.sortByDifficulty,
+            currentSortByCalories = state.sortByCalories,
+            onApply = onApplyFilters,
+            onDismiss = onDismissFilters,
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun WorkoutsPage(
+    state: WorkoutsUiState,
+    onStartPlan: (planId: String, planName: String) -> Unit,
+    onViewPlan: (planId: String) -> Unit,
+    onCreateWorkout: () -> Unit,
+    onRetry: () -> Unit,
+    onRefresh: () -> Unit,
+) {
+    val tabIsEmpty = state.workoutPlans.isEmpty()
+    val showLoading = state.isLoading && tabIsEmpty
+    val showError = state.errorMessage != null && tabIsEmpty && !(state.workoutPlansLoaded && tabIsEmpty)
+
+    when {
+        showLoading -> LoadingContent()
+        showError -> ErrorContent(message = state.errorMessage ?: "", onRetry = onRetry)
+        else -> WorkoutsTabContent(
+            state = state,
+            onStartPlan = onStartPlan,
+            onViewPlan = onViewPlan,
+            onCreateWorkout = onCreateWorkout,
+            onRefresh = onRefresh,
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ExercisesPage(
+    state: WorkoutsUiState,
+    gridState: LazyGridState,
+    scrollOffsetPx: Float,
+    onScrollOffsetChange: (Float) -> Unit,
+    onSearchQueryChanged: (String) -> Unit,
+    onSearch: () -> Unit,
+    onClearSearch: () -> Unit,
+    onLoadMore: () -> Unit,
+    onFilterMuscleGroup: (String?) -> Unit,
+    onExerciseClick: (ExerciseShortResponse) -> Unit,
+    onRetry: () -> Unit,
+    onRefresh: () -> Unit,
+    onShowFilters: () -> Unit,
+    activeFiltersCount: Int,
+) {
+    val tabIsEmpty = state.exercises.isEmpty()
+    val showLoading = state.isLoading && tabIsEmpty
+    val expectedEmpty = state.exercisesLoaded && tabIsEmpty && state.errorMessage == null
+    val showError = state.errorMessage != null && tabIsEmpty && !expectedEmpty
+
+    when {
+        showLoading -> LoadingContent()
+        showError -> ErrorContent(message = state.errorMessage ?: "", onRetry = onRetry)
+        else -> ExercisesTabContent(
+            state = state,
+            gridState = gridState,
+            scrollOffsetPx = scrollOffsetPx,
+            onScrollOffsetChange = onScrollOffsetChange,
+            onSearchQueryChanged = onSearchQueryChanged,
+            onSearch = onSearch,
+            onClearSearch = onClearSearch,
+            onLoadMore = onLoadMore,
+            onFilterMuscleGroup = onFilterMuscleGroup,
+            onExerciseClick = onExerciseClick,
+            onRefresh = onRefresh,
+            onShowFilters = onShowFilters,
+            activeFiltersCount = activeFiltersCount,
+        )
     }
 }
 
@@ -297,8 +352,6 @@ private fun WorkoutsTabContent(
         },
     ) {
         if (state.workoutPlans.isEmpty()) {
-            // Empty state must remain pull-to-refresh-able; LazyColumn fills
-            // the viewport so the gesture has a target on every device.
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 item {
                     WorkoutsEmptyState(onCreateWorkout = onCreateWorkout)
@@ -319,54 +372,9 @@ private fun WorkoutsTabContent(
                 )
             }
 
-            // Reserve space at the bottom so the FAB does not cover last cards.
             item {
                 Spacer(modifier = Modifier.height(80.dp))
             }
-        }
-    }
-}
-
-@Composable
-private fun WorkoutsEmptyState(onCreateWorkout: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 40.dp, vertical = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text(text = "🏋", fontSize = 48.sp)
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Нет тренировочных планов",
-            fontSize = 16.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = DeepInk,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = "Создайте свой первый план тренировок",
-            fontSize = 13.sp,
-            color = MutedText,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(modifier = Modifier.height(20.dp))
-        Button(
-            onClick = onCreateWorkout,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = AccentOrange,
-                contentColor = Color.White,
-            ),
-            shape = RoundedCornerShape(50),
-            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
-        ) {
-            Text(
-                text = "Создать первый план",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
         }
     }
 }
@@ -375,6 +383,9 @@ private fun WorkoutsEmptyState(onCreateWorkout: () -> Unit) {
 @Composable
 private fun ExercisesTabContent(
     state: WorkoutsUiState,
+    gridState: LazyGridState,
+    scrollOffsetPx: Float,
+    onScrollOffsetChange: (Float) -> Unit,
     onSearchQueryChanged: (String) -> Unit,
     onSearch: () -> Unit,
     onClearSearch: () -> Unit,
@@ -382,9 +393,46 @@ private fun ExercisesTabContent(
     onFilterMuscleGroup: (String?) -> Unit,
     onExerciseClick: (ExerciseShortResponse) -> Unit,
     onRefresh: () -> Unit,
+    onShowFilters: () -> Unit,
+    activeFiltersCount: Int,
 ) {
-    val gridState = rememberLazyGridState()
     val refreshState = rememberPullToRefreshState()
+    val density = LocalDensity.current
+    // headerHeightPx is derived from layout measurement (not user scroll),
+    // so resetting it on recomposition is harmless — keep local.
+    var headerHeightPx by remember { mutableFloatStateOf(with(density) { ExercisesCollapsibleHeight.toPx() }) }
+
+    // Keep latest references so the remembered NestedScrollConnection always
+    // reads the current hoisted offset and callback, without rebuilding.
+    val currentScrollOffsetPx by rememberUpdatedState(scrollOffsetPx)
+    val currentOnScrollOffsetChange by rememberUpdatedState(onScrollOffsetChange)
+
+    val nestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                val offset = currentScrollOffsetPx
+                if (available.y > 0f && offset > 0f) {
+                    val toExpand = minOf(available.y, offset)
+                    currentOnScrollOffsetChange(offset - toExpand)
+                    return Offset(0f, toExpand)
+                }
+                return Offset.Zero
+            }
+
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource,
+            ): Offset {
+                if (consumed.y < 0f) {
+                    currentOnScrollOffsetChange(
+                        (currentScrollOffsetPx - consumed.y).coerceIn(0f, headerHeightPx),
+                    )
+                }
+                return Offset.Zero
+            }
+        }
+    }
 
     LaunchedEffect(gridState) {
         snapshotFlow {
@@ -393,33 +441,62 @@ private fun ExercisesTabContent(
             val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
             lastVisibleItem >= totalItems - 4
         }.collect { shouldLoadMore ->
-            if (shouldLoadMore) {
-                onLoadMore()
-            }
+            if (shouldLoadMore) onLoadMore()
         }
     }
 
-    Column {
-        ExerciseSearchBar(
-            searchQuery = state.searchQuery,
-            onSearchQueryChanged = onSearchQueryChanged,
-            onSearch = onSearch,
-            onClearSearch = onClearSearch,
-        )
-
-        // Show muscle group filter chips only when not searching.
-        if (state.searchQuery.isBlank()) {
-            MuscleGroupFilterChips(
-                selected = state.selectedMuscleGroup,
-                onSelected = onFilterMuscleGroup,
-                modifier = Modifier.padding(vertical = 4.dp),
-            )
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .nestedScroll(nestedScrollConnection),
+    ) {
+        val visibleHeaderHeightDp = with(density) {
+            (headerHeightPx - scrollOffsetPx).coerceAtLeast(0f).toDp()
         }
 
-        // Pull-to-refresh covers the scrollable exercise grid area only —
-        // the search bar and filter chips above stay anchored. The refresh
-        // resets pagination to page 0 in the shared VM; subsequent
-        // infinite-scroll triggers continue from the freshly-loaded page.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(visibleHeaderHeightDp)
+                .background(WarmOffWhite)
+                .clipToBounds(),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .wrapContentHeight(align = Alignment.Top, unbounded = true)
+                    .graphicsLayer { translationY = -scrollOffsetPx }
+                    .onGloballyPositioned { headerHeightPx = it.size.height.toFloat() },
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    ExerciseSearchBar(
+                        searchQuery = state.searchQuery,
+                        onSearchQueryChanged = onSearchQueryChanged,
+                        onSearch = onSearch,
+                        onClearSearch = onClearSearch,
+                        modifier = Modifier.weight(1f),
+                    )
+                    FilterButton(
+                        activeFiltersCount = activeFiltersCount,
+                        onClick = onShowFilters,
+                    )
+                }
+                if (state.searchQuery.isBlank()) {
+                    MuscleGroupFilterChips(
+                        selected = state.selectedMuscleGroup,
+                        onSelected = onFilterMuscleGroup,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 16.dp),
+                    )
+                }
+            }
+        }
+
         PullToRefreshBox(
             isRefreshing = state.isRefreshing,
             onRefresh = onRefresh,
@@ -435,7 +512,10 @@ private fun ExercisesTabContent(
                 )
             },
         ) {
-            val showEmpty = state.exercises.isEmpty() && !state.isLoading && !state.isLoadingMore && !state.isRefreshing
+            val showEmpty = state.exercises.isEmpty() &&
+                !state.isLoading &&
+                !state.isLoadingMore &&
+                !state.isRefreshing
             if (showEmpty) {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
@@ -443,7 +523,12 @@ private fun ExercisesTabContent(
                 ) {
                     item(span = { GridItemSpan(2) }) {
                         ExercisesEmptyState(
-                            hasFilter = state.searchQuery.isNotBlank() || state.selectedMuscleGroup != null,
+                            hasFilter = state.searchQuery.isNotBlank() ||
+                                state.selectedMuscleGroup != null ||
+                                state.selectedDifficulties.isNotEmpty() ||
+                                state.requiresEquipment != null ||
+                                state.sortByDifficulty != null ||
+                                state.sortByCalories != null,
                         )
                     }
                 }
@@ -451,7 +536,11 @@ private fun ExercisesTabContent(
                 LazyVerticalGrid(
                     state = gridState,
                     columns = GridCells.Fixed(2),
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+                    contentPadding = PaddingValues(
+                        start = 20.dp,
+                        end = 20.dp,
+                        bottom = 12.dp,
+                    ),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
@@ -488,29 +577,33 @@ private fun ExercisesTabContent(
 }
 
 @Composable
-private fun ExercisesEmptyState(hasFilter: Boolean) {
-    Column(
+private fun FilterButton(
+    activeFiltersCount: Int,
+    onClick: () -> Unit,
+) {
+    val isActive = activeFiltersCount > 0
+    // Solid orange fill is the active indicator. No corner badge: avoids the
+    // clipping artefacts produced by a small chip overlapping the circle's edge
+    // and keeps the affordance readable at the 44dp touch target size.
+    val background = if (isActive) AccentOrange else Color.White
+    val borderColor = if (isActive) AccentOrange else Color(0xFFEDEDEF)
+    val iconTint = if (isActive) Color.White else Color(0xFF4C4C53)
+
+    Box(
         modifier = Modifier
-            .fillMaxSize()
-            .padding(40.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+            .size(44.dp)
+            .shadow(elevation = 2.dp, shape = RoundedCornerShape(50))
+            .clip(RoundedCornerShape(50))
+            .background(background)
+            .border(1.5.dp, borderColor, RoundedCornerShape(50))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
     ) {
-        Text(text = "📦", fontSize = 48.sp)
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = if (hasFilter) "Ничего не найдено" else "Каталог пуст",
-            fontSize = 16.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = DeepInk,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = if (hasFilter) "Попробуйте изменить запрос или фильтр" else "Упражнения скоро появятся",
-            fontSize = 13.sp,
-            color = MutedText,
-            textAlign = TextAlign.Center,
+        Icon(
+            imageVector = Icons.Outlined.Tune,
+            contentDescription = "Фильтры",
+            tint = iconTint,
+            modifier = Modifier.size(20.dp),
         )
     }
 }
