@@ -4,10 +4,12 @@ import Shared
 struct ProfileView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var profileStore: UserProfileStoreWrapper
+    @EnvironmentObject private var tabBarState: TabBarState
     @StateObject private var homeVM = HomeViewModelWrapper()
 
     @State private var confirmDialog: String? = nil
     @State private var showEdit: Bool = false
+    @State private var showHistory: Bool = false
 
     private let backgroundColor = Color(red: 0.980, green: 0.976, blue: 0.969)
     private let pvBlack = Color(red: 0.039, green: 0.039, blue: 0.039)
@@ -76,7 +78,7 @@ struct ProfileView: View {
 
                     ProfileSectionLabel(text: "Активность")
                     SettingsGroupView {
-                        SettingsRowView(label: "Статистика", icon: "chart.bar.fill")
+                        SettingsRowView(label: "Статистика", icon: "chart.bar.fill", action: { showHistory = true })
                     }
 
                     ProfileSectionLabel(text: "Поддержка")
@@ -114,6 +116,7 @@ struct ProfileView: View {
             }
         }
         .background(backgroundColor.ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
         .refreshable { await refreshAndWait() }
         .sheet(isPresented: confirmDialogBinding) {
             ConfirmAccountSheet(
@@ -127,8 +130,16 @@ struct ProfileView: View {
                 },
                 onDismiss: { confirmDialog = nil }
             )
-            .presentationDetents([.medium])
+            .presentationDetents([.height(300)])
             .presentationDragIndicator(.visible)
+        }
+        .navigationDestination(isPresented: $showHistory) {
+            WorkoutHistoryView(onBack: { showHistory = false })
+                .toolbar(.hidden, for: .navigationBar)
+        }
+        .navigationDestination(isPresented: $showEdit) {
+            EditProfileView(onBack: { showEdit = false })
+                .environmentObject(profileStore)
         }
         .onAppear {
             homeVM.setProfileStore(profileStore.store)
@@ -138,6 +149,12 @@ struct ProfileView: View {
         }
         .onChange(of: homeVM.isLoggedOut) { loggedOut in
             if loggedOut { appState.navigate(to: .login) }
+        }
+        .onChange(of: showHistory) { showing in
+            tabBarState.isVisible = !showing
+        }
+        .onChange(of: showEdit) { showing in
+            tabBarState.isVisible = !showing
         }
     }
 

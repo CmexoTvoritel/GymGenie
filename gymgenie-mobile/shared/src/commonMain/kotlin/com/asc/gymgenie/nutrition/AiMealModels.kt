@@ -66,6 +66,8 @@ data class PlannedDishItem(
     val proteinG: Int? = null,
     val carbsG: Int? = null,
     val fatG: Int? = null,
+    val foodProductId: String? = null,
+    val grams: Double? = null,
 )
 
 @Serializable
@@ -241,4 +243,6 @@ data class MealPlanDetailDish(
     val proteinG: Int? = null,
     val carbsG: Int? = null,
     val fatG: Int? = null,
+    val foodProductId: String? = null,
+    val grams: Double? = null,
 )

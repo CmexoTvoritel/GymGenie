@@ -2,6 +2,7 @@ package com.asc.gymgenie.activity.dto
 
 import com.asc.gymgenie.activity.entity.ActivityKind
 import com.asc.gymgenie.activity.entity.ActivityRing
+import com.asc.gymgenie.workout.entity.WorkoutScheduleType
 import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotNull
 import java.time.LocalDate
@@ -26,6 +27,9 @@ data class ActivityCatalogResponse(
  *
  * [goal] is the effective goal: user override if set, otherwise the catalog [defaultGoal-equivalent].
  * [logValue] is 0 when the user has not yet checked in for today.
+ *
+ * Schedule fields are included so the mobile client can display and edit them.
+ * [scheduleType] = null means "every day" (backward compatible).
  */
 data class ActivityTodayResponse(
     val activityId: UUID,
@@ -36,7 +40,10 @@ data class ActivityTodayResponse(
     val unit: String?,
     val goal: Int?,
     val inverse: Boolean,
-    val logValue: Int
+    val logValue: Int,
+    val scheduleType: WorkoutScheduleType? = null,
+    val scheduleDays: List<String> = emptyList(),
+    val oneOffDate: LocalDate? = null
 )
 
 /** Single log row — returned by `POST /{activityId}/checkin` and embedded in history responses. */
@@ -65,4 +72,28 @@ data class ActivityCheckinRequest(
     /** Raw value to record. For BINARY the service forces this to 1. For COUNTER/PRESET, must be >= 0. */
     @field:Min(0)
     val value: Int = 0,
+)
+
+/**
+ * Body for `POST /{activityId}/plan` — adds an activity to the user's plan
+ * with optional scheduling.
+ *
+ * All fields are optional for backward compatibility: if no body is provided
+ * (or all fields are null), the activity defaults to "every day".
+ */
+data class AddActivityToPlanRequest(
+    val scheduleType: WorkoutScheduleType? = null,
+    val scheduleDays: List<String>? = null,
+    val oneOffDate: LocalDate? = null,
+    val goal: Int? = null
+)
+
+/**
+ * Body for `PUT /{activityId}/plan/schedule` — updates only the schedule
+ * of an already-planned activity.
+ */
+data class UpdateActivityScheduleRequest(
+    val scheduleType: WorkoutScheduleType? = null,
+    val scheduleDays: List<String> = emptyList(),
+    val oneOffDate: LocalDate? = null
 )

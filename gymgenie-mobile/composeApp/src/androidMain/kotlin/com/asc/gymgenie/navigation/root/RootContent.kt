@@ -1,14 +1,15 @@
 package com.asc.gymgenie.navigation.root
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -17,10 +18,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.asc.gymgenie.R
 import com.arkivanov.decompose.extensions.compose.stack.Children
 import com.arkivanov.decompose.extensions.compose.stack.animation.slide
 import com.arkivanov.decompose.extensions.compose.stack.animation.stackAnimation
@@ -31,6 +35,7 @@ import com.asc.gymgenie.feature.paywall.PurchaseSuccessScreen
 import com.asc.gymgenie.feature.privacy.PrivacyScreen
 import com.asc.gymgenie.navigation.main.MainContent
 import com.asc.gymgenie.ui.theme.GymGenieTheme
+import com.asc.gymgenie.ui.theme.WarmOffWhite
 
 @Composable
 fun RootContent(
@@ -83,82 +88,54 @@ fun RootContent(
  * profile fetch). The composable is intentionally stateless — navigation is
  * driven entirely by [DefaultRootComponent] and only the visuals live here.
  *
- * Layout: centered logo badge with title and subtitle, with a spinner
- * pinned to the lower portion of the screen so it does not visually compete
- * with the brand mark.
- *
- * The logo is currently a styled "G" placeholder; swap [SplashLogo] for an
- * `Image(painterResource(...))` once a dedicated asset is available.
+ * Layout: app icon centered on screen (matching Android 12+ system splash),
+ * with a loading label and spinner pinned to the bottom of the screen.
  */
 @Composable
 private fun SplashContent() {
     val colors = MaterialTheme.colorScheme
-    val typography = MaterialTheme.typography
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.background),
+            .background(WarmOffWhite),
     ) {
-        Column(
+        Box(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+                .align(Alignment.Center)
+                .size(160.dp)
+                .clip(CircleShape)
+                .background(WarmOffWhite)
         ) {
-            SplashLogo()
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text(
-                text = "GymGenie",
-                style = typography.headlineLarge,
-                color = colors.onBackground,
-                textAlign = TextAlign.Center,
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = "Загружаем ваши данные...",
-                style = typography.bodyMedium,
-                color = colors.onSurfaceVariant,
-                textAlign = TextAlign.Center,
+            Image(
+                painter = painterResource(R.drawable.ic_app_icon),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
             )
         }
 
-        CircularProgressIndicator(
+        Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 64.dp)
-                .size(32.dp),
-            color = colors.primary,
-            strokeWidth = 3.dp,
-        )
-    }
-}
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Загружаем данные",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = colors.onBackground,
+            )
 
-/**
- * Placeholder logo badge. Renders the brand initial inside a tinted circle
- * so the splash has visual presence even before a vector/raster asset is
- * provided. Replace with the final brand mark when available.
- */
-@Composable
-private fun SplashLogo() {
-    val colors = MaterialTheme.colorScheme
-    Box(
-        modifier = Modifier
-            .size(112.dp)
-            .clip(CircleShape)
-            .background(colors.primary),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = "G",
-            color = colors.onPrimary,
-            fontSize = 56.sp,
-            fontWeight = FontWeight.Bold,
-        )
+            Spacer(modifier = Modifier.width(12.dp))
+
+            CircularProgressIndicator(
+                modifier = Modifier.size(24.dp),
+                color = Color(0xFFFF5A3C),
+                strokeWidth = 2.5.dp,
+            )
+        }
     }
 }

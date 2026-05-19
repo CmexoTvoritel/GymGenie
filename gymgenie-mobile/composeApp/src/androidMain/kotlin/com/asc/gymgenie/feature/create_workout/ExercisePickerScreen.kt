@@ -1,15 +1,17 @@
 package com.asc.gymgenie.feature.create_workout
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -17,7 +19,6 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -37,9 +38,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -48,6 +46,7 @@ import com.asc.gymgenie.exercise.ExerciseShortResponse
 import com.asc.gymgenie.feature.workouts.components.ExerciseCard
 import com.asc.gymgenie.presentation.ExerciseDetailViewModel
 import com.asc.gymgenie.presentation.WorkoutsViewModel
+import com.asc.gymgenie.ui.components.GymGenieToolbar
 import com.asc.gymgenie.ui.theme.AccentOrange
 import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
@@ -90,11 +89,13 @@ fun ExercisePickerScreen(
             .fillMaxSize()
             .background(WarmOffWhite),
     ) {
-        CreateWorkoutTopBar(
+        GymGenieToolbar(
             title = muscleGroupNameRu,
-            subtitle = "Шаг 2 из 4",
-            onBack = onBack,
+            showBackNavigation = true,
+            onBackClick = onBack,
         )
+
+        WorkoutFlowStepHeader(currentStep = 2)
 
         when {
             state.isLoading && state.exercises.isEmpty() -> {
@@ -150,6 +151,7 @@ private fun ExercisesGrid(
     onLoadMore: () -> Unit,
 ) {
     val gridState = rememberLazyGridState()
+    val bottomSafeArea = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     LaunchedEffect(gridState, hasMore) {
         snapshotFlow {
@@ -165,25 +167,27 @@ private fun ExercisesGrid(
     LazyVerticalGrid(
         state = gridState,
         columns = GridCells.Fixed(2),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+        // Bottom inset adds the gesture/navigation safe area on top of a 16dp
+        // floor so the last row is always reachable, independent of the device.
+        contentPadding = PaddingValues(
+            start = 20.dp,
+            end = 20.dp,
+            top = 12.dp,
+            bottom = bottomSafeArea + 16.dp,
+        ),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items(exercises, key = { it.id }) { exercise ->
-            Box {
-                ExerciseCard(
-                    exercise = exercise,
-                    onClick = { onExerciseSelected(exercise) },
-                )
-                // Info badge sits on top of the card without intercepting body taps,
-                // so selection stays fast even when users aim near the corner.
-                InfoBadge(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(6.dp),
-                    onClick = { onOpenDetail(exercise) },
-                )
-            }
+            // ExerciseCard now hosts the info badge inside the image area and
+            // owns the long-press gesture, so the picker no longer needs to
+            // overlay a separate Box for the badge.
+            ExerciseCard(
+                exercise = exercise,
+                onClick = { onExerciseSelected(exercise) },
+                onLongClick = { onOpenDetail(exercise) },
+                onInfoClick = { onOpenDetail(exercise) },
+            )
         }
 
         if (isLoadingMore) {
@@ -201,33 +205,6 @@ private fun ExercisesGrid(
                 }
             }
         }
-
-        item(span = { GridItemSpan(2) }) {
-            Spacer(modifier = Modifier.height(24.dp))
-        }
-    }
-}
-
-@Composable
-private fun InfoBadge(
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-) {
-    Box(
-        modifier = modifier
-            .size(28.dp)
-            .shadow(2.dp, CircleShape)
-            .clip(CircleShape)
-            .background(AccentOrange)
-            .clickable { onClick() },
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = "i",
-            color = Color.White,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
-        )
     }
 }
 

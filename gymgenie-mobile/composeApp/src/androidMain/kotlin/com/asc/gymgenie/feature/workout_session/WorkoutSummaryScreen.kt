@@ -12,20 +12,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,8 +32,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.asc.gymgenie.ui.theme.Background
+import com.asc.gymgenie.ui.components.GymGenieToolbar
 import com.asc.gymgenie.ui.theme.Coral
+import com.asc.gymgenie.ui.theme.WarmOffWhite
 import com.asc.gymgenie.ui.theme.CoralLight
 import com.asc.gymgenie.ui.theme.OnBackground
 import com.asc.gymgenie.ui.theme.OnSurfaceVariant
@@ -48,14 +44,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/**
- * End-of-workout summary screen.
- *
- * Receives the immutable result of the session ([completedSets], [exercises]) so the screen
- * is fully driven by the data produced by [com.asc.gymgenie.presentation.WorkoutSessionViewModel].
- * The total volume is computed from completed (non-skipped) sets — a skipped set is one where
- * `repsActual == 0 && weightActual == 0.0`, mirroring the convention used in the shared VM.
- */
 @Composable
 fun WorkoutSummaryScreen(
     planName: String,
@@ -78,136 +66,114 @@ fun WorkoutSummaryScreen(
         .toInt()
     val dateStr = SimpleDateFormat("d MMMM, HH:mm", Locale("ru")).format(Date())
 
-    Box(modifier = Modifier.fillMaxSize().background(Background)) {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .padding(bottom = 100.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            item {
-                // Top bar: back, title, trash
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    IconButton(onClick = onDismiss) {
-                        Box(
-                            modifier = Modifier.size(40.dp).clip(CircleShape).background(Color.White),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(Icons.Filled.ArrowBack, contentDescription = "Назад", tint = OnBackground)
-                        }
-                    }
-                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                        Text(
-                            "Сводка тренировки",
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 17.sp,
-                            color = OnBackground,
-                        )
-                    }
-                    IconButton(onClick = {}) {
-                        Text("🗑", fontSize = 18.sp)
-                    }
-                }
+    Box(modifier = Modifier.fillMaxSize().background(WarmOffWhite)) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            GymGenieToolbar(
+                title = "Результат тренировки",
+                showBackNavigation = true,
+                onBackClick = onDismiss,
+            )
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Trophy
-                Box(
-                    modifier = Modifier
-                        .size(80.dp)
-                        .clip(CircleShape)
-                        .background(CoralLight),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("🏆", fontSize = 36.sp)
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Text("Отличная работа!", fontWeight = FontWeight.Bold, fontSize = 24.sp, color = OnBackground)
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    "Тренировка \"$planName\" завершена",
-                    fontSize = 14.sp,
-                    color = OnSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
-                Text(dateStr, fontSize = 14.sp, color = OnSurfaceVariant)
-
-                Spacer(modifier = Modifier.height(28.dp))
-
-                // Section title
-                Text(
-                    "РЕЗУЛЬТАТЫ",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = OnSurfaceVariant,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // 2x2 stats grid
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    StatCard("⏱", "$durationMinutes мин", "Общее время", Modifier.weight(1f))
-                    StatCard("🔥", "$estimatedCalories ккал", "Сожжено", Modifier.weight(1f))
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    StatCard("⚖️", "$totalVolumeKg кг", "Общий объём", Modifier.weight(1f))
-                    StatCard("🏋️", "$exerciseCount", "Упражнений", Modifier.weight(1f))
-                }
-
-                Spacer(modifier = Modifier.height(28.dp))
-
-                SubmissionStatusBanner(
-                    isSubmitting = isSubmitting,
-                    isSubmitted = isSubmitted,
-                    submitError = submitError,
-                    onRetry = onRetrySubmit,
-                )
-            }
-
-            // Per-exercise list (only present when caller passes the exercises).
-            if (exercises.isNotEmpty()) {
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(bottom = 100.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
                 item {
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(CircleShape)
+                            .background(CoralLight),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("🏆", fontSize = 36.sp)
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text("Отличная работа!", fontWeight = FontWeight.Bold, fontSize = 24.sp, color = OnBackground)
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        "УПРАЖНЕНИЯ",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = OnSurfaceVariant,
+                        "Тренировка \"$planName\" завершена",
+                        fontSize = 17.sp,
+                        color = OnBackground,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                    Text(dateStr, fontSize = 17.sp, color = OnBackground)
+
+                    Spacer(modifier = Modifier.height(28.dp))
+
+                    Text(
+                        "Результаты",
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = OnBackground,
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                     )
                     Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        StatCard("⏱", "$durationMinutes мин", "Общее время", Modifier.weight(1f))
+                        StatCard("🔥", "$estimatedCalories ккал", "Сожжено", Modifier.weight(1f))
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        StatCard("⚖️", "$totalVolumeKg кг", "Общий объём", Modifier.weight(1f))
+                        StatCard("🏋️", "$exerciseCount", "Упражнений", Modifier.weight(1f))
+                    }
+
+                    Spacer(modifier = Modifier.height(28.dp))
+
+                    SubmissionStatusBanner(
+                        isSubmitting = isSubmitting,
+                        isSubmitted = isSubmitted,
+                        submitError = submitError,
+                        onRetry = onRetrySubmit,
+                    )
                 }
 
-                items(exercises.withIndex().toList(), key = { it.index }) { (index, exercise) ->
-                    val setsForExercise = completedSets.filter { it.exerciseIndex == index }
-                    val totalSetsCount = setsForExercise.size
-                    val totalReps = setsForExercise.sumOf { it.repsActual }
-                    ExerciseSummaryRow(
-                        name = exercise.exerciseName,
-                        setsCount = totalSetsCount,
-                        repsCount = totalReps,
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
+                if (exercises.isNotEmpty()) {
+                    item {
+                        Text(
+                            "Упражнения",
+                            fontSize = 19.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = OnBackground,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+
+                    items(exercises.withIndex().toList(), key = { it.index }) { (index, exercise) ->
+                        val setsForExercise = completedSets.filter { it.exerciseIndex == index }
+                        val nonSkippedSets = setsForExercise.filter { !it.isSkipped() }
+                        val totalSetsCount = setsForExercise.size
+                        val totalReps = nonSkippedSets.sumOf { it.repsActual }
+                        val maxWeight = nonSkippedSets.maxOfOrNull { it.weightActual } ?: 0.0
+                        ExerciseSummaryRow(
+                            name = exercise.exerciseName,
+                            setsCount = totalSetsCount,
+                            repsCount = totalReps,
+                            maxWeightKg = maxWeight,
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
                 }
             }
         }
 
-        // Go home button
         Button(
             onClick = onDismiss,
             modifier = Modifier
@@ -219,7 +185,7 @@ fun WorkoutSummaryScreen(
             shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Coral),
         ) {
-            Text("На главную →", fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Text("На главную", fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -249,13 +215,18 @@ private fun StatCard(
             }
             Spacer(modifier = Modifier.height(10.dp))
             Text(value, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = OnBackground)
-            Text(label, fontSize = 12.sp, color = OnSurfaceVariant)
+            Text(label, fontSize = 14.sp, color = OnSurfaceVariant)
         }
     }
 }
 
 @Composable
-private fun ExerciseSummaryRow(name: String, setsCount: Int, repsCount: Int) {
+private fun ExerciseSummaryRow(
+    name: String,
+    setsCount: Int,
+    repsCount: Int,
+    maxWeightKg: Double,
+) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         shape = RoundedCornerShape(12.dp),
@@ -277,10 +248,21 @@ private fun ExerciseSummaryRow(name: String, setsCount: Int, repsCount: Int) {
             }
             Spacer(modifier = Modifier.size(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(name, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = OnBackground)
+                Text(name, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = OnBackground)
+                val statsText = buildString {
+                    append("$setsCount подходов · $repsCount повторений")
+                    if (maxWeightKg > 0.0) {
+                        val formatted = if (maxWeightKg % 1.0 == 0.0) {
+                            maxWeightKg.toInt().toString()
+                        } else {
+                            String.format("%.1f", maxWeightKg)
+                        }
+                        append(" · $formatted кг")
+                    }
+                }
                 Text(
-                    "$setsCount подходов · $repsCount повторений",
-                    fontSize = 12.sp,
+                    statsText,
+                    fontSize = 14.sp,
                     color = OnSurfaceVariant,
                 )
             }
@@ -290,15 +272,6 @@ private fun ExerciseSummaryRow(name: String, setsCount: Int, repsCount: Int) {
 
 private fun CompletedSet.isSkipped(): Boolean = repsActual == 0 && weightActual == 0.0
 
-/**
- * Renders the upload state for the just-finished session. Behavior matches
- * the three terminal states of [com.asc.gymgenie.presentation.WorkoutSessionViewModel]:
- *
- *  - submitting → spinner + status text
- *  - submitted  → small success confirmation
- *  - error      → error text + retry button
- *  - idle       → nothing (no banner)
- */
 @Composable
 private fun SubmissionStatusBanner(
     isSubmitting: Boolean,
@@ -351,14 +324,6 @@ private fun SubmissionStatusBanner(
             }
             Spacer(modifier = Modifier.height(20.dp))
         }
-        isSubmitted -> {
-            Text(
-                text = "Тренировка сохранена",
-                fontSize = 13.sp,
-                color = OnSurfaceVariant,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            )
-            Spacer(modifier = Modifier.height(20.dp))
-        }
+        isSubmitted -> {}
     }
 }

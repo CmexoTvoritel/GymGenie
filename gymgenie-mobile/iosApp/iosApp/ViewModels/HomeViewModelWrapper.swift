@@ -28,6 +28,10 @@ final class HomeViewModelWrapper: ObservableObject {
     @Published private(set) var selectedMealDate: Date = Calendar.current.startOfDay(for: Date())
     @Published private(set) var isLoadingMealPlans: Bool = false
     @Published private(set) var userProfile: UserProfileResponse? = nil
+    @Published private(set) var isLoadingSession: Bool = false
+    @Published private(set) var pendingSession: ActiveWorkoutSession? = nil
+    @Published private(set) var sessionError: String? = nil
+    @Published private(set) var activityError: String? = nil
     @Published private(set) var isLoggedOut: Bool = false
 
     private var observationTask: Task<Void, Never>?
@@ -49,7 +53,8 @@ final class HomeViewModelWrapper: ObservableObject {
             mealPlansApi: KoinHelper.shared.getMealPlansApi(),
             tokenStorage: KoinHelper.shared.getTokenStorage(),
             userProfileStore: profileStore,
-            sessionManager: KoinHelper.shared.getSessionManager()
+            sessionManager: KoinHelper.shared.getSessionManager(),
+            pendingSessionUploader: KoinHelper.shared.getPendingSessionUploader()
         )
         startObserving()
 
@@ -94,6 +99,10 @@ final class HomeViewModelWrapper: ObservableObject {
                 self.selectedMealDate = Self.toDate(state.selectedMealDate)
                 self.isLoadingMealPlans = state.isLoadingMealPlans
                 self.userProfile = state.userProfile
+                self.isLoadingSession = state.isLoadingSession
+                self.pendingSession = state.pendingSession
+                self.sessionError = state.sessionError
+                self.activityError = state.activityError
 
                 if let profile = state.userProfile {
                     self.sharedProfileStore?.update(profile: profile)
@@ -145,6 +154,18 @@ final class HomeViewModelWrapper: ObservableObject {
     /// is needed here.
     func checkIn(activityId: String, value: Int) {
         vm.checkIn(activityId: activityId, value: Int32(value))
+    }
+
+    func startWorkout(planId: String, planName: String) {
+        vm.startWorkout(planId: planId, planName: planName)
+    }
+
+    func clearPendingSession() {
+        vm.clearPendingSession()
+    }
+
+    func clearActivityError() {
+        vm.clearActivityError()
     }
 
     /// Switches the meal-plan section to a different calendar day.

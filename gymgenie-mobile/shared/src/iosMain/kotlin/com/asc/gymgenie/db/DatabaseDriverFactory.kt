@@ -1,20 +1,40 @@
 package com.asc.gymgenie.db
 
+import app.cash.sqldelight.db.QueryResult
 import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.driver.native.NativeSqliteDriver
 
-/**
- * iOS driver factory backed by [NativeSqliteDriver].
- *
- * No platform context is required — the native driver opens a sqlite file in
- * the app's documents directory using [DATABASE_NAME].
- */
+@Suppress("EXPECT_ACTUAL_CLASSES")
 actual class DatabaseDriverFactory {
-    actual fun createDriver(): SqlDriver =
-        NativeSqliteDriver(
+    actual fun createDriver(): SqlDriver {
+        val driver = NativeSqliteDriver(
             schema = GymGenieDatabase.Schema,
             name = DATABASE_NAME,
         )
+        migrateIfNeeded(driver)
+        return driver
+    }
+
+    private fun migrateIfNeeded(driver: SqlDriver) {
+        val columns = driver.executeQuery(null, "PRAGMA table_info(PendingWorkoutSession)", { cursor ->
+            val cols = mutableSetOf<String>()
+            while (cursor.next().value) {
+                cursor.getString(1)?.let { cols.add(it) }
+            }
+            QueryResult.Value(cols)
+        }, 0).value
+
+        if ("finished_at" !in columns) {
+            try {
+                driver.execute(null, "ALTER TABLE PendingWorkoutSession ADD COLUMN finished_at INTEGER", 0)
+            } catch (_: Exception) { }
+        }
+        if ("status" !in columns) {
+            try {
+                driver.execute(null, "ALTER TABLE PendingWorkoutSession ADD COLUMN status TEXT NOT NULL DEFAULT 'COMPLETED'", 0)
+            } catch (_: Exception) { }
+        }
+    }
 
     private companion object {
         const val DATABASE_NAME = "gymgenie.db"

@@ -62,9 +62,8 @@ enum class CreateMealPlanStep(val index: Int) {
 data class CreateMealPlanUiState(
     val step: CreateMealPlanStep = CreateMealPlanStep.SETUP,
 
-    // Setup ----------------------------------------------------------
-    /** True while the initial parallel booked-days fetch is in flight. */
     val isInitializing: Boolean = true,
+    val editingPlanId: String? = null,
     val mealKind: ManualMealKind? = null,
     val scheduleMode: ManualScheduleMode = ManualScheduleMode.ONE_OFF,
     val selectedDate: String? = null,
@@ -90,6 +89,7 @@ data class CreateMealPlanUiState(
     // Modal slots ----------------------------------------------------
     val gramsFor: FoodProduct? = null,
     val infoFor: FoodProduct? = null,
+    val editingItem: AddedMealItem? = null,
 
     // Save -----------------------------------------------------------
     val isSaving: Boolean = false,
@@ -164,6 +164,7 @@ data class CreateMealPlanUiState(
 class CreateMealPlanViewModel(
     private val foodProductApi: FoodProductApi,
     private val manualMealPlanApi: ManualMealPlanApi,
+    private val mealPlansApi: MealPlansApi,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -289,6 +290,24 @@ class CreateMealPlanViewModel(
 
     fun removeItem(uid: Long) {
         _state.update { it.copy(addedItems = it.addedItems.filterNot { row -> row.uid == uid }) }
+    }
+
+    fun openEditGrams(item: AddedMealItem) {
+        _state.update { it.copy(editingItem = item) }
+    }
+
+    fun closeEditGrams() {
+        _state.update { it.copy(editingItem = null) }
+    }
+
+    fun updateItemGrams(uid: Long, newGrams: Double) {
+        if (newGrams <= 0.0) return
+        _state.update { st ->
+            st.copy(
+                addedItems = st.addedItems.map { if (it.uid == uid) it.copy(grams = newGrams) else it },
+                editingItem = null,
+            )
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -421,10 +440,94 @@ class CreateMealPlanViewModel(
     // Step navigation
     // -----------------------------------------------------------------------
 
-    /**
-     * Advances from setup to editor. Pre-fills the plan name from the meal
-     * kind + schedule selection if the user has not edited it manually.
-     */
+    fun initWithMealTypeAndDate(mealType: String, date: String) {
+        val kind = ManualMealKind.fromWireValue(mealType) ?: return
+        setMealKind(kind)
+        setScheduleMode(ManualScheduleMode.ONE_OFF)
+        selectDate(date)
+        goToEdit()
+    }
+
+    fun loadForEditing(planId: String) {
+        _state.update { it.copy(isInitializing = true) }
+        scope.launch {
+            mealPlansApi.getMealPlanById(planId).fold(
+                onSuccess = { plan ->
+                    val meal = plan.meals.firstOrNull()
+                    val mealKind = ManualMealKind.fromWireValue(meal?.mealType)
+
+                    val items = meal?.dishes?.mapNotNull { dish ->
+                        val grams = dish.grams
+                            ?: parseGramsFromDescription(dish.portionDescription)
+                            ?: return@mapNotNull null
+                        if (grams <= 0.0) return@mapNotNull null
+
+                        val hasCatalog = dish.foodProductId != null
+                        val productId = dish.foodProductId ?: dish.id
+
+                        val product = FoodProduct(
+                            id = productId,
+                            nameRu = dish.name,
+                            nameEn = null,
+                            category = FoodCategory.OTHER,
+                            emoji = null,
+                            caloriesPer100g = (dish.calories?.toDouble() ?: 0.0) * 100.0 / grams,
+                            proteinPer100g = (dish.proteinG?.toDouble() ?: 0.0) * 100.0 / grams,
+                            fatPer100g = (dish.fatG?.toDouble() ?: 0.0) * 100.0 / grams,
+                            carbsPer100g = (dish.carbsG?.toDouble() ?: 0.0) * 100.0 / grams,
+                            fiberPer100g = null,
+                            sugarPer100g = null,
+                        )
+
+                        AddedMealItem(
+                            uid = nextUid(),
+                            product = product,
+                            grams = grams,
+                            hasCatalogProduct = hasCatalog,
+                        )
+                    } ?: emptyList()
+
+                    val scheduleMode = when (plan.scheduleType) {
+                        "RECURRING" -> ManualScheduleMode.RECURRING
+                        else -> ManualScheduleMode.ONE_OFF
+                    }
+
+                    _state.update {
+                        it.copy(
+                            isInitializing = false,
+                            editingPlanId = planId,
+                            mealKind = mealKind,
+                            planName = plan.name,
+                            planNameTouched = true,
+                            addedItems = items,
+                            scheduleMode = scheduleMode,
+                            selectedDate = plan.oneOffDate,
+                            selectedWeekdays = plan.scheduleDays,
+                            step = CreateMealPlanStep.EDIT,
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    _state.update {
+                        it.copy(
+                            isInitializing = false,
+                            errorMessage = when (error) {
+                                is NetworkException -> error.message ?: "Ошибка сети"
+                                else -> "Не удалось загрузить план"
+                            },
+                        )
+                    }
+                },
+            )
+        }
+    }
+
+    private fun parseGramsFromDescription(desc: String?): Double? {
+        if (desc == null) return null
+        val match = Regex("(\\d+)").find(desc) ?: return null
+        return match.groupValues[1].toDoubleOrNull()
+    }
+
     fun goToEdit() {
         val current = _state.value
         if (!current.canContinueFromSetup) return
@@ -503,16 +606,32 @@ class CreateMealPlanViewModel(
             oneOffDate = if (current.scheduleMode == ManualScheduleMode.ONE_OFF)
                 current.selectedDate else null,
             items = current.addedItems.map {
-                ManualMealItemRequest(
-                    foodProductId = it.product.id,
-                    grams = it.grams,
-                )
-            },
+                    if (it.hasCatalogProduct) {
+                        ManualMealItemRequest(
+                            foodProductId = it.product.id,
+                            grams = it.grams,
+                        )
+                    } else {
+                        val macros = it.portion
+                        ManualMealItemRequest(
+                            grams = it.grams,
+                            name = it.product.nameRu,
+                            calories = macros.calories.toInt(),
+                            proteinG = macros.proteinG.toInt(),
+                            carbsG = macros.carbsG.toInt(),
+                            fatG = macros.fatG.toInt(),
+                        )
+                    }
+                },
         )
 
         scope.launch {
             manualMealPlanApi.createManualMealPlan(request).fold(
                 onSuccess = { plan ->
+                    val editId = _state.value.editingPlanId
+                    if (editId != null) {
+                        mealPlansApi.deleteMealPlan(editId)
+                    }
                     _state.update {
                         it.copy(
                             isSaving = false,
@@ -549,8 +668,8 @@ class CreateMealPlanViewModel(
     // -----------------------------------------------------------------------
 
     /**
-     * Builds a default plan name like "Завтрак · Сегодня" or
-     * "Обед · Пн, Ср". Used only while the user has not edited the field.
+     * Builds a default plan name like "Завтрак 17 мая" or
+     * "Обед Пн, Ср". Used only while the user has not edited the field.
      */
     private fun generatedPlanName(
         kind: ManualMealKind?,
@@ -566,17 +685,12 @@ class CreateMealPlanViewModel(
                 .takeIf { it.isNotEmpty() }
                 ?.joinToString(", ") { weekdayShort(it) }
         }
-        return if (schedulePart == null) mealLabel else "$mealLabel · $schedulePart"
+        return if (schedulePart == null) mealLabel else "$mealLabel $schedulePart"
     }
 
     private fun dateLabel(iso: String): String {
-        val today = today()
         val parsed = runCatching { LocalDate.parse(iso) }.getOrNull() ?: return iso
-        return when (parsed) {
-            today -> "Сегодня"
-            today.plus(DatePeriod(days = 1)) -> "Завтра"
-            else -> "${parsed.dayOfMonth} ${monthShort(parsed.monthNumber)}"
-        }
+        return "${parsed.dayOfMonth} ${monthShort(parsed.monthNumber)}"
     }
 
     private fun nextUid(): Long = Random.nextLong()
@@ -640,11 +754,6 @@ class CreateMealPlanViewModel(
 
         /**
          * Wire `DayOfWeek` name for a [kotlinx.datetime.LocalDate].
-         *
-         * `kotlinx.datetime.DayOfWeek` is an `expect` enum on KMP — the
-         * compiler does not consider its 7 cases exhaustive in `commonMain`.
-         * Falling back to the case name keeps the function total without
-         * pinning the implementation to a specific platform contract.
          */
         fun dayOfWeekWire(date: LocalDate): String = when (date.dayOfWeek) {
             DayOfWeek.MONDAY -> "MONDAY"
@@ -654,7 +763,6 @@ class CreateMealPlanViewModel(
             DayOfWeek.FRIDAY -> "FRIDAY"
             DayOfWeek.SATURDAY -> "SATURDAY"
             DayOfWeek.SUNDAY -> "SUNDAY"
-            else -> date.dayOfWeek.name
         }
 
         fun monthShort(monthNumber: Int): String = when (monthNumber) {

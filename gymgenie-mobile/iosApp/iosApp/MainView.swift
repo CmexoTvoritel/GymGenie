@@ -1,10 +1,20 @@
 import SwiftUI
 
+// MARK: - Tab bar visibility state
+
+final class TabBarState: ObservableObject {
+    @Published var isVisible: Bool = true
+    @Published var pendingTabSwitch: MainTab? = nil
+
+    func switchTo(_ tab: MainTab) {
+        pendingTabSwitch = tab
+    }
+}
+
 enum MainTab: Int, CaseIterable {
     case home
     case aiCoach
     case workouts
-    case nutrition
     case profile
 
     var title: String {
@@ -12,7 +22,6 @@ enum MainTab: Int, CaseIterable {
         case .home: return "Главная"
         case .aiCoach: return "ИИ"
         case .workouts: return "Тренировки"
-        case .nutrition: return "Рацион"
         case .profile: return "Профиль"
         }
     }
@@ -22,7 +31,6 @@ enum MainTab: Int, CaseIterable {
         case .home: return "house"
         case .aiCoach: return "sparkles"
         case .workouts: return "dumbbell"
-        case .nutrition: return "fork.knife"
         case .profile: return "person"
         }
     }
@@ -32,7 +40,6 @@ enum MainTab: Int, CaseIterable {
         case .home: return "house.fill"
         case .aiCoach: return "sparkles"
         case .workouts: return "dumbbell.fill"
-        case .nutrition: return "fork.knife"
         case .profile: return "person.fill"
         }
     }
@@ -41,6 +48,7 @@ enum MainTab: Int, CaseIterable {
 struct MainView: View {
     @State private var selectedTab: MainTab = .home
     @StateObject private var profileStore = UserProfileStoreWrapper()
+    @StateObject private var tabBarState = TabBarState()
 
     private var navItems: [BottomNavBar.Item] {
         MainTab.allCases.map { tab in
@@ -64,12 +72,12 @@ struct MainView: View {
                 tabView(.home) { HomeView() }
                 tabView(.aiCoach) { AiCoachView() }
                 tabView(.workouts) { WorkoutsView() }
-                tabView(.nutrition) { NutritionView() }
                 tabView(.profile) { ProfileView() }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.bottom, 88)
+            .padding(.bottom, tabBarState.isVisible ? 76 : 0)
             .environmentObject(profileStore)
+            .environmentObject(tabBarState)
 
             BottomNavBar(
                 items: navItems,
@@ -81,9 +89,19 @@ struct MainView: View {
                 }
             )
             .padding(.top, 8)
+            .offset(y: tabBarState.isVisible ? 0 : 120)
+            .opacity(tabBarState.isVisible ? 1 : 0)
+            .allowsHitTesting(tabBarState.isVisible)
+            .animation(.easeInOut(duration: 0.25), value: tabBarState.isVisible)
         }
-        .background(Palette.warmOffWhite)
+        .background(Palette.warmOffWhite.ignoresSafeArea())
         .onAppear { profileStore.load() }
+        .onChange(of: tabBarState.pendingTabSwitch) { tab in
+            if let tab = tab {
+                selectedTab = tab
+                tabBarState.pendingTabSwitch = nil
+            }
+        }
     }
 
     @ViewBuilder
@@ -92,12 +110,14 @@ struct MainView: View {
         @ViewBuilder content: () -> Content
     ) -> some View {
         let isActive = selectedTab == tab
-        content()
-            .opacity(isActive ? 1 : 0)
-            .allowsHitTesting(isActive)
-            // Keeps inactive tabs out of accessibility focus while they sit
-            // invisible in the hierarchy.
-            .accessibilityHidden(!isActive)
+        NavigationStack {
+            content()
+        }
+        .opacity(isActive ? 1 : 0)
+        .allowsHitTesting(isActive)
+        // Keeps inactive tabs out of accessibility focus while they sit
+        // invisible in the hierarchy.
+        .accessibilityHidden(!isActive)
     }
 }
 

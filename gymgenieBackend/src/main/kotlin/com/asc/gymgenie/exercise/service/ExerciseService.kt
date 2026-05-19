@@ -101,7 +101,7 @@ class ExerciseService(
             secondaryMuscleGroups = request.secondaryMuscleGroups,
             category = request.category,
             difficultyLevel = request.difficultyLevel,
-            durationMinutes = request.durationMinutes,
+            secondsPer10Reps = request.secondsPer10Reps,
             caloriesBurned = request.caloriesBurned,
             rating = request.rating,
             imageUrl = request.imageUrl,
@@ -128,7 +128,7 @@ class ExerciseService(
         request.secondaryMuscleGroups?.let { exercise.secondaryMuscleGroups = it }
         request.category?.let { exercise.category = it }
         request.difficultyLevel?.let { exercise.difficultyLevel = it }
-        request.durationMinutes?.let { exercise.durationMinutes = it }
+        request.secondsPer10Reps?.let { exercise.secondsPer10Reps = it }
         request.caloriesBurned?.let { exercise.caloriesBurned = it }
         request.rating?.let { exercise.rating = it }
         request.imageUrl?.let { exercise.imageUrl = it }
@@ -166,7 +166,7 @@ class ExerciseService(
         secondaryMuscleGroups = secondaryMuscleGroups,
         category = category,
         difficultyLevel = difficultyLevel,
-        durationMinutes = durationMinutes,
+        secondsPer10Reps = secondsPer10Reps,
         caloriesBurned = caloriesBurned,
         rating = rating,
         imageUrl = imageUrl,
@@ -188,7 +188,7 @@ class ExerciseService(
         secondaryMuscleGroups = secondaryMuscleGroups,
         category = category,
         difficultyLevel = difficultyLevel,
-        durationMinutes = durationMinutes,
+        secondsPer10Reps = secondsPer10Reps,
         caloriesBurned = caloriesBurned,
         rating = rating,
         imageUrl = imageUrl,

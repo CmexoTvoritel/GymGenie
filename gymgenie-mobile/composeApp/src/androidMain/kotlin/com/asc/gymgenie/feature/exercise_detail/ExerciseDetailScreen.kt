@@ -109,8 +109,8 @@ fun ExerciseDetailScreen(
 
                             // Stat chips
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                ex.durationMinutes?.let { dur ->
-                                    StatChip("⏱", "Время", "${dur} мин", Modifier.weight(1f))
+                                ex.secondsPer10Reps?.let { secPer10 ->
+                                    StatChip("⏱", "Темп", "${secPer10} сек/10", Modifier.weight(1f))
                                 }
                                 StatChip("🏋️", "Уровень", difficultyLabel(ex.difficultyLevel), Modifier.weight(1f))
                                 ex.caloriesBurned?.let { cal ->

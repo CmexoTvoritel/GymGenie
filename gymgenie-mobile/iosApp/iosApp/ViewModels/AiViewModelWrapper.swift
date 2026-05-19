@@ -39,11 +39,7 @@ final class AiViewModelWrapper: ObservableObject {
                     self.isSaving = state.isSaving
                     self.isSaved = state.isSaved
                     self.errorMessage = state.errorMessage
-                    if let list = state.messages as? [AiChatMessage] {
-                        self.messages = list
-                    } else {
-                        self.messages = (state.messages as NSArray).compactMap { $0 as? AiChatMessage }
-                    }
+                    self.messages = state.messages as [AiChatMessage]
                 }
                 try? await Task.sleep(nanoseconds: 50_000_000)
             }
@@ -88,6 +84,11 @@ final class AiViewModelWrapper: ObservableObject {
 
     func sendMessage(_ text: String) { vm.sendMessage(text: text) }
     func saveWorkout() { vm.saveWorkout() }
+
+    func reset() {
+        vm.reset()
+        didPrefill = false
+    }
 
     deinit {
         observationTask?.cancel()

@@ -1,0 +1,505 @@
+{
+  "info": {
+    "name": "GymGenie API",
+    "_postman_id": "gymgenie-collection-v1",
+    "description": "GymGenie backend API collection. Run Auth/Login first — access_token saves automatically.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://api.gymgenie.ru:8443/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refresh_token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/register", "host": ["{{base_url}}"], "path": ["auth", "register"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"testuser\",\n  \"email\": \"test@example.com\",\n  \"password\": \"Password123\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  if (json.accessToken) pm.collectionVariables.set('access_token', json.accessToken);",
+                  "  if (json.refreshToken) pm.collectionVariables.set('refresh_token', json.refreshToken);",
+                  "  console.log('Registered & tokens saved');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"Password123\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  pm.collectionVariables.set('access_token', json.accessToken);",
+                  "  pm.collectionVariables.set('refresh_token', json.refreshToken);",
+                  "  console.log('Tokens saved. Access token expires in 15 min.');",
+                  "  pm.test('Login successful', () => pm.response.to.have.status(200));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/refresh", "host": ["{{base_url}}"], "path": ["auth", "refresh"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  pm.collectionVariables.set('access_token', json.accessToken);",
+                  "  if (json.refreshToken) pm.collectionVariables.set('refresh_token', json.refreshToken);",
+                  "  console.log('Access token refreshed');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/logout", "host": ["{{base_url}}"], "path": ["auth", "logout"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Logout All Sessions",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/auth/logout-all", "host": ["{{base_url}}"], "path": ["auth", "logout-all"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "AI Chat (Workout Generation)",
+      "item": [
+        {
+          "name": "Generate Workout",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/ai/chat", "host": ["{{base_url}}"], "path": ["ai", "chat"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Составь мне тренировку на грудь на 45 минут, я новичок\",\n  \"healthIssues\": \"\"\n}"
+            },
+            "description": "Main AI endpoint. Response type: WORKOUT (готова) or CLARIFICATION (AI уточняет). Сессия сохраняется — можно продолжать диалог."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "console.log('AI response type:', json.type);",
+                  "if (json.type === 'WORKOUT') {",
+                  "  console.log('Workout ready:', json.workout?.name);",
+                  "  pm.collectionVariables.set('last_ai_workout', JSON.stringify(json.workout));",
+                  "} else {",
+                  "  console.log('AI needs clarification:', json.message);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Save AI Workout to Plan",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/ai/chat/save", "host": ["{{base_url}}"], "path": ["ai", "chat", "save"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Beginner Chest Blast\",\n  \"description\": \"Тренировка от AI\",\n  \"exercises\": [\n    {\n      \"exerciseId\": \"<вставь из ответа Generate Workout>\",\n      \"sets\": 3,\n      \"reps\": 12,\n      \"restSeconds\": 60,\n      \"notes\": \"\"\n    }\n  ]\n}"
+            },
+            "description": "Сохраняет AI-тренировку как workout plan. Вставь exercises из ответа /ai/chat"
+          }
+        },
+        {
+          "name": "Clear AI Session",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/ai/chat/session", "host": ["{{base_url}}"], "path": ["ai", "chat", "session"] },
+            "description": "Сбрасывает контекст AI-диалога — начать с чистого листа"
+          }
+        }
+      ]
+    },
+    {
+      "name": "User Profile",
+      "item": [
+        {
+          "name": "Get My Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/users/me", "host": ["{{base_url}}"], "path": ["users", "me"] }
+          }
+        },
+        {
+          "name": "Update My Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/users/me", "host": ["{{base_url}}"], "path": ["users", "me"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Artem\",\n  \"lastName\": \"Test\",\n  \"gender\": \"MALE\",\n  \"birthDate\": \"1995-01-15\",\n  \"weightKg\": 80.0,\n  \"heightCm\": 180.0\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Workout Plans",
+      "item": [
+        {
+          "name": "Get All Plans",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/workout-plans?page=0&size=20",
+              "host": ["{{base_url}}"],
+              "path": ["workout-plans"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Active Plans",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/workout-plans/active", "host": ["{{base_url}}"], "path": ["workout-plans", "active"] }
+          }
+        },
+        {
+          "name": "Get Plan by ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/workout-plans/:id", "host": ["{{base_url}}"], "path": ["workout-plans", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        },
+        {
+          "name": "Create Detailed Plan",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/workout-plans", "host": ["{{base_url}}"], "path": ["workout-plans"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Push Day\",\n  \"description\": \"Грудь, плечи, трицепс\",\n  \"createdBy\": \"USER\",\n  \"days\": [\n    {\n      \"dayOfWeek\": \"MONDAY\",\n      \"name\": \"Понедельник — Push\",\n      \"orderIndex\": 0,\n      \"exercises\": [\n        {\n          \"exerciseId\": \"<id упражнения>\",\n          \"sets\": 3,\n          \"reps\": 10,\n          \"weightKg\": 60.0,\n          \"restSeconds\": 90,\n          \"orderIndex\": 0,\n          \"notes\": \"\"\n        }\n      ]\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Create Simple Workout",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/workout-plans/simple", "host": ["{{base_url}}"], "path": ["workout-plans", "simple"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Быстрая кардио\",\n  \"restSeconds\": 45,\n  \"scheduleType\": \"ONE_TIME\",\n  \"scheduleDays\": [],\n  \"exercises\": [\n    {\n      \"exerciseId\": \"<id упражнения>\",\n      \"sets\": 3,\n      \"reps\": 15\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete Plan",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/workout-plans/:id", "host": ["{{base_url}}"], "path": ["workout-plans", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Workout Sessions",
+      "item": [
+        {
+          "name": "Get All Sessions",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/workout-sessions?page=0&size=20",
+              "host": ["{{base_url}}"],
+              "path": ["workout-sessions"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Sessions by Date",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/workout-sessions/by-date?date=2026-04-28",
+              "host": ["{{base_url}}"],
+              "path": ["workout-sessions", "by-date"],
+              "query": [{ "key": "date", "value": "2026-04-28" }]
+            }
+          }
+        },
+        {
+          "name": "Start Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/workout-sessions", "host": ["{{base_url}}"], "path": ["workout-sessions"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Понедельник — Push\",\n  \"workoutPlanDayId\": null,\n  \"notes\": \"\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  if (json.id) pm.collectionVariables.set('session_id', json.id);",
+                  "  console.log('Session started, id saved:', json.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Add Set to Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/workout-sessions/:id/sets", "host": ["{{base_url}}"], "path": ["workout-sessions", ":id", "sets"], "variable": [{ "key": "id", "value": "{{session_id}}" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"exerciseId\": \"<id упражнения>\",\n  \"setNumber\": 1,\n  \"reps\": 10,\n  \"weightKg\": 60.0,\n  \"completed\": true,\n  \"durationSeconds\": 0\n}"
+            }
+          }
+        },
+        {
+          "name": "Finish Session",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/workout-sessions/:id/finish", "host": ["{{base_url}}"], "path": ["workout-sessions", ":id", "finish"], "variable": [{ "key": "id", "value": "{{session_id}}" }] }
+          }
+        },
+        {
+          "name": "Submit Offline Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/workout-sessions/submit", "host": ["{{base_url}}"], "path": ["workout-sessions", "submit"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Утренняя тренировка\",\n  \"workoutPlanDayId\": null,\n  \"startedAt\": \"2026-04-28T08:00:00Z\",\n  \"finishedAt\": \"2026-04-28T08:45:00Z\",\n  \"status\": \"COMPLETED\",\n  \"notes\": \"\",\n  \"sets\": [\n    {\n      \"exerciseId\": \"<id упражнения>\",\n      \"setNumber\": 1,\n      \"reps\": 10,\n      \"weightKg\": 60.0,\n      \"completed\": true,\n      \"durationSeconds\": 0\n    }\n  ]\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Exercises",
+      "item": [
+        {
+          "name": "List Exercises",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/exercises?page=0&size=20",
+              "host": ["{{base_url}}"],
+              "path": ["exercises"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" },
+                { "key": "muscleGroup", "value": "CHEST", "disabled": true },
+                { "key": "difficultyLevel", "value": "BEGINNER", "disabled": true }
+              ]
+            },
+            "description": "Параметры muscleGroup и difficultyLevel опциональны — включи по необходимости"
+          }
+        },
+        {
+          "name": "Search Exercises",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/exercises/search?query=bench&page=0&size=20",
+              "host": ["{{base_url}}"],
+              "path": ["exercises", "search"],
+              "query": [
+                { "key": "query", "value": "bench" },
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Muscle Groups",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/exercises/muscle-groups", "host": ["{{base_url}}"], "path": ["exercises", "muscle-groups"] }
+          }
+        },
+        {
+          "name": "Get Exercise by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/exercises/:id", "host": ["{{base_url}}"], "path": ["exercises", ":id"], "variable": [{ "key": "id", "value": "" }] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Nutrition",
+      "item": [
+        {
+          "name": "Get All Meal Plans",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/nutrition/plans", "host": ["{{base_url}}"], "path": ["nutrition", "plans"] }
+          }
+        },
+        {
+          "name": "Get Active Meal Plan",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/nutrition/plans/active", "host": ["{{base_url}}"], "path": ["nutrition", "plans", "active"] }
+          }
+        },
+        {
+          "name": "Create Meal Plan",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/nutrition/plans", "host": ["{{base_url}}"], "path": ["nutrition", "plans"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Мой план питания\",\n  \"description\": \"\",\n  \"targetCalories\": 2500,\n  \"targetProteinG\": 150,\n  \"targetCarbsG\": 250,\n  \"targetFatG\": 80\n}"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

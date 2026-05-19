@@ -1,28 +1,41 @@
 import SwiftUI
 import Shared
 
-/// Between-sets rest screen.
-///
-/// Shows a circular countdown, ±10s adjustments, the next-up exercise preview, and two
-/// terminal actions: skip current set (records it as skipped) and skip rest (advances
-/// without recording).
 struct RestTimerView: View {
     @ObservedObject var sessionVM: WorkoutSessionViewModelWrapper
+    var onDismiss: () -> Void
 
-    private var totalRestSeconds: Int {
-        let configured = Int((sessionVM.vm.state.value as? WorkoutSessionViewModel.State)?.session.restSeconds ?? 60)
-        // Guard against negative ratios when the user adds time mid-rest.
-        return max(configured, Int(sessionVM.restSecondsRemaining))
-    }
+    @State private var showExitAlert: Bool = false
+    @State private var showNextExerciseInfo: Bool = false
+    @State private var restEndDate: Date = Date()
+    @State private var restCompletionTask: Task<Void, Never>? = nil
+    @State private var remainingSeconds: Int = 0
+    @State private var circleMax: Int = 0
+    @State private var countdownTask: Task<Void, Never>? = nil
 
     var body: some View {
         VStack(spacing: 0) {
             HStack {
+                Button(action: { showExitAlert = true }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(Palette.deepInk)
+                        .frame(width: 40, height: 40)
+                        .background(Circle().fill(Color.white))
+                        .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
+                }
+                .buttonStyle(.plain)
+
                 Spacer()
-                Text(sessionVM.currentExercise?.exerciseName ?? "Отдых")
-                    .font(.system(size: 17, weight: .semibold))
+
+                Text("Тренировка")
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(Palette.deepInk)
+
                 Spacer()
+
+                Color.clear
+                    .frame(width: 40, height: 40)
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
@@ -35,15 +48,24 @@ struct RestTimerView: View {
 
             Spacer()
 
-            // ± 10s adjustments
             HStack(spacing: 12) {
-                adjustButton(label: "- 10 сек") { sessionVM.adjustRest(-10) }
-                adjustButton(label: "+ 10 сек") { sessionVM.adjustRest(10) }
+                adjustButton(label: "- 10 сек") {
+                    sessionVM.adjustRest(-10)
+                    restEndDate = max(Date().addingTimeInterval(1), restEndDate.addingTimeInterval(-10))
+                    remainingSeconds = max(0, Int(ceil(restEndDate.timeIntervalSince(Date()))))
+                    scheduleRestCompletion()
+                }
+                adjustButton(label: "+ 10 сек") {
+                    sessionVM.adjustRest(10)
+                    restEndDate = restEndDate.addingTimeInterval(10)
+                    remainingSeconds = max(0, Int(ceil(restEndDate.timeIntervalSince(Date()))))
+                    circleMax = max(circleMax, remainingSeconds)
+                    scheduleRestCompletion()
+                }
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 16)
 
-            // Next exercise / set preview
             nextExerciseCard
                 .padding(.horizontal, 16)
                 .padding(.bottom, 20)
@@ -58,16 +80,64 @@ struct RestTimerView: View {
             .padding(.bottom, 16)
             .background(Palette.warmOffWhite)
         }
+        .alert("Завершить тренировку?", isPresented: $showExitAlert) {
+            Button("Продолжить", role: .cancel) { }
+            Button("Завершить", role: .destructive) {
+                sessionVM.cancelWorkout()
+                onDismiss()
+            }
+        } message: {
+            Text("Прогресс будет сохранён как незавершённая тренировка.")
+        }
+        .sheet(isPresented: $showNextExerciseInfo) {
+            if let exerciseId = nextExerciseInfoId {
+                ExerciseInfoSheet(exerciseId: exerciseId)
+            }
+        }
+        .onAppear {
+            restEndDate = Date().addingTimeInterval(Double(sessionVM.restDurationSeconds))
+            scheduleRestCompletion()
+            remainingSeconds = Int(ceil(Double(sessionVM.restDurationSeconds)))
+            circleMax = remainingSeconds
+            startCountdown()
+        }
+        .onDisappear {
+            restCompletionTask?.cancel()
+            countdownTask?.cancel()
+        }
     }
 
-    // MARK: - Components
+    private func scheduleRestCompletion() {
+        restCompletionTask?.cancel()
+        let endDate = restEndDate
+        restCompletionTask = Task { @MainActor in
+            let remaining = endDate.timeIntervalSince(Date())
+            if remaining > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
+            }
+            if !Task.isCancelled {
+                sessionVM.restComplete()
+            }
+        }
+    }
+
+    private func startCountdown() {
+        countdownTask?.cancel()
+        countdownTask = Task { @MainActor in
+            while !Task.isCancelled {
+                let remaining = restEndDate.timeIntervalSince(Date())
+                remainingSeconds = max(0, Int(ceil(remaining)))
+                if remaining <= 0 { break }
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+        }
+    }
 
     private var circularTimer: some View {
-        let remaining = Int(sessionVM.restSecondsRemaining)
-        let total = totalRestSeconds
-        let progress = total > 0 ? Double(remaining) / Double(total) : 0.0
-        let minutes = remaining / 60
-        let seconds = remaining % 60
+        let total = max(1.0, Double(circleMax))
+        let progress = Double(remainingSeconds) / total
+        let minutes = remainingSeconds / 60
+        let seconds = remainingSeconds % 60
 
         return ZStack {
             Circle()
@@ -80,14 +150,14 @@ struct RestTimerView: View {
                     style: StrokeStyle(lineWidth: 12, lineCap: .round)
                 )
                 .rotationEffect(.degrees(-90))
-                .animation(.linear(duration: 1), value: sessionVM.restSecondsRemaining)
+                .animation(.linear(duration: 1), value: remainingSeconds)
 
             VStack(spacing: 4) {
                 Text(String(format: "%02d:%02d", minutes, seconds))
                     .font(.system(size: 52, weight: .bold, design: .monospaced))
                     .foregroundColor(Palette.deepInk)
                 Text("отдых")
-                    .font(.system(size: 16))
+                    .font(.system(size: 18))
                     .foregroundColor(.gray)
             }
         }
@@ -97,16 +167,17 @@ struct RestTimerView: View {
     private func adjustButton(label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
-                .font(.system(size: 15, weight: .medium))
+                .font(.system(size: 19, weight: .medium))
                 .foregroundColor(Palette.deepInk)
                 .frame(maxWidth: .infinity)
                 .frame(height: 46)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.gray.opacity(0.3), lineWidth: 1.5)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(.white))
+                        .stroke(Palette.coral.opacity(0.4), lineWidth: 1.5)
+                        .background(RoundedRectangle(cornerRadius: 12).fill(Palette.coral.opacity(0.05)))
                 )
         }
+        .buttonStyle(.plain)
     }
 
     private var nextExerciseCard: some View {
@@ -122,21 +193,25 @@ struct RestTimerView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Далее")
-                    .font(.system(size: 12))
+                    .font(.system(size: 15))
                     .foregroundColor(.gray)
-                Text(sessionVM.nextExercise?.exerciseName ?? "Финиш")
-                    .font(.system(size: 15, weight: .semibold))
+                Text(nextExerciseName)
+                    .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(Palette.deepInk)
                 Text(nextSetLabel)
-                    .font(.system(size: 12))
+                    .font(.system(size: 15))
                     .foregroundColor(.gray)
             }
 
             Spacer()
 
-            Image(systemName: "chevron.right")
-                .font(.system(size: 14))
-                .foregroundColor(.gray)
+            Button(action: { showNextExerciseInfo = true }) {
+                Image(systemName: "info.circle")
+                    .font(.system(size: 22))
+                    .foregroundColor(Palette.coral)
+                    .frame(width: 40, height: 40)
+                    .background(Circle().fill(Palette.coral.opacity(0.12)))
+            }
         }
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 14).fill(.white))
@@ -146,35 +221,48 @@ struct RestTimerView: View {
     private var skipSetButton: some View {
         Button(action: { sessionVM.skipSet() }) {
             Text("Пропустить подход")
-                .font(.system(size: 15, weight: .medium))
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundColor(Palette.deepInk)
                 .frame(maxWidth: .infinity)
                 .frame(height: 44)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(Color.gray.opacity(0.3), lineWidth: 1.5)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(.white))
                 )
         }
+        .buttonStyle(.plain)
     }
 
     private var skipRestButton: some View {
         Button(action: { sessionVM.skipRest() }) {
-            HStack(spacing: 8) {
-                Text("Пропустить отдых")
-                    .font(.system(size: 17, weight: .semibold))
-                Image(systemName: "forward.end.fill")
-                    .font(.system(size: 16))
-            }
-            .foregroundColor(.white)
-            .frame(maxWidth: .infinity)
-            .frame(height: 54)
-            .background(RoundedRectangle(cornerRadius: 14).fill(Palette.coral))
+            Text("Пропустить отдых")
+                .font(.system(size: 19, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 54)
+                .background(RoundedRectangle(cornerRadius: 14).fill(Palette.coral))
         }
+        .buttonStyle(.plain)
     }
 
-    /// Mirrors Android's `nextSetLabel` logic. The current set index still points at the set the
-    /// user just completed, so the visible "next" set within the same exercise is `currentSetIndex + 2`.
+    private var nextExerciseName: String {
+        let currentSets = Int(sessionVM.totalSets)
+        let nextWithinExercise = Int(sessionVM.currentSetIndex) + 2
+        if nextWithinExercise <= currentSets {
+            return sessionVM.currentExercise?.exerciseName ?? "Финиш"
+        }
+        return sessionVM.nextExercise?.exerciseName ?? "Финиш"
+    }
+
+    private var nextExerciseInfoId: String? {
+        let currentSets = Int(sessionVM.totalSets)
+        let nextWithinExercise = Int(sessionVM.currentSetIndex) + 2
+        if nextWithinExercise <= currentSets {
+            return sessionVM.currentExercise?.exerciseId
+        }
+        return sessionVM.nextExercise?.exerciseId
+    }
+
     private var nextSetLabel: String {
         let currentSets = Int(sessionVM.totalSets)
         let nextWithinExercise = Int(sessionVM.currentSetIndex) + 2

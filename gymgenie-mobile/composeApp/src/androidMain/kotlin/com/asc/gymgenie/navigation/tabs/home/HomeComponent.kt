@@ -13,19 +13,42 @@ interface HomeComponent {
     fun openActivities()
     fun openCatalog()
     fun openGoalSettings(category: GoalCategory)
-    fun openNutrition()
-    fun openCreateMealPlan(initialMealType: String? = null)
+    fun openActivityScheduleSettings(
+        activityId: String,
+        activityName: String,
+        scheduleType: String?,
+        scheduleDays: List<String>,
+        oneOffDate: String?,
+    )
+    fun openMealPlanDetail(planId: String)
+    fun openCreateMealPlan(initialMealType: String? = null, initialDate: String? = null, editPlanId: String? = null)
+    fun openWorkoutDetail(planId: String)
+    fun openNotifications()
     fun popBackToActivities()
     fun pop()
     fun resetToMain()
     fun onMealPlanSaved()
+    fun onMealPlanDeleted()
 
     sealed class Child {
         data object Main : Child()
         data object Activities : Child()
         data object ActivityCatalog : Child()
         data class ActivityGoalSettings(val category: GoalCategory) : Child()
-        data object Nutrition : Child()
-        data class CreateMealPlan(val initialMealType: String? = null) : Child()
+        data class ActivityScheduleSettings(
+            val activityId: String,
+            val activityName: String,
+            val scheduleType: String?,
+            val scheduleDays: List<String>,
+            val oneOffDate: String?,
+        ) : Child()
+        data class MealPlanDetail(val planId: String) : Child()
+        data class CreateMealPlan(
+            val initialMealType: String? = null,
+            val initialDate: String? = null,
+            val editPlanId: String? = null,
+        ) : Child()
+        data class WorkoutDetail(val planId: String) : Child()
+        data object Notifications : Child()
     }
 }

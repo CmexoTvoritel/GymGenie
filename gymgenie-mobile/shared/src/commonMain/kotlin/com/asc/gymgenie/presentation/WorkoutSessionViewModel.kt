@@ -10,10 +10,8 @@ import com.asc.gymgenie.workout.SubmitWorkoutSessionRequest
 import com.asc.gymgenie.workout.WorkoutApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,12 +46,11 @@ class WorkoutSessionViewModel(
         val currentExerciseIndex: Int = 0,
         val currentSetIndex: Int = 0,
         val phase: Phase = Phase.EXERCISE,
-        val restSecondsRemaining: Int = 0,
+        val restDurationSeconds: Int = 0,
         val currentWeight: Double = 0.0,
         val currentReps: Int = 12,
         val completedSets: List<CompletedSet> = emptyList(),
         val isFinished: Boolean = false,
-        val sessionDurationSeconds: Int = 0,
         val isSubmitting: Boolean = false,
         val submitError: String? = null,
         val isSubmitted: Boolean = false,
@@ -63,23 +60,24 @@ class WorkoutSessionViewModel(
         val totalSets: Int get() = currentExercise?.sets ?: 0
         val displaySetNumber: Int get() = currentSetIndex + 1
         val totalExercises: Int get() = session.exercises.size
+        val requiresWeight: Boolean get() = currentExercise?.weightKg != null
     }
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private val sessionStartedAtEpochMillis = Clock.System.now().toEpochMilliseconds()
 
     private val _state = MutableStateFlow(
-        State(
-            sessionId = sessionIdSeed,
-            session = session,
-            currentWeight = session.exercises.firstOrNull()?.weightKg ?: 60.0,
-            currentReps = session.exercises.firstOrNull()?.reps ?: 12,
-        ),
+        run {
+            val firstEx = session.exercises.firstOrNull()
+            State(
+                sessionId = sessionIdSeed,
+                session = session,
+                currentWeight = firstEx?.setWeightsKg?.getOrNull(0) ?: firstEx?.weightKg ?: 0.0,
+                currentReps = firstEx?.reps ?: 12,
+            )
+        },
     )
     val state: StateFlow<State> = _state.asStateFlow()
-
-    private var restTimerJob: Job? = null
-    private var durationJob: Job? = null
 
     init {
         // Persist the session metadata up-front so that the rows we write per
@@ -91,21 +89,9 @@ class WorkoutSessionViewModel(
             name = session.planName,
             startedAtEpochMillis = sessionStartedAtEpochMillis,
         )
-        startDurationTimer()
     }
 
-    private fun startDurationTimer() {
-        durationJob = scope.launch {
-            while (true) {
-                delay(1000)
-                _state.value = _state.value.copy(
-                    sessionDurationSeconds = _state.value.sessionDurationSeconds + 1,
-                )
-            }
-        }
-    }
-
-    fun completeSet() {
+    fun completeSet(elapsedSeconds: Int) {
         val current = _state.value
         val newSet = CompletedSet(
             exerciseIndex = current.currentExerciseIndex,
@@ -130,7 +116,6 @@ class WorkoutSessionViewModel(
 
         if (isLastSet && isLastExercise) {
             _state.value = current.copy(completedSets = updatedSets, isFinished = true)
-            durationJob?.cancel()
             submitWorkout()
             return
         }
@@ -138,28 +123,20 @@ class WorkoutSessionViewModel(
         _state.value = current.copy(
             completedSets = updatedSets,
             phase = Phase.REST,
-            restSecondsRemaining = current.session.restSeconds,
+            restDurationSeconds = current.session.restSeconds,
         )
-        startRestTimer()
     }
 
-    private fun startRestTimer() {
-        restTimerJob?.cancel()
-        restTimerJob = scope.launch {
-            while (true) {
-                delay(1000)
-                val current = _state.value.restSecondsRemaining
-                if (current <= 0) break
-                _state.value = _state.value.copy(restSecondsRemaining = current - 1)
-            }
-            if (_state.value.restSecondsRemaining <= 0) {
-                advanceToNextSet()
-            }
-        }
+    /**
+     * Called by the native platform when the rest countdown reaches zero.
+     * No-op if not currently in the rest phase.
+     */
+    fun restComplete() {
+        if (_state.value.phase != Phase.REST) return
+        advanceToNextSet()
     }
 
     fun skipRest() {
-        restTimerJob?.cancel()
         advanceToNextSet()
     }
 
@@ -172,11 +149,10 @@ class WorkoutSessionViewModel(
      * check `repsActual == 0 && weightActual == 0.0`. The persisted DB row
      * carries the explicit `completed = false` flag for downstream analytics.
      *
-     * If invoked during the rest phase, the rest timer is cancelled before
-     * advancing so the UI immediately moves to the next exercise/set.
+     * If invoked during the rest phase, the method advances immediately
+     * so the UI moves to the next exercise/set.
      */
     fun skipSet() {
-        restTimerJob?.cancel()
         val current = _state.value
         val skippedSet = CompletedSet(
             exerciseIndex = current.currentExerciseIndex,
@@ -204,7 +180,6 @@ class WorkoutSessionViewModel(
                 completedSets = current.completedSets + skippedSet,
                 isFinished = true,
             )
-            durationJob?.cancel()
             submitWorkout()
             return
         }
@@ -214,12 +189,8 @@ class WorkoutSessionViewModel(
     }
 
     fun adjustRest(deltaSeconds: Int) {
-        val newVal = (_state.value.restSecondsRemaining + deltaSeconds).coerceAtLeast(5)
-        _state.value = _state.value.copy(restSecondsRemaining = newVal)
-        // Restart timer so it picks up the new value from state
-        if (_state.value.phase == Phase.REST) {
-            startRestTimer()
-        }
+        val newDuration = (_state.value.restDurationSeconds + deltaSeconds).coerceAtLeast(5)
+        _state.value = _state.value.copy(restDurationSeconds = newDuration)
     }
 
     private fun advanceToNextSet() {
@@ -234,13 +205,18 @@ class WorkoutSessionViewModel(
                 phase = Phase.EXERCISE,
                 currentExerciseIndex = nextIndex,
                 currentSetIndex = 0,
-                currentWeight = nextExercise?.weightKg ?: current.currentWeight,
+                currentWeight = nextExercise?.setWeightsKg?.getOrNull(0)
+                    ?: nextExercise?.weightKg
+                    ?: 0.0,
                 currentReps = nextExercise?.reps ?: current.currentReps,
             )
         } else {
             _state.value = current.copy(
                 phase = Phase.EXERCISE,
                 currentSetIndex = current.currentSetIndex + 1,
+                currentWeight = exercise.setWeightsKg?.getOrNull(current.currentSetIndex + 1)
+                    ?: exercise.weightKg
+                    ?: current.currentWeight,
             )
         }
     }
@@ -255,11 +231,50 @@ class WorkoutSessionViewModel(
         _state.value = _state.value.copy(currentReps = newReps)
     }
 
-    /**
-     * Re-attempts the backend submit when a previous attempt failed. Safe to
-     * call from a "retry" UI affordance because [submitWorkout] guards
-     * against parallel/duplicate submissions.
-     */
+    fun cancelWorkout(totalDurationSeconds: Int) {
+        val current = _state.value
+        if (current.isFinished) return
+
+        val finishedAtMillis = Clock.System.now().toEpochMilliseconds()
+        runCatching { localRepository.markSessionFinishedWithStatus(current.sessionId, finishedAtMillis, "CANCELLED") }
+
+        _state.update { it.copy(isFinished = true) }
+
+        val pendingSession = localRepository.getSession(current.sessionId) ?: return
+        val pendingSets = localRepository.getSetsForSession(current.sessionId)
+
+        _state.update { it.copy(isSubmitting = true, submitError = null) }
+
+        scope.launch {
+            val request = SubmitWorkoutSessionRequest(
+                name = pendingSession.name,
+                workoutPlanDayId = pendingSession.planDayId,
+                startedAt = pendingSession.startedAt,
+                finishedAt = finishedAtMillis,
+                status = "CANCELLED",
+                sets = pendingSets.map { set ->
+                    SubmitSessionSetItem(
+                        exerciseId = set.exerciseId,
+                        setNumber = set.setNumber,
+                        reps = set.reps,
+                        weightKg = set.weightKg,
+                        completed = set.completed,
+                        durationSeconds = set.durationSeconds,
+                    )
+                },
+            )
+            workoutApi.submitSession(request).fold(
+                onSuccess = {
+                    runCatching { localRepository.clearSession(current.sessionId) }
+                    _state.update { it.copy(isSubmitting = false, isSubmitted = true) }
+                },
+                onFailure = {
+                    _state.update { it.copy(isSubmitting = false, submitError = "Не удалось сохранить.") }
+                },
+            )
+        }
+    }
+
     fun retrySubmit() {
         if (!_state.value.isFinished) return
         if (_state.value.isSubmitting || _state.value.isSubmitted) return
@@ -302,6 +317,14 @@ class WorkoutSessionViewModel(
         val pendingSession = localRepository.getSession(current.sessionId) ?: return
         val pendingSets = localRepository.getSetsForSession(current.sessionId)
 
+        // Stamp the row as finished BEFORE we kick off the submit so that:
+        //  (a) a process death between here and a successful POST still leaves
+        //      the row eligible for retry by [PendingSessionUploader], and
+        //  (b) the timestamp posted to the backend matches the one we just
+        //      committed to local storage.
+        val finishedAtMillis = Clock.System.now().toEpochMilliseconds()
+        runCatching { localRepository.markSessionFinished(current.sessionId, finishedAtMillis) }
+
         _state.update { it.copy(isSubmitting = true, submitError = null) }
 
         scope.launch {
@@ -309,7 +332,7 @@ class WorkoutSessionViewModel(
                 name = pendingSession.name,
                 workoutPlanDayId = pendingSession.planDayId,
                 startedAt = pendingSession.startedAt,
-                finishedAt = Clock.System.now().toEpochMilliseconds(),
+                finishedAt = finishedAtMillis,
                 status = "COMPLETED",
                 sets = pendingSets.map { set ->
                     SubmitSessionSetItem(

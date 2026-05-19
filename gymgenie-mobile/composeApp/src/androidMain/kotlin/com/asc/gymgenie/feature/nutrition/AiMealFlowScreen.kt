@@ -40,7 +40,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
@@ -65,7 +64,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
@@ -73,16 +75,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.BackHandler
 import com.asc.gymgenie.nutrition.AiMealChatMessage
 import com.asc.gymgenie.nutrition.AiMealFlowStep
 import com.asc.gymgenie.nutrition.AiMealProfileData
 import com.asc.gymgenie.nutrition.AiMealViewModel
 import com.asc.gymgenie.nutrition.MealGoal
+import com.asc.gymgenie.ui.components.GymGenieToolbar
 import com.asc.gymgenie.ui.theme.Coral
 import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.WarmOffWhite
+import com.asc.gymgenie.R
+import kotlin.math.roundToInt
 import org.koin.core.context.GlobalContext
 
 // Local palette — mirrors `AiFlowScreen.kt` so the meal flow has the same
@@ -120,6 +127,14 @@ fun AiMealFlowScreen(
     DisposableEffect(Unit) { onDispose { viewModel.onCleared() } }
 
     val state by viewModel.state.collectAsState()
+
+    BackHandler(enabled = state.step != AiMealFlowStep.CHOOSE) {
+        if (state.step == AiMealFlowStep.PROFILE) {
+            onDismiss()
+        } else {
+            viewModel.goBack()
+        }
+    }
 
     // Re-pull the cached profile every time the surface is shown — guards
     // against a returning user whose profile loaded *after* the VM was
@@ -296,17 +311,20 @@ private fun ProfileScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(MealOffWhite)
-            .statusBarsPadding()
             .navigationBarsPadding(),
     ) {
-        FlowHeader(title = "Рацион на день", onBack = onBack)
+        GymGenieToolbar(
+            title = "Рацион на день",
+            showBackNavigation = true,
+            onBackClick = onBack,
+        )
         Column(
             modifier = Modifier
                 .weight(1f)
                 .padding(horizontal = 20.dp),
         ) {
             Spacer(Modifier.height(8.dp))
-            Text("Ваши параметры", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = DeepInk)
+            Text("Ваши параметры", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = DeepInk)
             Spacer(Modifier.height(24.dp))
             SliderField(label = "Возраст", value = profile.age, min = 15, max = 80, onChange = onAge)
             SliderField(label = "Рост (см)", value = profile.height, min = 140, max = 220, onChange = onHeight)
@@ -324,7 +342,6 @@ private fun SliderField(
     max: Int,
     onChange: (Int) -> Unit,
 ) {
-    val density = LocalDensity.current
     var trackWidthPx by remember { mutableFloatStateOf(1f) }
     var accumulatedOffset by remember { mutableFloatStateOf(0f) }
     val pct = if (max > min) (value - min).toFloat() / (max - min) else 0f
@@ -348,7 +365,7 @@ private fun SliderField(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Bottom,
         ) {
-            Text(label, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Color(0xFF555555))
+            Text(label, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF555555))
             if (isEditing) {
                 BasicTextField(
                     value = inputText,
@@ -414,29 +431,31 @@ private fun SliderField(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(4.dp)
+                    .height(6.dp)
                     .align(Alignment.Center)
-                    .clip(RoundedCornerShape(2.dp))
+                    .clip(RoundedCornerShape(3.dp))
                     .background(MealBorderGray),
             )
             Box(
                 modifier = Modifier
                     .fillMaxWidth(pct)
-                    .height(4.dp)
+                    .height(6.dp)
                     .align(Alignment.CenterStart)
-                    .clip(RoundedCornerShape(2.dp))
+                    .clip(RoundedCornerShape(3.dp))
                     .background(Coral),
             )
             Box(
                 modifier = Modifier
-                    .size(20.dp)
                     .align(Alignment.CenterStart)
-                    .then(
-                        with(density) {
-                            val offset = ((pct * (trackWidthPx - 20.dp.toPx()))).toDp()
-                            Modifier.padding(start = offset.coerceAtLeast(0.dp))
-                        },
-                    )
+                    .offset {
+                        val thumbPx = 24.dp.toPx()
+                        IntOffset(
+                            x = (pct * (trackWidthPx - thumbPx)).roundToInt().coerceAtLeast(0),
+                            y = 0,
+                        )
+                    }
+                    .size(24.dp)
+                    .border(2.5.dp, Color.White, CircleShape)
                     .clip(CircleShape)
                     .background(Coral),
             )
@@ -444,8 +463,8 @@ private fun SliderField(
 
         Spacer(Modifier.height(4.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(min.toString(), fontSize = 11.sp, color = Color(0xFFAAAAAA))
-            Text(max.toString(), fontSize = 11.sp, color = Color(0xFFAAAAAA))
+            Text(min.toString(), fontSize = 13.sp, color = Color(0xFFAAAAAA))
+            Text(max.toString(), fontSize = 13.sp, color = Color(0xFFAAAAAA))
         }
     }
 }
@@ -494,17 +513,20 @@ private fun GoalScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(MealOffWhite)
-            .statusBarsPadding()
             .navigationBarsPadding(),
     ) {
-        FlowHeader(title = "Рацион на день", onBack = onBack)
+        GymGenieToolbar(
+            title = "Рацион на день",
+            showBackNavigation = true,
+            onBackClick = onBack,
+        )
         Column(
             modifier = Modifier
                 .weight(1f)
                 .padding(horizontal = 20.dp),
         ) {
             Spacer(Modifier.height(8.dp))
-            Text("Ваша цель", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = DeepInk)
+            Text("Ваша цель", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = DeepInk)
             Spacer(Modifier.height(24.dp))
             goalOptions.forEach { option ->
                 GoalCard(
@@ -542,9 +564,9 @@ private fun GoalCard(
         Text(option.emoji, fontSize = 28.sp)
         Spacer(Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(option.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = DeepInk)
+            Text(option.title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = DeepInk)
             Spacer(Modifier.height(4.dp))
-            Text(option.subtitle, fontSize = 12.sp, color = MealMutedGray)
+            Text(option.subtitle, fontSize = 14.sp, color = MealMutedGray)
         }
         if (isSelected) {
             Box(
@@ -585,7 +607,6 @@ private fun RestrictionsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(MealOffWhite)
-            .statusBarsPadding()
             .navigationBarsPadding()
             .imePadding()
             // Tap on any non-interactive area (paddings, labels, screen
@@ -599,7 +620,15 @@ private fun RestrictionsScreen(
                 }
             },
     ) {
-        FlowHeader(title = "Рацион на день", onBack = onBack)
+        GymGenieToolbar(
+            title = "Рацион на день",
+            showBackNavigation = true,
+            onBackClick = {
+                focusManager.clearFocus()
+                keyboardController?.hide()
+                onBack()
+            },
+        )
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -608,14 +637,14 @@ private fun RestrictionsScreen(
             Spacer(Modifier.height(8.dp))
             Text(
                 "Ограничения и аллергии",
-                fontSize = 22.sp,
+                fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 color = DeepInk,
             )
             Spacer(Modifier.height(4.dp))
             Text(
                 "Можно оставить пустым",
-                fontSize = 13.sp,
+                fontSize = 15.sp,
                 color = MealMutedGray,
             )
             Spacer(Modifier.height(24.dp))
@@ -651,7 +680,7 @@ private fun TextEditorField(
     Column {
         Text(
             label,
-            fontSize = 14.sp,
+            fontSize = 16.sp,
             fontWeight = FontWeight.Medium,
             color = Color(0xFF555555),
         )
@@ -659,7 +688,7 @@ private fun TextEditorField(
         BasicTextField(
             value = value,
             onValueChange = onChange,
-            textStyle = TextStyle(fontSize = 14.sp, color = DeepInk),
+            textStyle = TextStyle(fontSize = 16.sp, color = DeepInk),
             cursorBrush = SolidColor(Coral),
             modifier = Modifier
                 .fillMaxWidth()
@@ -675,7 +704,7 @@ private fun TextEditorField(
                 .padding(14.dp),
             decorationBox = { inner ->
                 if (value.isEmpty()) {
-                    Text(placeholder, fontSize = 14.sp, color = Color(0xFFAAAAAA))
+                    Text(placeholder, fontSize = 16.sp, color = Color(0xFFAAAAAA))
                 }
                 inner()
             },
@@ -717,11 +746,18 @@ private fun ChatScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(MealOffWhite)
-            .statusBarsPadding()
             .navigationBarsPadding()
             .imePadding(),
     ) {
-        FlowHeader(title = "AI Нутрициолог", onBack = onBack)
+        GymGenieToolbar(
+            title = "AI диетолог",
+            showBackNavigation = true,
+            onBackClick = {
+                focusManager.clearFocus()
+                keyboardController?.hide()
+                onBack()
+            },
+        )
 
         LazyColumn(
             state = listState,
@@ -747,23 +783,22 @@ private fun ChatScreen(
                             .padding(top = 40.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        Text("🥗", fontSize = 64.sp)
-                        Spacer(Modifier.height(20.dp))
+                        Image(
+                            painter = painterResource(R.drawable.ic_chatbot_preview),
+                            contentDescription = null,
+                            contentScale = ContentScale.FillWidth,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 32.dp),
+                        )
+                        Spacer(Modifier.height(16.dp))
                         Text(
-                            "Опишите, какой рацион вы хотите получить",
+                            "Опишите какой рацион вы хотите получить",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = DeepInk,
+                            color = Color(0xFFAAAAAA),
                             textAlign = TextAlign.Center,
                             lineHeight = 24.sp,
-                            modifier = Modifier.padding(horizontal = 32.dp),
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "Например: «1700 ккал, без молочного, без глютена»",
-                            fontSize = 13.sp,
-                            color = MealMutedGray,
-                            textAlign = TextAlign.Center,
                             modifier = Modifier.padding(horizontal = 32.dp),
                         )
                     }
@@ -935,34 +970,6 @@ private fun TypingBubble() {
 // ---------------------------------------------------------------------------
 // Shared in-flow controls
 // ---------------------------------------------------------------------------
-
-@Composable
-private fun FlowHeader(title: String, onBack: () -> Unit) {
-    val focusManager = LocalFocusManager.current
-    val keyboardController = LocalSoftwareKeyboardController.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 4.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(onClick = {
-            // Going back must drop the keyboard so it doesn't linger over
-            // the previous step or the destination screen mid-transition.
-            focusManager.clearFocus()
-            keyboardController?.hide()
-            onBack()
-        }) {
-            Icon(
-                Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Назад",
-                tint = DeepInk,
-            )
-        }
-        Spacer(Modifier.width(4.dp))
-        Text(title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = DeepInk)
-    }
-}
 
 @Composable
 private fun PrimaryButton(

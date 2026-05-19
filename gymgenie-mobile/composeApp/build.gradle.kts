@@ -20,6 +20,8 @@ kotlin {
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.androidx.activity.compose)
             implementation(libs.androidx.datastore.preferences)
+            implementation(libs.androidx.appcompat)
+            implementation(libs.androidx.splashscreen)
             implementation(libs.koin.android)
             implementation(libs.essenty.lifecycle)
             implementation(libs.essenty.backhandler)

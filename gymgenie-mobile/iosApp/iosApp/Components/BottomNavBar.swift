@@ -30,21 +30,7 @@ struct BottomNavBar: View {
             // 1 — Frosted backdrop
             glassBackdrop
 
-            // 2 — Top sheen
-            topSheen
-                .frame(height: Self.barHeight * 0.45)
-                .frame(maxHeight: .infinity, alignment: .top)
-                .clipShape(
-                    UnevenRoundedRectangle(
-                        topLeadingRadius: Self.cornerRadius,
-                        bottomLeadingRadius: 0,
-                        bottomTrailingRadius: 0,
-                        topTrailingRadius: Self.cornerRadius
-                    )
-                )
-                .allowsHitTesting(false)
-
-            // 3 — Coral indicator pill (slides smoothly, no bounce)
+            // 2 — Coral indicator pill (slides smoothly, no bounce)
             Capsule()
                 .fill(Palette.coral)
                 .frame(width: Self.itemWidth, height: Self.itemHeight)
@@ -76,22 +62,11 @@ struct BottomNavBar: View {
 
     private var glassBackdrop: some View {
         ZStack {
-            Capsule().fill(.ultraThinMaterial)
             Capsule().fill(Palette.neutrals400.opacity(0.35))
             Capsule().strokeBorder(Color.white.opacity(0.45), lineWidth: 0.8)
         }
     }
 
-    private var topSheen: some View {
-        LinearGradient(
-            stops: [
-                .init(color: Color.white.opacity(0.30), location: 0.0),
-                .init(color: Color.white.opacity(0.0), location: 1.0),
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-    }
 }
 
 // MARK: - Item view

@@ -42,7 +42,8 @@ class ExerciseEntity(
     @Column(nullable = false)
     var difficultyLevel: DifficultyLevel,
 
-    var durationMinutes: Int? = null,
+    @Column(name = "seconds_per_10_reps")
+    var secondsPer10Reps: Int? = null,
 
     var caloriesBurned: Int? = null,
 

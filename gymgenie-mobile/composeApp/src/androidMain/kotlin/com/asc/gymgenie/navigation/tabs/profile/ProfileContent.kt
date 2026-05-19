@@ -9,6 +9,8 @@ import com.arkivanov.decompose.extensions.compose.stack.Children
 import com.arkivanov.decompose.extensions.compose.stack.animation.slide
 import com.arkivanov.decompose.extensions.compose.stack.animation.stackAnimation
 import com.asc.gymgenie.feature.paywall.PaywallScreen
+import com.asc.gymgenie.feature.workout_history.HistorySummaryScreen
+import com.asc.gymgenie.feature.workout_history.WorkoutHistoryScreen
 import com.asc.gymgenie.feature.profile.EditExperienceScreen
 import com.asc.gymgenie.feature.profile.EditHealthScreen
 import com.asc.gymgenie.feature.profile.EditMetricsScreen
@@ -26,10 +28,11 @@ fun ProfileContent(
             stack = component.stack,
             animation = stackAnimation(slide()),
         ) { child ->
-            when (child.instance) {
+            when (val instance = child.instance) {
                 ProfileComponent.Child.Main -> ProfileScreen(
                     onOpenEditProfile = component::openEditProfile,
                     onOpenPaywall = component::openPaywall,
+                    onOpenHistory = component::openHistory,
                 )
 
                 ProfileComponent.Child.EditProfile -> EditProfileScreen(
@@ -59,6 +62,16 @@ fun ProfileContent(
                 ProfileComponent.Child.Paywall -> PaywallScreen(
                     onPurchaseSuccess = component::pop,
                     onSkip = component::pop,
+                )
+
+                ProfileComponent.Child.History -> WorkoutHistoryScreen(
+                    onBack = component::pop,
+                    onSessionClick = component::openHistorySummary,
+                )
+
+                is ProfileComponent.Child.HistorySummary -> HistorySummaryScreen(
+                    session = instance.session,
+                    onBack = component::pop,
                 )
             }
         }

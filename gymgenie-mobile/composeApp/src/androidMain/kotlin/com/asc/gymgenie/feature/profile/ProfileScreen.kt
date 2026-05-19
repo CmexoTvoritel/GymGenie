@@ -63,6 +63,7 @@ private val ProfileVersionTextColor = Color(0xFFB5B5BD)
 fun ProfileScreen(
     onOpenEditProfile: () -> Unit,
     onOpenPaywall: () -> Unit,
+    onOpenHistory: () -> Unit = {},
 ) {
     val koin = remember { GlobalContext.get() }
     val userProfileStore = remember { koin.get<UserProfileStore>() }
@@ -172,7 +173,7 @@ fun ProfileScreen(
                     SettingsRow(
                         label = "Статистика",
                         icon = Icons.Filled.BarChart,
-                        onClick = {},
+                        onClick = onOpenHistory,
                     )
                 }
 

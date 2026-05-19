@@ -1,143 +1,137 @@
 import SwiftUI
 import Shared
 
-// MARK: - Root container
-
 struct AiCoachView: View {
+    @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var profileStore: UserProfileStoreWrapper
+    @EnvironmentObject private var tabBarState: TabBarState
     @StateObject private var vm = AiViewModelWrapper()
-    @State private var previousStepIndex: Int32 = 0
+
+    @State private var showProfile = false
+    @State private var showExperience = false
+    @State private var showHealth = false
+    @State private var showChat = false
+
+    private var isPremium: Bool {
+        guard let sub = profileStore.profile?.subscriptionType else { return false }
+        return sub != "FREE"
+    }
 
     var body: some View {
         ZStack {
             Palette.warmOffWhite.ignoresSafeArea()
-            content
+            if isPremium {
+                AiChooseScreen(onNext: {
+                    vm.goTo(step: .profile)
+                    showProfile = true
+                })
+            } else {
+                PremiumLockedOverlay(onUnlock: { appState.navigate(to: .paywall) })
+            }
         }
-        .animation(.easeInOut(duration: 0.3), value: vm.step.index)
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             if let profile = profileStore.profile {
                 vm.prefillProfile(profile)
             }
         }
-        // Tracks profile identity (id) so a re-login or fresh profile load
-        // re-triggers the pre-fill exactly once. The wrapper itself guards
-        // against overwriting user edits.
         .onChange(of: profileStore.profile?.id) { _ in
             if let profile = profileStore.profile {
                 vm.prefillProfile(profile)
             }
         }
-    }
-
-    private func transition(for step: AiFlowStep) -> AnyTransition {
-        let forward = step.index >= previousStepIndex
-        return .asymmetric(
-            insertion: .move(edge: forward ? .trailing : .leading),
-            removal: .move(edge: forward ? .leading : .trailing)
-        )
-    }
-
-    @ViewBuilder
-    private var content: some View {
-        switch vm.step {
-        case .choose:
-            AiChooseScreen {
-                previousStepIndex = vm.step.index
-                vm.goTo(step: .profile)
+        .onChange(of: showProfile) { showing in
+            if !showing {
+                showExperience = false
+                showHealth = false
+                showChat = false
+                vm.reset()
             }
-            .transition(transition(for: .choose))
-        case .profile:
+            tabBarState.isVisible = !showing
+        }
+        .onChange(of: showExperience) { showing in
+            if !showing {
+                showHealth = false
+                showChat = false
+            }
+        }
+        .onChange(of: showHealth) { showing in
+            if !showing {
+                showChat = false
+            }
+        }
+        .navigationDestination(isPresented: $showProfile) {
             AiProfileScreen(
                 profile: vm.profile,
-                onBack: {
-                    previousStepIndex = vm.step.index
-                    vm.goBack()
-                },
+                onBack: { showProfile = false },
                 onNext: {
-                    previousStepIndex = vm.step.index
                     vm.goTo(step: .experience)
+                    showExperience = true
                 },
                 onAge: { vm.setAge($0) },
                 onHeight: { vm.setHeight($0) },
                 onWeight: { vm.setWeight($0) }
             )
-            .transition(transition(for: .profile))
-        case .experience:
-            AiExperienceScreen(
-                profile: vm.profile,
-                onBack: {
-                    previousStepIndex = vm.step.index
-                    vm.goBack()
-                },
-                onNext: {
-                    previousStepIndex = vm.step.index
-                    vm.goTo(step: .health)
-                },
-                onExperience: { vm.setExperience($0) },
-                onFrequency: { vm.setFrequency($0) }
-            )
-            .transition(transition(for: .experience))
-        case .health:
-            AiHealthScreen(
-                profile: vm.profile,
-                onBack: {
-                    previousStepIndex = vm.step.index
-                    vm.goBack()
-                },
-                onNext: {
-                    previousStepIndex = vm.step.index
-                    vm.goTo(step: .chat)
-                },
-                onHasLimitations: { vm.setHasLimitations($0) },
-                onLimitationsDesc: { vm.setLimitationsDesc($0) }
-            )
-            .transition(transition(for: .health))
-        case .chat:
-            AiChatScreen(
-                messages: vm.messages,
-                isTyping: vm.isTyping,
-                hasWorkout: vm.hasWorkout,
-                savedPlanId: vm.savedPlanId,
-                isSaving: vm.isSaving,
-                isSaved: vm.isSaved,
-                errorMessage: vm.errorMessage,
-                onBack: {
-                    previousStepIndex = vm.step.index
-                    vm.goBack()
-                },
-                onSend: { vm.sendMessage($0) },
-                onSave: { vm.saveWorkout() }
-            )
-            .transition(transition(for: .chat))
-        default:
-            EmptyView()
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(isPresented: $showExperience) {
+                AiExperienceScreen(
+                    profile: vm.profile,
+                    onBack: { showExperience = false },
+                    onNext: {
+                        vm.goTo(step: .health)
+                        showHealth = true
+                    },
+                    onExperience: { vm.setExperience($0) },
+                    onFrequency: { vm.setFrequency($0) }
+                )
+                .toolbar(.hidden, for: .navigationBar)
+                .navigationDestination(isPresented: $showHealth) {
+                    AiHealthScreen(
+                        profile: vm.profile,
+                        onBack: { showHealth = false },
+                        onNext: {
+                            vm.goTo(step: .chat)
+                            showChat = true
+                        },
+                        onHasLimitations: { vm.setHasLimitations($0) },
+                        onLimitationsDesc: { vm.setLimitationsDesc($0) }
+                    )
+                    .toolbar(.hidden, for: .navigationBar)
+                    .navigationDestination(isPresented: $showChat) {
+                        AiChatScreen(
+                            messages: vm.messages,
+                            isTyping: vm.isTyping,
+                            hasWorkout: vm.hasWorkout,
+                            savedPlanId: vm.savedPlanId,
+                            isSaving: vm.isSaving,
+                            isSaved: vm.isSaved,
+                            errorMessage: vm.errorMessage,
+                            onBack: { showChat = false },
+                            onSend: { vm.sendMessage($0) },
+                            onSave: { vm.saveWorkout() }
+                        )
+                        .toolbar(.hidden, for: .navigationBar)
+                    }
+                }
+            }
         }
     }
 }
 
-// MARK: - Screen 1: Choose
-
 private struct AiChooseScreen: View {
     let onNext: () -> Void
 
-    /// Drives the full-screen presentation of the AI meal flow. Kept local
-    /// to this screen so the workout flow's `AiViewModelWrapper` doesn't
-    /// need to know about meal-flow navigation.
     @State private var showMealCoach = false
 
     var body: some View {
         VStack(spacing: 0) {
-            Text("AI")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(Palette.deepInk)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
+            GymGenieToolbar(title: "ИИ тренер")
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Spacer().frame(height: 40)
                     Text("Что вы хотите сгенерировать?")
-                        .font(.system(size: 22, weight: .bold))
+                        .font(.system(size: 24, weight: .bold))
                         .foregroundColor(Palette.deepInk)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)
@@ -167,9 +161,6 @@ private struct AiChooseScreen: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Palette.warmOffWhite)
-        // The meal flow lives in its own self-contained surface
-        // (`AiMealCoachView`) and inherits `profileStore` from the tab
-        // hierarchy via @EnvironmentObject — no explicit injection needed.
         .fullScreenCover(isPresented: $showMealCoach) {
             AiMealCoachView(onClose: { showMealCoach = false })
         }
@@ -187,12 +178,12 @@ private struct GenerateCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(emoji).font(.system(size: 28))
+            Text(emoji).font(.system(size: 30))
             Text(title)
-                .font(.system(size: 17, weight: .semibold))
+                .font(.system(size: 19, weight: .semibold))
                 .foregroundColor(Palette.deepInk)
             Text(subtitle)
-                .font(.system(size: 13))
+                .font(.system(size: 15))
                 .foregroundColor(Color(hex: "888888"))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -201,7 +192,7 @@ private struct GenerateCard: View {
         .cornerRadius(16)
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(pressed && enabled ? Palette.coral : Color(hex: "EEEEEE"), lineWidth: 2)
+                .stroke(pressed && enabled ? Palette.coral : Color(hex: "E0E0E0"), lineWidth: 2)
         )
         .scaleEffect(pressed && enabled ? 1.02 : 1.0)
         .opacity(enabled ? 1.0 : 0.45)
@@ -217,8 +208,6 @@ private struct GenerateCard: View {
     }
 }
 
-// MARK: - Screen 2: Profile
-
 private struct AiProfileScreen: View {
     let profile: AiProfileData
     let onBack: () -> Void
@@ -231,12 +220,19 @@ private struct AiProfileScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            FlowHeader(title: "План тренировки", onBack: onBack)
+            GymGenieToolbar(
+                title: "План тренировки",
+                showBackNavigation: true,
+                onBackTap: {
+                    dismissAiFlowKeyboard()
+                    onBack()
+                }
+            )
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Spacer().frame(height: 8)
                     Text("Введите данные профиля")
-                        .font(.system(size: 22, weight: .bold))
+                        .font(.system(size: 24, weight: .bold))
                         .foregroundColor(Palette.deepInk)
                         .padding(.horizontal, 20)
                     Spacer().frame(height: 24)
@@ -282,7 +278,7 @@ private struct SliderField: View {
         VStack(spacing: 0) {
             HStack(alignment: .bottom) {
                 Text(label)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 16, weight: .bold))
                     .foregroundColor(Color(hex: "555555"))
                 Spacer()
                 if isEditing {
@@ -317,15 +313,19 @@ private struct SliderField: View {
 
             GeometryReader { geo in
                 let w = geo.size.width
-                let thumbSize: CGFloat = 20
+                let thumbSize: CGFloat = 24
                 let thumbX = pct * (w - thumbSize)
 
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color(hex: "E0E0E0")).frame(height: 4)
+                    Capsule().fill(Color(hex: "E0E0E0")).frame(height: 6)
                     Capsule().fill(Palette.coral)
-                        .frame(width: Swift.max(0, thumbX + thumbSize / 2), height: 4)
+                        .frame(width: Swift.max(0, thumbX + thumbSize / 2), height: 6)
                     Circle()
                         .fill(Palette.coral)
+                        .overlay(
+                            Circle()
+                                .stroke(Color.white, lineWidth: 2.5)
+                        )
                         .shadow(color: Palette.coral.opacity(0.35), radius: 3)
                         .frame(width: thumbSize, height: thumbSize)
                         .offset(x: thumbX)
@@ -340,21 +340,19 @@ private struct SliderField: View {
                         }
                 )
             }
-            .frame(height: 20)
+            .frame(height: 24)
 
             Spacer().frame(height: 4)
             HStack {
-                Text("\(min)").font(.system(size: 11)).foregroundColor(Color(hex: "AAAAAA"))
+                Text("\(min)").font(.system(size: 13)).foregroundColor(Color(hex: "AAAAAA"))
                 Spacer()
-                Text("\(max)").font(.system(size: 11)).foregroundColor(Color(hex: "AAAAAA"))
+                Text("\(max)").font(.system(size: 13)).foregroundColor(Color(hex: "AAAAAA"))
             }
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 28)
     }
 }
-
-// MARK: - Screen 3: Experience
 
 private struct AiExperienceScreen: View {
     let profile: AiProfileData
@@ -367,19 +365,26 @@ private struct AiExperienceScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            FlowHeader(title: "План тренировки", onBack: onBack)
+            GymGenieToolbar(
+                title: "План тренировки",
+                showBackNavigation: true,
+                onBackTap: {
+                    dismissAiFlowKeyboard()
+                    onBack()
+                }
+            )
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Spacer().frame(height: 8)
                     Text("Ваш опыт")
-                        .font(.system(size: 22, weight: .bold))
+                        .font(.system(size: 24, weight: .bold))
                         .foregroundColor(Palette.deepInk)
                         .padding(.horizontal, 20)
                     Spacer().frame(height: 24)
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Как давно вы занимаетесь спортом?")
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(Color(hex: "555555"))
                         ChipGroup(
                             options: ["Давно", "Недавно", "Не занимался"],
@@ -392,7 +397,7 @@ private struct AiExperienceScreen: View {
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Как часто вы занимаетесь спортом?")
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(Color(hex: "555555"))
                         ChipGroup(
                             options: ["Часто", "Редко", "Не занимался"],
@@ -411,8 +416,6 @@ private struct AiExperienceScreen: View {
     }
 }
 
-// MARK: - Screen 4: Health
-
 private struct AiHealthScreen: View {
     let profile: AiProfileData
     let onBack: () -> Void
@@ -425,19 +428,26 @@ private struct AiHealthScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            FlowHeader(title: "План тренировки", onBack: onBack)
+            GymGenieToolbar(
+                title: "План тренировки",
+                showBackNavigation: true,
+                onBackTap: {
+                    dismissAiFlowKeyboard()
+                    onBack()
+                }
+            )
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Spacer().frame(height: 8)
                     Text("Здоровье")
-                        .font(.system(size: 22, weight: .bold))
+                        .font(.system(size: 24, weight: .bold))
                         .foregroundColor(Palette.deepInk)
                         .padding(.horizontal, 20)
                     Spacer().frame(height: 24)
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Есть ли у вас ограничения по здоровью?")
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(Color(hex: "555555"))
                         ChipGroup(
                             options: ["Да", "Нет"],
@@ -454,12 +464,12 @@ private struct AiHealthScreen: View {
                     if profile.hasLimitations == "Да" {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Опишите ваши ограничения")
-                                .font(.system(size: 14, weight: .medium))
+                                .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(Color(hex: "555555"))
                             ZStack(alignment: .topLeading) {
                                 if profile.limitationsDesc.isEmpty {
                                     Text("Например: грыжа позвоночника")
-                                        .font(.system(size: 14))
+                                        .font(.system(size: 16))
                                         .foregroundColor(Color(hex: "AAAAAA"))
                                         .padding(14)
                                         .allowsHitTesting(false)
@@ -468,7 +478,7 @@ private struct AiHealthScreen: View {
                                     get: { profile.limitationsDesc },
                                     set: onLimitationsDesc
                                 ))
-                                .font(.system(size: 14))
+                                .font(.system(size: 16))
                                 .foregroundColor(Palette.deepInk)
                                 .focused($textFocused)
                                 .frame(minHeight: 90)
@@ -488,9 +498,6 @@ private struct AiHealthScreen: View {
                         .animation(.easeInOut(duration: 0.25), value: profile.hasLimitations)
                     }
                 }
-                // Tapping any empty space in the scroll content (paddings,
-                // labels, gaps) clears focus from the TextEditor. Interactive
-                // children (ChipGroup, TextEditor) handle their own taps.
                 .contentShape(Rectangle())
                 .onTapGesture { textFocused = false }
             }
@@ -500,8 +507,6 @@ private struct AiHealthScreen: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
-
-// MARK: - Screen 5: Chat
 
 private struct AiChatScreen: View {
     let messages: [AiChatMessage]
@@ -518,10 +523,6 @@ private struct AiChatScreen: View {
     @State private var input: String = ""
     @FocusState private var inputFocused: Bool
 
-    /// Switches between insert and update copy. We rely on `savedPlanId` —
-    /// not `isSaved` — because once a plan is persisted the user keeps
-    /// iterating with the AI; every new message clears `isSaved` but the
-    /// saved id remains so subsequent saves overwrite the same plan.
     private var saveButtonTitle: String {
         if isSaving { return "Сохранение..." }
         return savedPlanId != nil ? "✓ Обновить тренировку" : "✓ Добавить тренировку"
@@ -529,7 +530,14 @@ private struct AiChatScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            FlowHeader(title: "AI Тренер", onBack: onBack)
+            GymGenieToolbar(
+                title: "AI Тренер",
+                showBackNavigation: true,
+                onBackTap: {
+                    dismissAiFlowKeyboard()
+                    onBack()
+                }
+            )
 
             ScrollViewReader { proxy in
                 ScrollView {
@@ -545,7 +553,7 @@ private struct AiChatScreen: View {
                                 Spacer().frame(height: 16)
                                 Text("Опишите какую тренировку вы хотите получить")
                                     .font(.system(size: 18, weight: .semibold))
-                                    .foregroundColor(Palette.deepInk)
+                                    .foregroundColor(Color(hex: "AAAAAA"))
                                     .multilineTextAlignment(.center)
                                     .padding(.horizontal, 32)
                             }
@@ -560,9 +568,6 @@ private struct AiChatScreen: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 8)
-                    // Tapping anywhere in the messages list (empty area or
-                    // around bubbles) clears focus from the input field.
-                    // Bubbles render as plain Text so they don't intercept.
                     .contentShape(Rectangle())
                     .onTapGesture { inputFocused = false }
                 }
@@ -585,9 +590,6 @@ private struct AiChatScreen: View {
 
             if hasWorkout && !isSaved {
                 Button(action: {
-                    // Saving may transition out of input mode (success card,
-                    // disabled state). Drop focus so the keyboard doesn't
-                    // float on top of the success state.
                     inputFocused = false
                     onSave()
                 }) {
@@ -596,7 +598,7 @@ private struct AiChatScreen: View {
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(isSaving ? Color.green.opacity(0.6) : Color.green)
+                        .background(isSaving ? Color(hex: "22C55E").opacity(0.6) : Color(hex: "22C55E"))
                         .cornerRadius(28)
                 }
                 .disabled(isSaving)
@@ -644,8 +646,6 @@ private struct AiChatScreen: View {
                 let canSend = !input.trimmingCharacters(in: .whitespaces).isEmpty && !isTyping
                 Button(action: {
                     guard canSend else { return }
-                    // Drop focus so the keyboard collapses on send. The user
-                    // can tap the field again to compose a follow-up.
                     inputFocused = false
                     let text = input
                     input = ""
@@ -722,37 +722,6 @@ private struct TypingBubbleView: View {
     }
 }
 
-// MARK: - Shared components
-
-private struct FlowHeader: View {
-    let title: String
-    let onBack: () -> Void
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Button(action: {
-                // Tapping back must always dismiss the keyboard so the user
-                // doesn't navigate away with a still-floating keyboard.
-                dismissAiFlowKeyboard()
-                onBack()
-            }) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(Palette.deepInk)
-                    .frame(width: 44, height: 44)
-            }
-            Text(title)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(Palette.deepInk)
-            Spacer()
-        }
-        .padding(.leading, 4)
-        .padding(.trailing, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 4)
-    }
-}
-
 private struct ChipGroup: View {
     let options: [String]
     let selected: String
@@ -763,7 +732,7 @@ private struct ChipGroup: View {
             ForEach(options, id: \.self) { opt in
                 let active = selected == opt
                 Text(opt)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(active ? .white : Palette.deepInk)
                     .padding(.horizontal, 18)
                     .padding(.vertical, 12)
@@ -774,8 +743,6 @@ private struct ChipGroup: View {
                             .stroke(active ? Palette.coral : Color(hex: "E0E0E0"), lineWidth: 2)
                     )
                     .onTapGesture {
-                        // Picking a chip should also clear focus from any
-                        // sibling text input (e.g. health limitations field).
                         dismissAiFlowKeyboard()
                         onSelect(opt)
                     }
@@ -793,8 +760,6 @@ private struct PrimaryButton: View {
 
     var body: some View {
         Button(action: {
-            // CTA fires after dismissing the keyboard so transitions out of
-            // the screen don't leave the keyboard hanging mid-animation.
             dismissAiFlowKeyboard()
             action()
         }) {
@@ -812,12 +777,6 @@ private struct PrimaryButton: View {
     }
 }
 
-// MARK: - Helpers
-
-/// File-scoped keyboard dismiss used by every shared control in the AI flow
-/// (chips, primary CTA, header back button, chat send/save). Resigns the
-/// current first responder so any focused TextEditor/TextField loses focus
-/// alongside the user's actual gesture target.
 fileprivate func dismissAiFlowKeyboard() {
     UIApplication.shared.sendAction(
         #selector(UIResponder.resignFirstResponder),

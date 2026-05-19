@@ -11,6 +11,7 @@ final class CreateWorkoutViewModelWrapper: ObservableObject {
     private let vm: Shared.CreateWorkoutViewModel
 
     @Published private(set) var workoutName: String = ""
+    @Published private(set) var workoutDescription: String = ""
     @Published private(set) var restSeconds: Int32 = Int32(Shared.CreateWorkoutLimits.shared.DEFAULT_REST_SECONDS)
     @Published private(set) var exercises: [Shared.PendingExercise] = []
     @Published private(set) var muscleGroups: [Shared.MuscleGroupInfo] = []
@@ -38,33 +39,17 @@ final class CreateWorkoutViewModelWrapper: ObservableObject {
                 guard let self = self else { break }
                 guard let state = self.vm.state.value as? Shared.CreateWorkoutUiState else { continue }
                 self.workoutName = state.workoutName
+                self.workoutDescription = state.description_
                 self.restSeconds = state.restSeconds
-                if let list = state.exercises as? [Shared.PendingExercise] {
-                    self.exercises = list
-                } else {
-                    self.exercises = (state.exercises as NSArray).compactMap { $0 as? Shared.PendingExercise }
-                }
-                if let list = state.muscleGroups as? [Shared.MuscleGroupInfo] {
-                    self.muscleGroups = list
-                } else {
-                    self.muscleGroups = (state.muscleGroups as NSArray).compactMap { $0 as? Shared.MuscleGroupInfo }
-                }
+                self.exercises = state.exercises as [Shared.PendingExercise]
+                self.muscleGroups = state.muscleGroups as [Shared.MuscleGroupInfo]
                 self.isMuscleGroupsLoading = state.isMuscleGroupsLoading
                 self.isMuscleGroupsLoaded = state.isMuscleGroupsLoaded
                 self.isSaving = state.isSaving
                 self.isSaved = state.isSaved
                 self.errorMessage = state.errorMessage
                 self.scheduleType = state.scheduleType
-                // Kotlin's `Set<String>` is bridged to Swift as `Set<AnyHashable>`;
-                // cast each element back to `String` so the view can compare with
-                // its own day-key constants without re-bridging on every read.
-                if let days = state.scheduleDays as? Set<String> {
-                    self.scheduleDays = days
-                } else {
-                    self.scheduleDays = Set(
-                        (state.scheduleDays as? Set<AnyHashable> ?? []).compactMap { $0 as? String }
-                    )
-                }
+                self.scheduleDays = state.scheduleDays as Set<String>
 
                 try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
             }
@@ -81,6 +66,10 @@ final class CreateWorkoutViewModelWrapper: ObservableObject {
         vm.setWorkoutName(name: name)
     }
 
+    func setDescription(_ description: String) {
+        vm.setDescription(description: description)
+    }
+
     func incrementRestSeconds() {
         vm.incrementRestSeconds()
     }
@@ -95,6 +84,23 @@ final class CreateWorkoutViewModelWrapper: ObservableObject {
 
     func removeExercise(at index: Int) {
         vm.removeExerciseAt(index: Int32(index))
+    }
+
+    func updateExercise(at index: Int, updated: Shared.PendingExercise) {
+        vm.updateExerciseAt(index: Int32(index), updated: updated)
+    }
+
+    func moveExercise(from: Int, to: Int) {
+        guard from != to,
+              exercises.indices.contains(from),
+              exercises.indices.contains(to)
+        else { return }
+        var reordered = exercises
+        let item = reordered.remove(at: from)
+        reordered.insert(item, at: to)
+        for (i, exercise) in reordered.enumerated() {
+            vm.updateExerciseAt(index: Int32(i), updated: exercise)
+        }
     }
 
     func saveWorkout() {

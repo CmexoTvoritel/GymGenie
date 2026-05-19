@@ -1,11 +1,6 @@
 import SwiftUI
 import Shared
 
-/// Swift-side bridge for [Shared.MealPlanDetailViewModel].
-///
-/// Owns the saved meal plan's id at construction time so the underlying KMM
-/// presenter does not need a separate "set id" intent. The view triggers
-/// `load()` on first appear; `retry()` re-runs the same fetch on demand.
 @MainActor
 final class MealPlanDetailViewModelWrapper: ObservableObject {
     private let vm: Shared.MealPlanDetailViewModel
@@ -13,6 +8,8 @@ final class MealPlanDetailViewModelWrapper: ObservableObject {
     @Published private(set) var isLoading: Bool = false
     @Published private(set) var plan: MealPlanDetail? = nil
     @Published private(set) var errorMessage: String? = nil
+    @Published private(set) var isDeleting: Bool = false
+    @Published private(set) var isDeleted: Bool = false
 
     private var observationTask: Task<Void, Never>?
 
@@ -32,6 +29,8 @@ final class MealPlanDetailViewModelWrapper: ObservableObject {
                     self.isLoading = state.isLoading
                     self.plan = state.plan
                     self.errorMessage = state.errorMessage
+                    self.isDeleting = state.isDeleting
+                    self.isDeleted = state.isDeleted
                 }
                 try? await Task.sleep(nanoseconds: 50_000_000)
             }
@@ -40,6 +39,7 @@ final class MealPlanDetailViewModelWrapper: ObservableObject {
 
     func load() { vm.load() }
     func retry() { vm.retry() }
+    func delete() { vm.delete() }
 
     deinit {
         observationTask?.cancel()

@@ -1,6 +1,7 @@
 package com.asc.gymgenie.feature.home.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,38 +36,46 @@ import com.asc.gymgenie.ui.theme.SoftCard
 fun HomeHeaderSection(
     username: String,
     date: String,
+    onNotificationsClick: () -> Unit = {},
+    onProfileClick: () -> Unit = {},
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Avatar(username = username)
-
-        Spacer(modifier = Modifier.width(12.dp))
-
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.Center,
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .clickable(onClick = onProfileClick),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = date,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Normal,
-                color = MutedText,
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Привет, $username!",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = DeepInk,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Avatar(username = username)
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text(
+                    text = date,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = MutedText,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Привет, $username!",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = DeepInk,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
 
         IconButton(
-            onClick = {},
+            onClick = onNotificationsClick,
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)

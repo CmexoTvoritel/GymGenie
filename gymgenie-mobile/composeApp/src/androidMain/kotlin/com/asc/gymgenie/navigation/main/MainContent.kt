@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
 import com.asc.gymgenie.feature.main.BottomNavBar
 import com.asc.gymgenie.feature.main.BottomNavItem
+import com.asc.gymgenie.feature.paywall.PaywallScreen
 import com.asc.gymgenie.feature.workout_session.WorkoutSessionScreen
 import com.asc.gymgenie.navigation.tabs.ai.AiContent
 import com.asc.gymgenie.navigation.tabs.home.HomeContent
@@ -43,6 +44,7 @@ fun MainContent(
 ) {
     val activeTab by component.activeTab.subscribeAsState()
     val sessionSlot by component.workoutSessionSlot.subscribeAsState()
+    val paywallSlotState by component.paywallSlot.subscribeAsState()
 
     val koin = remember { GlobalContext.get() }
     val workoutApi = remember { koin.get<WorkoutApi>() }
@@ -56,7 +58,7 @@ fun MainContent(
             coroutineScope.launch {
                 workoutApi.getPlanById(planId).fold(
                     onSuccess = { plan -> component.startWorkoutSession(plan.toActiveSession()) },
-                    onFailure = { /* keep current screen, allow retry */ },
+                    onFailure = { },
                 )
                 isLoadingSession = false
             }
@@ -65,7 +67,8 @@ fun MainContent(
 
     val activeSession = (sessionSlot.child?.instance as? MainComponent.WorkoutSessionChild.Active)
     val isSessionActive = activeSession != null
-    val showBottomBar = !isSessionActive && shouldShowBottomBar(component, activeTab)
+    val isPaywallActive = paywallSlotState.child?.instance is MainComponent.PaywallChild.Active
+    val showBottomBar = !isSessionActive && !isPaywallActive && shouldShowBottomBar(component, activeTab)
 
     Box(modifier = modifier.fillMaxSize().background(WarmOffWhite)) {
         Box(
@@ -80,12 +83,19 @@ fun MainContent(
             TabHost(visible = activeTab == MainTab.HOME) {
                 HomeContent(
                     component = component.homeComponent,
-                    onOpenWorkoutPlan = { plan -> component.workoutsComponent.openWorkoutDetail(plan.id) },
+                    onOpenWorkoutPlan = { plan -> component.homeComponent.openWorkoutDetail(plan.id) },
+                    onStartPlan = onStartPlan,
                     onSessionReady = component::startWorkoutSession,
+                    onOpenPaywall = component::openPaywall,
+                    onSwitchToProfile = { component.selectTab(MainTab.PROFILE) },
+                    onSwitchToWorkouts = { component.selectTab(MainTab.WORKOUTS) },
                 )
             }
             TabHost(visible = activeTab == MainTab.AI_COACH) {
-                AiContent(component = component.aiComponent)
+                AiContent(
+                    component = component.aiComponent,
+                    onOpenPaywall = component::openPaywall,
+                )
             }
             TabHost(visible = activeTab == MainTab.WORKOUTS) {
                 WorkoutsContent(
@@ -105,6 +115,13 @@ fun MainContent(
                 localRepository = localWorkoutRepository,
                 workoutApi = workoutApi,
                 onFinish = component::closeWorkoutSession,
+            )
+        }
+
+        if (isPaywallActive) {
+            PaywallScreen(
+                onPurchaseSuccess = component::closePaywall,
+                onSkip = component::closePaywall,
             )
         }
 
@@ -132,7 +149,10 @@ fun MainContent(
 @Composable
 private fun shouldShowBottomBar(component: MainComponent, tab: MainTab): Boolean {
     return when (tab) {
-        MainTab.AI_COACH -> true
+        MainTab.AI_COACH -> {
+            val aiShow by component.aiComponent.showBottomBar.subscribeAsState()
+            aiShow
+        }
         MainTab.HOME -> {
             val home by component.homeComponent.stack.subscribeAsState()
             home.items.size == 1
@@ -161,7 +181,7 @@ private fun TabHost(
                 .size(0.dp)
                 .clip(RoundedCornerShape(0.dp))
                 .clipToBounds()
-                .pointerInput(Unit) { /* swallow gestures */ }
+                .pointerInput(Unit) { }
         },
     ) {
         content()

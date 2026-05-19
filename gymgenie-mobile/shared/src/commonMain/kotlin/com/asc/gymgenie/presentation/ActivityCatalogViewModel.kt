@@ -2,6 +2,7 @@ package com.asc.gymgenie.presentation
 
 import com.asc.gymgenie.activity.ActivityApi
 import com.asc.gymgenie.activity.ActivityCatalogResponse
+import com.asc.gymgenie.activity.AddActivityToPlanRequest
 import com.asc.gymgenie.common.ApiException
 import com.asc.gymgenie.common.SessionManager
 import kotlinx.coroutines.CoroutineScope
@@ -79,10 +80,43 @@ class ActivityCatalogViewModel(
     }
 
     /**
-     * Toggles the plan membership of [activityId]. Updates local state
-     * optimistically and rolls back if the server call fails.
+     * Toggles the plan membership of [activityId] with the default "every
+     * day" schedule. Updates local state optimistically and rolls back if the
+     * server call fails.
      */
     fun togglePlan(activityId: String) {
+        togglePlanInternal(activityId, request = null)
+    }
+
+    /**
+     * Adds [activityId] to the plan with explicit schedule parameters.
+     * If the activity is already in the plan this behaves like a simple
+     * toggle-off (the schedule params are ignored on removal).
+     */
+    fun addToPlanWithSchedule(
+        activityId: String,
+        scheduleType: String?,
+        scheduleDays: List<String>?,
+        oneOffDate: String?,
+        goal: Int?,
+    ) {
+        val hasSchedule = scheduleType != null || scheduleDays != null
+                || oneOffDate != null || goal != null
+        val request = if (hasSchedule) {
+            AddActivityToPlanRequest(
+                scheduleType = scheduleType,
+                scheduleDays = scheduleDays,
+                oneOffDate = oneOffDate,
+                goal = goal,
+            )
+        } else null
+        togglePlanInternal(activityId, request)
+    }
+
+    private fun togglePlanInternal(
+        activityId: String,
+        request: AddActivityToPlanRequest?,
+    ) {
         val isInPlan = activityId in _state.value.planIds
         applyPlanFlag(activityId, addToPlan = !isInPlan)
 
@@ -90,7 +124,7 @@ class ActivityCatalogViewModel(
             val result = if (isInPlan) {
                 activityApi.removeFromPlan(activityId)
             } else {
-                activityApi.addToPlan(activityId)
+                activityApi.addToPlan(activityId, request)
             }
             result.onFailure { e ->
                 if (isUnauthorized(e)) {

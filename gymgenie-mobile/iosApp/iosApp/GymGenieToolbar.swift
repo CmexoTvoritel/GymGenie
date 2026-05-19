@@ -8,6 +8,7 @@ struct ToolbarAction {
 struct GymGenieToolbar: View {
     let title: String
     var showBackNavigation: Bool = false
+    var useCloseIcon: Bool = false
     var onBackTap: () -> Void = {}
     var actions: [ToolbarAction] = []
 
@@ -19,7 +20,7 @@ struct GymGenieToolbar: View {
             HStack(alignment: .center, spacing: 12) {
                 if showBackNavigation {
                     Button(action: onBackTap) {
-                        Image(systemName: "chevron.left")
+                        Image(systemName: useCloseIcon ? "xmark" : "chevron.left")
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundColor(titleColor)
                             .frame(width: 40, height: 40)

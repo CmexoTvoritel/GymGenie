@@ -51,6 +51,7 @@ internal fun ActivityCard(
     activity: ActivityTodayResponse,
     onCheckIn: (String, Int) -> Unit,
     onOpenPreset: () -> Unit,
+    onOpenScheduleSettings: (() -> Unit)? = null,
 ) {
     val progress = remember(activity) { activity.toProgress() }
     val ringColor = ringColorFor(activity.ring)
@@ -60,6 +61,10 @@ internal fun ActivityCard(
     val isPartial = !progress.isDone && progress.fraction > 0f
     val borderColor = if (progress.isDone) ringColor else ActivityCardBorder
     val titleColor = if (progress.isDone || isPartial) DeepInk else Color(0xFF5A5A62)
+
+    val scheduleLabel = remember(activity.scheduleType, activity.scheduleDays, activity.oneOffDate) {
+        formatScheduleLabel(activity)
+    }
 
     val cardShape = RoundedCornerShape(18.dp)
     val cardModifier = Modifier
@@ -103,6 +108,23 @@ internal fun ActivityCard(
                 isDone = progress.isDone,
                 ringColor = ringColor,
             )
+            if (scheduleLabel != null) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = scheduleLabel,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MutedText.copy(alpha = 0.7f),
+                    modifier = if (onOpenScheduleSettings != null) {
+                        Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable { onOpenScheduleSettings() }
+                            .padding(vertical = 2.dp)
+                    } else {
+                        Modifier.padding(vertical = 2.dp)
+                    },
+                )
+            }
         }
 
         Spacer(modifier = Modifier.width(12.dp))
@@ -278,4 +300,38 @@ internal fun toggleBinary(
         if (activity.inverse) 0 else 1
     }
     onCheckIn(activity.activityId, next)
+}
+
+private val backendDayToShort = mapOf(
+    "MONDAY" to "Пн",
+    "TUESDAY" to "Вт",
+    "WEDNESDAY" to "Ср",
+    "THURSDAY" to "Чт",
+    "FRIDAY" to "Пт",
+    "SATURDAY" to "Сб",
+    "SUNDAY" to "Вс",
+)
+
+/**
+ * Returns a short human-readable label for the activity's schedule, or null
+ * when the activity runs every day (the default — no indicator needed).
+ */
+private fun formatScheduleLabel(activity: ActivityTodayResponse): String? {
+    return when (activity.scheduleType) {
+        "RECURRING" -> {
+            if (activity.scheduleDays.isEmpty()) return null
+            val ordered = listOf("MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY")
+            val sorted = activity.scheduleDays.sortedBy { ordered.indexOf(it) }
+            sorted.mapNotNull { backendDayToShort[it] }.joinToString(" ")
+        }
+        "ONE_TIME" -> {
+            val raw = activity.oneOffDate ?: return null
+            runCatching {
+                val ld = java.time.LocalDate.parse(raw)
+                val fmt = java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale("ru"))
+                ld.format(fmt)
+            }.getOrDefault(raw)
+        }
+        else -> null
+    }
 }

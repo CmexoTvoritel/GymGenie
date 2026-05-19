@@ -1,16 +1,32 @@
 import SwiftUI
 import Shared
 
+/// Equal-height exercise tile used in the workouts list and the create-workout
+/// picker.
+///
+/// - `onTap`: primary action (select / navigate / filter).
+/// - `onLongPress`: optional long-press shortcut, typically used by the
+///   create-workout picker to surface the detail sheet without committing the
+///   selection.
+/// - `onInfoTap`: optional callback for the small "i" info badge floating in
+///   the top-right corner of the image area. When `nil`, the badge is hidden.
 struct ExerciseCard: View {
     let exercise: ExerciseShortResponse
     var onTap: () -> Void = {}
+    var onLongPress: (() -> Void)? = nil
+    var onInfoTap: (() -> Void)? = nil
 
     private let cardBorder = Color(red: 0.929, green: 0.929, blue: 0.937)
     private let imageBackground = Color(red: 0.973, green: 0.973, blue: 0.980)
     private let primaryText = Color(red: 0.039, green: 0.039, blue: 0.039)
     private let metaText = Color(red: 0.298, green: 0.298, blue: 0.325)
+    private let infoBadgeColor = Color(red: 0.941, green: 0.439, blue: 0.188) // accent orange
 
     var body: some View {
+        // The long-press gesture must be installed on a fully built view, so we
+        // capture the button once and attach the optional gesture afterwards.
+        // `_LongPressOptional` keeps the opaque return type stable regardless
+        // of whether the caller provided a handler.
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 0) {
                 imageSection
@@ -45,16 +61,52 @@ struct ExerciseCard: View {
             .shadow(color: Color.black.opacity(0.03), radius: 3, y: 1)
         }
         .buttonStyle(.plain)
+        .modifier(LongPressOptionalModifier(onLongPress: onLongPress))
+    }
+
+    /// View modifier that conditionally attaches `onLongPressGesture` without
+    /// branching on the opaque type, which would break `some View` inference.
+    private struct LongPressOptionalModifier: ViewModifier {
+        let onLongPress: (() -> Void)?
+        func body(content: Content) -> some View {
+            if let onLongPress = onLongPress {
+                content.onLongPressGesture(minimumDuration: 0.4, perform: onLongPress)
+            } else {
+                content
+            }
+        }
     }
 
     private var imageSection: some View {
-        ZStack {
+        // ZStack with topTrailing alignment so the optional info badge sits
+        // exactly in the corner of the image area without disturbing the
+        // emoji's centering or the card's natural aspect ratio.
+        ZStack(alignment: .topTrailing) {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(imageBackground)
 
             Text(Self.muscleGroupEmoji(exercise.muscleGroup))
                 .font(.system(size: 54))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            if let onInfoTap = onInfoTap {
+                Button(action: onInfoTap) {
+                    ZStack {
+                        Circle()
+                            .fill(infoBadgeColor)
+                            .frame(width: 28, height: 28)
+                            .shadow(color: Color.black.opacity(0.15), radius: 2, y: 1)
+                        Text("i")
+                            .font(.system(size: 14, weight: .bold, design: .serif))
+                            .italic()
+                            .foregroundColor(.white)
+                    }
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 8)
+                .padding(.trailing, 8)
+                .accessibilityLabel("Подробнее об упражнении")
+            }
         }
         .aspectRatio(1, contentMode: .fit)
         .frame(maxWidth: .infinity)

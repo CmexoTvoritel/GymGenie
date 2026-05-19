@@ -8,13 +8,16 @@ import com.arkivanov.decompose.router.stack.replaceAll
 import com.arkivanov.decompose.value.Value
 import com.arkivanov.essenty.lifecycle.doOnDestroy
 import com.asc.gymgenie.common.SessionManager
+import com.asc.gymgenie.common.clearBearerTokens
 import com.asc.gymgenie.navigation.main.DefaultMainComponent
 import com.asc.gymgenie.navigation.util.componentScope
 import com.asc.gymgenie.presentation.AuthViewModel
 import com.asc.gymgenie.presentation.CreateWorkoutViewModel
+import com.asc.gymgenie.presentation.HomeViewModel
 import com.asc.gymgenie.presentation.ProfileViewModel
 import com.asc.gymgenie.storage.TokenStorage
 import com.asc.gymgenie.user.UserProfileStore
+import io.ktor.client.HttpClient
 import kotlinx.coroutines.launch
 
 class DefaultRootComponent(
@@ -22,7 +25,9 @@ class DefaultRootComponent(
     private val tokenStorage: TokenStorage,
     private val userProfileStore: UserProfileStore,
     private val sessionManager: SessionManager,
+    private val httpClient: HttpClient,
     private val authViewModel: AuthViewModel,
+    private val homeViewModel: HomeViewModel,
     private val onboardingFlagReader: suspend () -> Boolean,
     private val onboardingFlagWriter: suspend (Boolean) -> Unit,
     private val createWorkoutViewModelProvider: () -> CreateWorkoutViewModel,
@@ -70,9 +75,11 @@ class DefaultRootComponent(
 
         scope.launch {
             sessionManager.logoutEvent.collect {
+                httpClient.clearBearerTokens()
                 tokenStorage.clearTokens()
                 userProfileStore.clear()
                 authViewModel.resetState()
+                homeViewModel.reset()
                 navigation.replaceAll(RootConfig.Login)
             }
         }
@@ -100,6 +107,7 @@ class DefaultRootComponent(
     }
 
     override fun onAuthSuccess() {
+        scope.launch { userProfileStore.load() }
         val isPremium = authViewModel.state.value.subscriptionType == "PREMIUM"
         navigation.replaceAll(if (isPremium) RootConfig.Main else RootConfig.Paywall)
     }

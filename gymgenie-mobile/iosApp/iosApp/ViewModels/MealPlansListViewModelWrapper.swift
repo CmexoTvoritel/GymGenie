@@ -1,11 +1,6 @@
 import SwiftUI
 import Shared
 
-/// Swift-side bridge for [Shared.MealPlansListViewModel].
-///
-/// Drives the saved meal plans list (`NutritionView`). The polling pattern
-/// matches the other wrappers in this project (50ms tick on the main actor)
-/// so the iOS app stays consistent with the workouts/AI flows.
 @MainActor
 final class MealPlansListViewModelWrapper: ObservableObject {
     private let vm: Shared.MealPlansListViewModel
@@ -41,11 +36,7 @@ final class MealPlansListViewModelWrapper: ObservableObject {
                     self.hasMore = state.hasMore
                     self.errorMessage = state.errorMessage
                     self.deletingPlanId = state.deletingPlanId
-                    if let list = state.plans as? [MealPlanShortInfo] {
-                        self.plans = list
-                    } else {
-                        self.plans = (state.plans as NSArray).compactMap { $0 as? MealPlanShortInfo }
-                    }
+                    self.plans = state.plans as [MealPlanShortInfo]
                 }
                 try? await Task.sleep(nanoseconds: 50_000_000)
             }

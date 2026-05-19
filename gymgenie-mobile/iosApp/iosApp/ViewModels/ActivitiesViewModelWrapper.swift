@@ -1,12 +1,6 @@
 import SwiftUI
 import Shared
 
-/// SwiftUI bridge over the KMM `ActivitiesViewModel`.
-///
-/// Mirrors the polling pattern used by `HomeViewModelWrapper`: a 50ms tick
-/// reads the latest `state.value` snapshot and republishes individual fields
-/// as `@Published` properties, so SwiftUI views can bind to them without
-/// dealing with `Any` casts on every read.
 @MainActor
 final class ActivitiesViewModelWrapper: ObservableObject {
     private let vm: Shared.ActivitiesViewModel
@@ -16,7 +10,16 @@ final class ActivitiesViewModelWrapper: ObservableObject {
     @Published private(set) var history: [ActivityHistoryDayResponse] = []
     @Published private(set) var isHistoryLoading: Bool = false
     @Published private(set) var error: String? = nil
+    @Published private(set) var isScheduleUpdating: Bool = false
+    @Published private(set) var scheduleUpdateError: String? = nil
     @Published private(set) var isLoggedOut: Bool = false
+    @Published private(set) var selectedDate: String = {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .iso8601)
+        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f.string(from: Date())
+    }()
 
     private var observationTask: Task<Void, Never>?
     private var logoutSubscription: SessionSubscription?
@@ -46,6 +49,9 @@ final class ActivitiesViewModelWrapper: ObservableObject {
                 self.history = state.history as [ActivityHistoryDayResponse]
                 self.isHistoryLoading = state.isHistoryLoading
                 self.error = state.error
+                self.selectedDate = state.selectedDate as String
+                self.isScheduleUpdating = state.isScheduleUpdating
+                self.scheduleUpdateError = state.scheduleUpdateError
 
                 try? await Task.sleep(nanoseconds: 50_000_000)
             }
@@ -60,6 +66,28 @@ final class ActivitiesViewModelWrapper: ObservableObject {
 
     func checkIn(activityId: String, value: Int) {
         vm.checkIn(activityId: activityId, value: Int32(value))
+    }
+
+    func selectDate(date: String) {
+        vm.selectDate(date: date)
+    }
+
+    func updateSchedule(
+        activityId: String,
+        scheduleType: String?,
+        scheduleDays: [String],
+        oneOffDate: String?
+    ) {
+        vm.updateSchedule(
+            activityId: activityId,
+            scheduleType: scheduleType,
+            scheduleDays: scheduleDays,
+            oneOffDate: oneOffDate
+        )
+    }
+
+    func clearScheduleUpdateError() {
+        vm.clearScheduleUpdateError()
     }
 
     deinit {

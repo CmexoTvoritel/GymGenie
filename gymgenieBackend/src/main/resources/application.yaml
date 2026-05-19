@@ -8,6 +8,13 @@ spring:
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
 
+  jackson:
+    datatype:
+      datetime:
+        write-dates-as-timestamps: false
+        write-date-timestamps-as-nanoseconds: false
+        read-date-timestamps-as-nanoseconds: false
+
   jpa:
     hibernate:
       ddl-auto: update

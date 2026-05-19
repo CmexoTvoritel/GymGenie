@@ -52,9 +52,6 @@ class DefaultMainComponent(
             profileViewModelProvider = profileViewModelProvider,
         )
 
-    // Session is intentionally not persisted (serializer = null): on process
-    // death the active workout overlay is silently dropped rather than
-    // restored into a stale state. The user resumes from the workout list.
     private val sessionNavigation = SlotNavigation<WorkoutSessionConfig>()
 
     override val workoutSessionSlot: Value<ChildSlot<*, MainComponent.WorkoutSessionChild>> =
@@ -67,19 +64,37 @@ class DefaultMainComponent(
             },
         )
 
+    private val paywallNavigation = SlotNavigation<PaywallConfig>()
+
+    override val paywallSlot: Value<ChildSlot<*, MainComponent.PaywallChild>> =
+        childSlot(
+            source = paywallNavigation,
+            key = "paywall_slot",
+            serializer = null,
+            handleBackButton = true,
+            childFactory = { _, _ ->
+                MainComponent.PaywallChild.Active
+            },
+        )
+
     override fun selectTab(tab: MainTab) {
-        // Standard "pop to root" on tab reselect — only reset the stack of the
-        // currently active tab when the user taps it again. Switching to a
-        // different tab preserves its existing back stack.
         if (_activeTab.value == tab) {
             when (tab) {
                 MainTab.HOME -> homeComponent.resetToMain()
                 MainTab.WORKOUTS -> workoutsComponent.resetToMain()
                 MainTab.PROFILE -> profileComponent.resetToMain()
-                MainTab.AI_COACH -> { /* leaf tab — no inner stack to reset */ }
+                MainTab.AI_COACH -> {}
             }
         }
         _activeTab.value = tab
+    }
+
+    override fun openPaywall() {
+        paywallNavigation.activate(PaywallConfig)
+    }
+
+    override fun closePaywall() {
+        paywallNavigation.dismiss()
     }
 
     override fun startWorkoutSession(session: ActiveWorkoutSession) {
@@ -91,4 +106,6 @@ class DefaultMainComponent(
     }
 
     private data class WorkoutSessionConfig(val session: ActiveWorkoutSession)
+
+    private data object PaywallConfig
 }

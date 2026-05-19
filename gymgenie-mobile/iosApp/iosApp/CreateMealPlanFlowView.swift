@@ -1,95 +1,102 @@
 import SwiftUI
 import Shared
 
-// MARK: - Root container
-
-/// Manual meal-plan creation flow.
-///
-/// 4 in-feature steps + 1 modal layer (grams sheet) on top of the picker /
-/// info screens:
-///  - SETUP   — meal kind + schedule (one-off date / recurring weekdays)
-///  - EDIT    — plan name + accumulated product list + macros summary
-///  - PICKER  — catalog search by query/category, tap → INFO
-///  - INFO    — single-product detail (per-100g macros + "Choose grams")
-///  + grams modal opened from PICKER row or INFO confirm — sets portion
-///
-/// The KMM `CreateMealPlanViewModel` is the single source of truth for the
-/// step + all editable fields; this view only renders state and dispatches
-/// intents back into the wrapper. On successful save the parent is notified
-/// via `onSaved()` so it can dismiss this flow and refresh the home meal
-/// section without an extra round-trip.
 struct CreateMealPlanFlowView: View {
     @StateObject private var vm = CreateMealPlanViewModelWrapper()
     @State private var previousStepIndex: Int32 = 0
-    /// Snapshot of the live error when an alert is shown — keeps the message
-    /// stable while the user reads it even if the wrapper has already
-    /// cleared the underlying state.
     @State private var pendingError: String? = nil
     @State private var didApplyInitialMealType: Bool = false
+    @State private var initialLoadCompleted: Bool = false
 
     var initialMealType: String? = nil
+    var initialDate: String? = nil
+    var editPlanId: String? = nil
     var onClose: () -> Void
     var onSaved: () -> Void
 
+    private var hasPrefilledInit: Bool {
+        editPlanId != nil || (initialMealType != nil && initialDate != nil)
+    }
+
     var body: some View {
-        if vm.isInitializing {
+        if vm.isInitializing || (hasPrefilledInit && vm.step == .setup && !initialLoadCompleted) {
             ZStack {
                 Palette.warmOffWhite.ignoresSafeArea()
                 ProgressView()
                     .scaleEffect(1.2)
                     .tint(Palette.coral)
             }
-            return
-        }
-
-        ZStack {
-            Palette.warmOffWhite.ignoresSafeArea()
-            content
-                .animation(.easeInOut(duration: 0.25), value: vm.step.index)
-
-            if vm.gramsFor != nil {
-                GramsBottomSheet(
-                    product: vm.gramsFor!,
-                    onClose: { vm.closeGrams() },
-                    onAdd: { grams in vm.addItem(vm.gramsFor!, grams: grams) }
-                )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .zIndex(10)
+            .onAppear {
+                applyInitialMealTypeIfNeeded(isInitializing: vm.isInitializing)
             }
-
-            if vm.isSaving {
-                SavingOverlay()
-                    .transition(.opacity)
-                    .zIndex(20)
+            .onChange(of: vm.isInitializing) { initializing in
+                applyInitialMealTypeIfNeeded(isInitializing: initializing)
             }
-        }
-        .animation(.easeInOut(duration: 0.2), value: vm.gramsFor?.id)
-        .animation(.easeInOut(duration: 0.2), value: vm.isSaving)
-        .onChange(of: vm.savedPlan?.id) { newValue in
-            if newValue != nil { onSaved() }
-        }
-        .onChange(of: vm.isInitializing) { initializing in
-            applyInitialMealTypeIfNeeded(isInitializing: initializing)
-        }
-        .onAppear {
-            applyInitialMealTypeIfNeeded(isInitializing: vm.isInitializing)
-        }
-        .onChange(of: vm.errorMessage) { msg in
-            // Keep showing the last error in an alert; if the user dismisses
-            // it we forward the clear back to the VM.
-            if let msg = msg { pendingError = msg }
-        }
-        .alert(
-            "Ошибка",
-            isPresented: Binding(
-                get: { pendingError != nil },
-                set: { if !$0 { pendingError = nil; vm.clearError() } }
-            ),
-            presenting: pendingError
-        ) { _ in
-            Button("OK") { pendingError = nil; vm.clearError() }
-        } message: { msg in
-            Text(msg)
+        } else {
+            ZStack {
+                Palette.warmOffWhite.ignoresSafeArea()
+                content
+                    .animation(.easeInOut(duration: 0.25), value: vm.step.index)
+
+                if vm.isSaving {
+                    SavingOverlay()
+                        .transition(.opacity)
+                        .zIndex(20)
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: vm.isSaving)
+            .sheet(isPresented: Binding(
+                get: { vm.gramsFor != nil },
+                set: { if !$0 { vm.closeGrams() } }
+            )) {
+                if let product = vm.gramsFor {
+                    GramsSheetContent(product: product, onAdd: { grams in vm.addItem(product, grams: grams) })
+                        .presentationDetents([.medium])
+                        .presentationDragIndicator(.visible)
+                        .presentationBackground(Palette.warmOffWhite)
+                }
+            }
+            .sheet(isPresented: Binding(
+                get: { vm.editingItem != nil },
+                set: { if !$0 { vm.closeEditGrams() } }
+            )) {
+                if let item = vm.editingItem {
+                    EditGramsSheetContent(item: item, onSave: { grams in vm.updateItemGrams(uid: item.uid, newGrams: grams) })
+                        .presentationDetents([.medium])
+                        .presentationDragIndicator(.visible)
+                        .presentationBackground(Palette.warmOffWhite)
+                }
+            }
+            .onChange(of: vm.step) { step in
+                if hasPrefilledInit && step != .setup && !initialLoadCompleted {
+                    initialLoadCompleted = true
+                }
+            }
+            .onChange(of: vm.savedPlan?.id) { newValue in
+                if newValue != nil { onSaved() }
+            }
+            .onChange(of: vm.isInitializing) { initializing in
+                applyInitialMealTypeIfNeeded(isInitializing: initializing)
+            }
+            .onAppear {
+                if hasPrefilledInit { initialLoadCompleted = true }
+                applyInitialMealTypeIfNeeded(isInitializing: vm.isInitializing)
+            }
+            .onChange(of: vm.errorMessage) { msg in
+                if let msg = msg { pendingError = msg }
+            }
+            .alert(
+                "Ошибка",
+                isPresented: Binding(
+                    get: { pendingError != nil },
+                    set: { if !$0 { pendingError = nil; vm.clearError() } }
+                ),
+                presenting: pendingError
+            ) { _ in
+                Button("OK") { pendingError = nil; vm.clearError() }
+            } message: { msg in
+                Text(msg)
+            }
         }
     }
 
@@ -110,8 +117,12 @@ struct CreateMealPlanFlowView: View {
             EditStep(
                 vm: vm,
                 onBack: {
-                    previousStepIndex = vm.step.index
-                    vm.goBack()
+                    if hasPrefilledInit {
+                        onClose()
+                    } else {
+                        previousStepIndex = vm.step.index
+                        vm.goBack()
+                    }
                 },
                 onAddProduct: {
                     previousStepIndex = vm.step.index
@@ -144,10 +155,6 @@ struct CreateMealPlanFlowView: View {
             )
             .transition(transition(forward: vm.step.index >= previousStepIndex))
         default:
-            // CreateMealPlanStep is a closed enum on the Kotlin side; the
-            // `default` here only exists because Swift cannot prove
-            // exhaustiveness across the bridge. Treat any unexpected value
-            // as a no-op render so the surface stays alive.
             EmptyView()
         }
     }
@@ -160,17 +167,23 @@ struct CreateMealPlanFlowView: View {
     }
 
     private func applyInitialMealTypeIfNeeded(isInitializing: Bool) {
-        guard !didApplyInitialMealType, !isInitializing, let wire = initialMealType else { return }
-        if let kind = ManualMealKind.companion.fromWireValue(value: wire) {
+        guard !didApplyInitialMealType else { return }
+        if let editId = editPlanId {
+            didApplyInitialMealType = true
+            vm.loadForEditing(editId)
+            return
+        }
+        guard !isInitializing, let wire = initialMealType else { return }
+        if let date = initialDate {
+            vm.initWithMealTypeAndDate(wire, date: date)
+            initialLoadCompleted = true
+        } else if let kind = ManualMealKind.companion.fromWireValue(value: wire) {
             vm.setMealKind(kind)
         }
         didApplyInitialMealType = true
     }
 }
 
-// MARK: - SETUP step
-
-/// Meal kind cards + schedule mode toggle + date strip / weekday chips.
 private struct SetupStep: View {
     @ObservedObject var vm: CreateMealPlanViewModelWrapper
     let onClose: () -> Void
@@ -183,7 +196,7 @@ private struct SetupStep: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 20) {
                     Text("Что планируем?")
-                        .font(.system(size: 17, weight: .heavy))
+                        .font(.system(size: 19, weight: .heavy))
                         .foregroundColor(Palette.deepInk)
                         .padding(.horizontal, 20)
                         .padding(.top, 4)
@@ -202,7 +215,7 @@ private struct SetupStep: View {
                     if vm.mealKind != nil {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Когда?")
-                                .font(.system(size: 17, weight: .heavy))
+                                .font(.system(size: 19, weight: .heavy))
                                 .foregroundColor(Palette.deepInk)
 
                             ScheduleModeToggle(
@@ -270,11 +283,11 @@ private struct MealKindCard: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(kind.displayName)
-                        .font(.system(size: 16, weight: .heavy))
+                        .font(.system(size: 18, weight: .heavy))
                         .foregroundColor(Palette.deepInk)
                     Text(kind.kcalHintRu)
-                        .font(.system(size: 12))
-                        .foregroundColor(Palette.mutedText)
+                        .font(.system(size: 16))
+                        .foregroundColor(Palette.deepInk)
                 }
 
                 Spacer()
@@ -322,7 +335,7 @@ private struct ScheduleModeToggle: View {
     private func toggleButton(title: String, isSelected: Bool, target: ManualScheduleMode) -> some View {
         Button(action: { onSelect(target) }) {
             Text(title)
-                .font(.system(size: 13, weight: .bold))
+                .font(.system(size: 15, weight: .bold))
                 .foregroundColor(isSelected ? .white : Palette.deepInk)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)
@@ -345,11 +358,12 @@ private struct OneOffDateStrip: View {
         var c = cal
         c.locale = Locale(identifier: "ru_RU")
         let today = c.startOfDay(for: Date())
-        let isoFmt = ISO8601DateFormatter()
-        isoFmt.formatOptions = [.withFullDate]
+        let dateFmt = DateFormatter()
+        dateFmt.dateFormat = "yyyy-MM-dd"
+        dateFmt.calendar = c
         return (0..<14).map { offset in
             let date = c.date(byAdding: .day, value: offset, to: today) ?? today
-            let iso = isoFmt.string(from: date)
+            let iso = dateFmt.string(from: date)
             let day = c.component(.day, from: date)
             let weekday = Self.weekdayShort(c.component(.weekday, from: date))
             return (iso, day, weekday)
@@ -357,7 +371,6 @@ private struct OneOffDateStrip: View {
     }
 
     private static func weekdayShort(_ index: Int) -> String {
-        // Apple weekday: Sunday=1, Monday=2 … Saturday=7
         switch index {
         case 1: return "Вс"
         case 2: return "Пн"
@@ -381,7 +394,7 @@ private struct OneOffDateStrip: View {
                     }) {
                         VStack(spacing: 4) {
                             Text(entry.weekday)
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(.system(size: 12, weight: .semibold))
                                 .foregroundColor(isSelected ? .white : Palette.mutedText)
                             Text("\(entry.day)")
                                 .font(.system(size: 18, weight: .heavy))
@@ -392,7 +405,7 @@ private struct OneOffDateStrip: View {
                                     .foregroundColor(Palette.mutedText)
                             }
                         }
-                        .frame(width: 52, height: 64)
+                        .frame(width: 56, height: 70)
                         .background(
                             RoundedRectangle(cornerRadius: 14)
                                 .fill(isSelected ? Palette.coral : (isBooked ? Palette.softCard : Color.white))
@@ -438,7 +451,7 @@ private struct WeekdayChipsGrid: View {
                     Button(action: { if !isBooked { onToggle(day.wire) } }) {
                         HStack(spacing: 4) {
                             Text(day.label)
-                                .font(.system(size: 13, weight: .bold))
+                                .font(.system(size: 14, weight: .bold))
                                 .foregroundColor(isSelected ? .white : (isBooked ? Palette.mutedText : Palette.deepInk))
                             if isBooked {
                                 Image(systemName: "lock.fill").font(.system(size: 9))
@@ -465,8 +478,6 @@ private struct WeekdayChipsGrid: View {
         }
     }
 }
-
-// MARK: - EDIT step
 
 private struct EditStep: View {
     @ObservedObject var vm: CreateMealPlanViewModelWrapper
@@ -504,7 +515,7 @@ private struct EditStep: View {
                             .padding(.top, 16)
                     } else {
                         Text("ДОБАВЛЕНО")
-                            .font(.system(size: 11, weight: .bold))
+                            .font(.system(size: 13, weight: .bold))
                             .foregroundColor(Palette.mutedText)
                             .tracking(0.5)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -513,9 +524,11 @@ private struct EditStep: View {
 
                         VStack(spacing: 8) {
                             ForEach(vm.addedItems, id: \.uid) { item in
-                                AddedItemRow(item: item, onDelete: {
-                                    vm.removeItem(uid: item.uid)
-                                })
+                                AddedItemRow(
+                                    item: item,
+                                    onEdit: { vm.openEditGrams(item) },
+                                    onDelete: { vm.removeItem(uid: item.uid) }
+                                )
                             }
                         }
                         .padding(.horizontal, 20)
@@ -523,7 +536,7 @@ private struct EditStep: View {
                         Button(action: onAddProduct) {
                             HStack(spacing: 8) {
                                 Image(systemName: "plus").font(.system(size: 13, weight: .bold))
-                                Text("Добавить продукт").font(.system(size: 14, weight: .bold))
+                                Text("Добавить продукт").font(.system(size: 16, weight: .bold))
                             }
                             .foregroundColor(Palette.deepInk)
                             .frame(maxWidth: .infinity)
@@ -563,11 +576,11 @@ private struct PlanNameField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("НАЗВАНИЕ")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundColor(Palette.mutedText)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(Palette.deepInk)
                 .tracking(0.5)
             TextField("Завтрак · Сегодня", text: Binding(get: { name }, set: { onChange($0) }))
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(Palette.deepInk)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
@@ -591,7 +604,7 @@ private struct MacrosSummaryCard: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("ВСЕГО КАЛОРИЙ").font(.system(size: 11, weight: .bold))
+                    Text("ВСЕГО КАЛОРИЙ").font(.system(size: 15, weight: .bold))
                         .foregroundColor(.white.opacity(0.65))
                         .tracking(0.5)
                     Text("\(kcal) ккал")
@@ -620,10 +633,10 @@ private struct MacroPill: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            Text(label).font(.system(size: 11, weight: .heavy))
-                .foregroundColor(.white.opacity(0.7))
+            Text(label).font(.system(size: 16, weight: .heavy))
+                .foregroundColor(.white)
             Text("\(Int(grams.rounded()))г")
-                .font(.system(size: 14, weight: .heavy))
+                .font(.system(size: 16, weight: .heavy))
                 .foregroundColor(.white)
         }
         .padding(.horizontal, 12)
@@ -634,6 +647,7 @@ private struct MacroPill: View {
 
 private struct AddedItemRow: View {
     let item: AddedMealItem
+    let onEdit: () -> Void
     let onDelete: () -> Void
 
     var body: some View {
@@ -647,24 +661,35 @@ private struct AddedItemRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.product.nameRu)
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(size: 16, weight: .bold))
                     .foregroundColor(Palette.deepInk)
                     .lineLimit(1)
-                Text("\(Int(item.grams.rounded()))г · \(Int(item.portion.calories.rounded())) ккал")
-                    .font(.system(size: 12))
-                    .foregroundColor(Palette.mutedText)
+                Text("\(Int(item.grams.rounded()))г, \(Int(item.portion.calories.rounded())) ккал, Б\(shortMacro(item.portion.proteinG)), Ж\(shortMacro(item.portion.fatG)), У\(shortMacro(item.portion.carbsG))")
+                    .font(.system(size: 14))
+                    .foregroundColor(Palette.deepInk)
             }
 
             Spacer(minLength: 8)
 
-            Button(action: onDelete) {
-                Image(systemName: "trash.fill")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(Color(red: 0.898, green: 0.224, blue: 0.208))
-                    .padding(8)
-                    .background(Circle().fill(Color(red: 1.0, green: 0.918, blue: 0.918)))
+            HStack(spacing: 8) {
+                Button(action: onEdit) {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 13))
+                        .foregroundColor(Palette.deepInk)
+                        .frame(width: 24, height: 24)
+                        .background(Circle().fill(Palette.softCard))
+                }
+                .buttonStyle(.plain)
+
+                Button(action: onDelete) {
+                    Image(systemName: "trash.fill")
+                        .font(.system(size: 13))
+                        .foregroundColor(Color(red: 0.898, green: 0.224, blue: 0.208))
+                        .frame(width: 24, height: 24)
+                        .background(Circle().fill(Color(red: 1.0, green: 0.918, blue: 0.918)))
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -684,10 +709,10 @@ private struct EmptyEditState: View {
         VStack(spacing: 12) {
             Text("🥗").font(.system(size: 40))
             Text("Пока пусто")
-                .font(.system(size: 16, weight: .heavy))
+                .font(.system(size: 18, weight: .heavy))
                 .foregroundColor(Palette.deepInk)
             Text("Добавьте продукты, из которых будет состоять приём пищи")
-                .font(.system(size: 13))
+                .font(.system(size: 15))
                 .foregroundColor(Palette.mutedText)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
@@ -695,7 +720,7 @@ private struct EmptyEditState: View {
             Button(action: onAdd) {
                 HStack(spacing: 6) {
                     Image(systemName: "plus").font(.system(size: 13, weight: .bold))
-                    Text("Добавить продукт").font(.system(size: 14, weight: .bold))
+                    Text("Добавить продукт").font(.system(size: 16, weight: .bold))
                 }
                 .foregroundColor(.white)
                 .padding(.horizontal, 22)
@@ -719,51 +744,119 @@ private struct EmptyEditState: View {
     }
 }
 
-// MARK: - PICKER step
+private struct PickerScrollOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private struct PickerHeaderHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
 
 private struct PickerStep: View {
     @ObservedObject var vm: CreateMealPlanViewModelWrapper
     let onBack: () -> Void
     let onSelect: (FoodProduct) -> Void
 
+    @State private var scrollOffset: CGFloat = 0
+    @State private var fullHeaderHeight: CGFloat = 0
+
     var body: some View {
+        let collapseProgress = fullHeaderHeight > 0 ? min(max(scrollOffset / fullHeaderHeight, 0), 1) : 0
+
         VStack(spacing: 0) {
             FlowHeader(title: "Выбор продукта", onBack: onBack, isClose: false)
 
-            VStack(spacing: 12) {
-                SearchField(
-                    query: vm.searchQuery,
-                    onChange: { vm.setSearchQuery($0) }
-                )
-                .padding(.horizontal, 20)
-
-                CategoryChipsRow(
-                    selected: vm.selectedCategory,
-                    onSelect: { vm.setCategory($0) }
-                )
-            }
-            .padding(.bottom, 8)
-
-            if let err = vm.productsError, vm.filteredProducts.isEmpty {
+            if let err = vm.productsError, vm.products.isEmpty {
                 CenteredMessage(emoji: "⚠️", title: err, ctaTitle: "Повторить", onCta: {
                     vm.loadProducts()
                 })
-            } else if vm.isLoadingProducts && vm.filteredProducts.isEmpty {
+            } else if vm.isLoadingProducts && vm.products.isEmpty {
                 CenteredSpinner()
-            } else if vm.filteredProducts.isEmpty {
+            } else if vm.filteredProducts.isEmpty && !vm.searchQuery.isEmpty && !vm.isLoadingProducts {
+                VStack(spacing: 12) {
+                    SearchField(
+                        query: vm.searchQuery,
+                        onChange: { vm.setSearchQuery($0) }
+                    )
+                    .padding(.horizontal, 20)
+
+                    CategoryChipsRow(
+                        selected: vm.selectedCategory,
+                        onSelect: { vm.setCategory($0) }
+                    )
+                }
+                .padding(.bottom, 8)
+
                 CenteredMessage(emoji: "🔍", title: "Ничего не найдено", ctaTitle: nil, onCta: {})
             } else {
-                ScrollView(showsIndicators: false) {
-                    LazyVStack(spacing: 10) {
-                        ForEach(vm.filteredProducts, id: \.id) { product in
-                            ProductRow(product: product, onTap: { onSelect(product) })
-                        }
-                        Color.clear.frame(height: 24)
+                VStack(spacing: 0) {
+                    VStack(spacing: 12) {
+                        SearchField(
+                            query: vm.searchQuery,
+                            onChange: { vm.setSearchQuery($0) }
+                        )
+                        .padding(.horizontal, 20)
+
+                        CategoryChipsRow(
+                            selected: vm.selectedCategory,
+                            onSelect: { vm.setCategory($0) }
+                        )
+
+                        Spacer().frame(height: 4)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 8)
+                    .padding(.top, 8)
+                    .background(Palette.warmOffWhite)
+                    .background(GeometryReader { geo in
+                        Color.clear.preference(
+                            key: PickerHeaderHeightKey.self,
+                            value: geo.size.height
+                        )
+                    })
+                    .frame(height: fullHeaderHeight > 0 ? max(0, fullHeaderHeight * (1 - collapseProgress)) : nil)
+                    .clipped()
+
+                    if vm.isLoadingProducts {
+                        VStack {
+                            Spacer()
+                            ProgressView().scaleEffect(1.2).tint(Palette.coral)
+                            Spacer()
+                        }
+                    } else {
+                        ScrollView(showsIndicators: false) {
+                            LazyVStack(spacing: 10) {
+                                ForEach(vm.filteredProducts, id: \.id) { product in
+                                    ProductRow(product: product, onTap: { onSelect(product) })
+                                }
+                                Color.clear.frame(height: 24)
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 8)
+                            .background(GeometryReader { geo in
+                                Color.clear.preference(
+                                    key: PickerScrollOffsetKey.self,
+                                    value: -geo.frame(in: .named("pickerScroll")).minY
+                                )
+                            })
+                        }
+                        .coordinateSpace(name: "pickerScroll")
+                        .onPreferenceChange(PickerScrollOffsetKey.self) { scrollOffset = $0 }
+                    }
+                }
+                .onPreferenceChange(PickerHeaderHeightKey.self) { newHeight in
+                    if newHeight > fullHeaderHeight {
+                        fullHeaderHeight = newHeight
+                    }
                 }
             }
+        }
+        .onTapGesture {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }
     }
 }
@@ -796,12 +889,10 @@ private struct SearchField: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
+        .frame(height: 44)
         .background(Color.white)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(Color(red: 0.929, green: 0.929, blue: 0.937), lineWidth: 1.5)
-        )
+        .clipShape(Capsule())
+        .shadow(color: Color.black.opacity(0.06), radius: 6, x: 0, y: 2)
     }
 }
 
@@ -809,9 +900,6 @@ private struct CategoryChipsRow: View {
     let selected: FoodCategory?
     let onSelect: (FoodCategory?) -> Void
 
-    /// Iterates over `FoodCategory.entries` (the Kotlin-exposed enum entry list)
-    /// so the chip row reflects the canonical taxonomy without duplicating the
-    /// case order on the Swift side.
     private var categories: [FoodCategory] { FoodCategory.entries }
 
     var body: some View {
@@ -839,18 +927,12 @@ private struct CategoryChip: View {
     var body: some View {
         Button(action: onTap) {
             Text(label)
-                .font(.system(size: 13, weight: .bold))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(isSelected ? .white : Palette.deepInk)
                 .padding(.horizontal, 14)
-                .padding(.vertical, 8)
+                .padding(.vertical, 6)
                 .background(
-                    Capsule().fill(isSelected ? Palette.coral : Color.white)
-                )
-                .overlay(
-                    Capsule().strokeBorder(
-                        isSelected ? Palette.coral : Color(red: 0.929, green: 0.929, blue: 0.937),
-                        lineWidth: 1.5
-                    )
+                    Capsule().fill(isSelected ? Palette.accentOrange : Palette.softCard)
                 )
         }
         .buttonStyle(.plain)
@@ -868,11 +950,11 @@ private struct ProductRow: View {
                     RoundedRectangle(cornerRadius: 12).fill(categoryBg(product.category))
                     Text(product.emoji ?? defaultEmoji(for: product.category)).font(.system(size: 20))
                 }
-                .frame(width: 44, height: 44)
+                .frame(width: 48, height: 48)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(product.nameRu)
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.system(size: 16, weight: .bold))
                         .foregroundColor(Palette.deepInk)
                         .lineLimit(1)
 
@@ -884,10 +966,6 @@ private struct ProductRow: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(Palette.mutedText)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
@@ -908,9 +986,9 @@ private struct MiniMacroChip: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            Text(label).font(.system(size: 9, weight: .bold))
-                .foregroundColor(Palette.mutedText)
-            Text(value).font(.system(size: 11, weight: .heavy))
+            Text(label).font(.system(size: 14, weight: .medium))
+                .foregroundColor(Palette.deepInk)
+            Text(value).font(.system(size: 14, weight: .medium))
                 .foregroundColor(Palette.deepInk)
         }
         .padding(.horizontal, 6)
@@ -919,8 +997,6 @@ private struct MiniMacroChip: View {
     }
 }
 
-// MARK: - INFO step
-
 private struct InfoStep: View {
     @ObservedObject var vm: CreateMealPlanViewModelWrapper
     let onBack: () -> Void
@@ -928,7 +1004,7 @@ private struct InfoStep: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            FlowHeader(title: vm.infoFor?.nameRu ?? "Продукт", onBack: onBack, isClose: false)
+            FlowHeader(title: "Выбор продукта", onBack: onBack, isClose: false)
 
             if let p = vm.infoFor {
                 ScrollView(showsIndicators: false) {
@@ -941,27 +1017,29 @@ private struct InfoStep: View {
                         .frame(height: 160)
                         .padding(.horizontal, 20)
 
-                        Text(p.nameRu)
-                            .font(.system(size: 22, weight: .heavy))
-                            .foregroundColor(Palette.deepInk)
-                            .padding(.horizontal, 20)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(p.nameRu)
+                                .font(.system(size: 24, weight: .heavy))
+                                .foregroundColor(Palette.deepInk)
 
-                        Text("на 100 г")
-                            .font(.system(size: 12))
-                            .foregroundColor(Palette.mutedText)
+                            Text("БЖУ продукта на 100г")
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundColor(Palette.deepInk)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 16)
 
                         VStack(spacing: 10) {
                             HStack(spacing: 10) {
                                 BigMacroCell(
                                     label: "Калории",
                                     value: "\(Int(p.caloriesPer100g)) ккал",
-                                    bg: Color(red: 1.0, green: 0.957, blue: 0.902),
                                     fg: Color(red: 0.878, green: 0.482, blue: 0.0)
                                 )
                                 BigMacroCell(
                                     label: "Белки",
                                     value: "\(shortMacro(p.proteinPer100g)) г",
-                                    bg: Color(red: 0.882, green: 0.945, blue: 1.0),
                                     fg: Color(red: 0.039, green: 0.518, blue: 1.0)
                                 )
                             }
@@ -969,13 +1047,11 @@ private struct InfoStep: View {
                                 BigMacroCell(
                                     label: "Жиры",
                                     value: "\(shortMacro(p.fatPer100g)) г",
-                                    bg: Color(red: 1.0, green: 0.918, blue: 0.918),
                                     fg: Color(red: 1.0, green: 0.420, blue: 0.420)
                                 )
                                 BigMacroCell(
                                     label: "Углеводы",
                                     value: "\(shortMacro(p.carbsPer100g)) г",
-                                    bg: Color(red: 0.91, green: 0.969, blue: 0.91),
                                     fg: Color(red: 0.204, green: 0.78, blue: 0.349)
                                 )
                             }
@@ -1002,13 +1078,12 @@ private struct InfoStep: View {
 private struct BigMacroCell: View {
     let label: String
     let value: String
-    let bg: Color
     let fg: Color
 
     var body: some View {
         VStack(spacing: 6) {
             Text(label)
-                .font(.system(size: 11, weight: .heavy))
+                .font(.system(size: 15, weight: .heavy))
                 .foregroundColor(fg)
                 .tracking(0.4)
             Text(value)
@@ -1017,118 +1092,191 @@ private struct BigMacroCell: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 18)
-        .background(RoundedRectangle(cornerRadius: 18).fill(bg))
+        .background(Color.clear)
+        .overlay(
+            RoundedRectangle(cornerRadius: 18)
+                .strokeBorder(fg, lineWidth: 1.5)
+        )
     }
 }
 
-// MARK: - Grams bottom sheet
-
-private struct GramsBottomSheet: View {
+private struct GramsSheetContent: View {
     let product: FoodProduct
-    let onClose: () -> Void
     let onAdd: (Double) -> Void
 
     @State private var grams: Double = 100
+    @FocusState private var isGramsFieldFocused: Bool
 
     private var portionMacros: FoodPortionMacros {
         product.macrosForGrams(grams: grams)
     }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            Color.black.opacity(0.35)
-                .ignoresSafeArea()
-                .onTapGesture { onClose() }
-
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Capsule().fill(Color.gray.opacity(0.3))
-                        .frame(width: 36, height: 4)
-                        .frame(maxWidth: .infinity)
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14).fill(categoryBg(product.category))
+                    Text(product.emoji ?? defaultEmoji(for: product.category))
+                        .font(.system(size: 24))
                 }
-                .padding(.top, 8)
+                .frame(width: 48, height: 48)
 
-                HStack(spacing: 12) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 14).fill(categoryBg(product.category))
-                        Text(product.emoji ?? defaultEmoji(for: product.category))
-                            .font(.system(size: 24))
-                    }
-                    .frame(width: 52, height: 52)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(product.nameRu)
-                            .font(.system(size: 16, weight: .heavy))
-                            .foregroundColor(Palette.deepInk)
-                            .lineLimit(2)
-                        Text("\(Int(product.caloriesPer100g)) ккал / 100 г")
-                            .font(.system(size: 12))
-                            .foregroundColor(Palette.mutedText)
-                    }
-                    Spacer()
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(product.nameRu)
+                        .font(.system(size: 18, weight: .heavy))
+                        .foregroundColor(Palette.deepInk)
+                        .lineLimit(2)
+                    Text("\(Int(product.caloriesPer100g)) ккал, Б\(shortMacro(product.proteinPer100g)), Ж\(shortMacro(product.fatPer100g)), У\(shortMacro(product.carbsPer100g)) / 100г")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(Palette.mutedText)
                 }
-
-                HStack(spacing: 12) {
-                    StepperButton(symbol: "minus", action: { grams = max(1, grams - 10) })
-                    GramsValueField(grams: $grams)
-                    StepperButton(symbol: "plus", action: { grams = min(5000, grams + 10) })
-                }
-
-                HStack(spacing: 8) {
-                    ForEach([50, 100, 150, 200], id: \.self) { preset in
-                        Button(action: { grams = Double(preset) }) {
-                            Text("\(preset) г")
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundColor(Int(grams) == preset ? .white : Palette.deepInk)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Int(grams) == preset ? Palette.coral : Palette.softCard)
-                                )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-
-                LiveMacrosBar(macros: portionMacros)
-
-                Button(action: { onAdd(grams) }) {
-                    Text("Добавить")
-                        .font(.system(size: 16, weight: .heavy))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(RoundedRectangle(cornerRadius: 16).fill(Palette.coral))
-                }
-                .buttonStyle(.plain)
-
-                Spacer().frame(height: 16)
+                Spacer()
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 4)
-            .background(
-                Palette.warmOffWhite
-                    .clipShape(RoundedRectangle(cornerRadius: 28))
-                    .ignoresSafeArea(edges: .bottom)
-            )
+
+            HStack(spacing: 12) {
+                StepperButton(symbol: "minus", action: { grams = max(1, grams - 10) })
+                GramsValueField(grams: $grams, isFocused: _isGramsFieldFocused)
+                StepperButton(symbol: "plus", action: { grams = min(5000, grams + 10) })
+            }
+
+            HStack(spacing: 8) {
+                ForEach([50, 100, 150, 200], id: \.self) { preset in
+                    Button(action: { grams = Double(preset) }) {
+                        Text("\(preset) г")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(Int(grams) == preset ? .white : Palette.deepInk)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Int(grams) == preset ? Palette.coral : Palette.softCard)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            LiveMacrosBar(macros: portionMacros)
+
+            Button(action: { onAdd(grams) }) {
+                Text("Добавить")
+                    .font(.system(size: 18, weight: .heavy))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(RoundedRectangle(cornerRadius: 16).fill(Palette.coral))
+            }
+            .buttonStyle(.plain)
+
+            Spacer().frame(height: 8)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 16)
+        .background(Palette.warmOffWhite.ignoresSafeArea())
+        .onTapGesture {
+            isGramsFieldFocused = false
+        }
+    }
+}
+
+private struct EditGramsSheetContent: View {
+    let item: AddedMealItem
+    let onSave: (Double) -> Void
+
+    @State private var grams: Double
+    @FocusState private var isGramsFieldFocused: Bool
+
+    init(item: AddedMealItem, onSave: @escaping (Double) -> Void) {
+        self.item = item
+        self.onSave = onSave
+        self._grams = State(initialValue: item.grams)
+    }
+
+    private var portionMacros: FoodPortionMacros {
+        item.product.macrosForGrams(grams: grams)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14).fill(categoryBg(item.product.category))
+                    Text(item.product.emoji ?? defaultEmoji(for: item.product.category))
+                        .font(.system(size: 24))
+                }
+                .frame(width: 48, height: 48)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.product.nameRu)
+                        .font(.system(size: 18, weight: .heavy))
+                        .foregroundColor(Palette.deepInk)
+                        .lineLimit(2)
+                    Text("\(Int(item.product.caloriesPer100g)) ккал, Б\(shortMacro(item.product.proteinPer100g)), Ж\(shortMacro(item.product.fatPer100g)), У\(shortMacro(item.product.carbsPer100g)) / 100г")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(Palette.mutedText)
+                }
+                Spacer()
+            }
+
+            HStack(spacing: 12) {
+                StepperButton(symbol: "minus", action: { grams = max(1, grams - 10) })
+                GramsValueField(grams: $grams, isFocused: _isGramsFieldFocused)
+                StepperButton(symbol: "plus", action: { grams = min(5000, grams + 10) })
+            }
+
+            HStack(spacing: 8) {
+                ForEach([50, 100, 150, 200], id: \.self) { preset in
+                    Button(action: { grams = Double(preset) }) {
+                        Text("\(preset) г")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(Int(grams) == preset ? .white : Palette.deepInk)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Int(grams) == preset ? Palette.coral : Palette.softCard)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            LiveMacrosBar(macros: portionMacros)
+
+            Button(action: { onSave(grams) }) {
+                Text("Сохранить")
+                    .font(.system(size: 18, weight: .heavy))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(RoundedRectangle(cornerRadius: 16).fill(Palette.coral))
+            }
+            .buttonStyle(.plain)
+
+            Spacer().frame(height: 8)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 16)
+        .background(Palette.warmOffWhite.ignoresSafeArea())
+        .onTapGesture {
+            isGramsFieldFocused = false
         }
     }
 }
 
 private struct GramsValueField: View {
     @Binding var grams: Double
+    @FocusState var isFocused: Bool
 
-    /// Editable text mirror for `grams` so the user can type any value while
-    /// `+`/`-` buttons keep stepping through the numeric source of truth.
     @State private var text: String = ""
 
     var body: some View {
         TextField("100", text: $text)
             .multilineTextAlignment(.center)
             .keyboardType(.numberPad)
-            .font(.system(size: 26, weight: .heavy))
+            .font(.system(size: 18, weight: .bold))
             .foregroundColor(Palette.deepInk)
+            .focused($isFocused)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .background(Palette.softCard)
@@ -1196,17 +1344,15 @@ private struct LiveMacrosBar: View {
     private func macroBlock(label: String, value: String) -> some View {
         VStack(spacing: 2) {
             Text(value)
-                .font(.system(size: 14, weight: .heavy))
+                .font(.system(size: 18, weight: .medium))
                 .foregroundColor(Palette.deepInk)
             Text(label)
-                .font(.system(size: 10, weight: .bold))
-                .foregroundColor(Palette.mutedText)
+                .font(.system(size: 18, weight: .medium))
+                .foregroundColor(Palette.deepInk)
         }
         .frame(maxWidth: .infinity)
     }
 }
-
-// MARK: - Saving overlay
 
 private struct SavingOverlay: View {
     var body: some View {
@@ -1225,8 +1371,6 @@ private struct SavingOverlay: View {
         }
     }
 }
-
-// MARK: - Common chrome
 
 private struct FlowHeader: View {
     let title: String
@@ -1288,7 +1432,7 @@ private struct PrimaryButton: View {
     var body: some View {
         Button(action: { if enabled { action() } }) {
             Text(title)
-                .font(.system(size: 16, weight: .heavy))
+                .font(.system(size: 18, weight: .heavy))
                 .foregroundColor(enabled ? .white : Palette.mutedText)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
@@ -1345,18 +1489,11 @@ private struct CenteredMessage: View {
     }
 }
 
-// MARK: - Helpers
-
 private func shortMacro(_ value: Double) -> String {
     if value == value.rounded() { return "\(Int(value))" }
     return String(format: "%.1f", value)
 }
 
-/// Emoji + background helpers are written as chained equality checks (instead
-/// of a `switch`) because `FoodCategory` arrives from KMM as an ObjC-bridged
-/// class — Swift `switch` patterns cannot use `case .meat:` on class enums,
-/// they would require explicit `case FoodCategory.meat:`. The chained form
-/// keeps the read-site close to the Android equivalent.
 private func defaultEmoji(for category: FoodCategory) -> String {
     if category == FoodCategory.meat { return "🍗" }
     if category == FoodCategory.fish { return "🐟" }

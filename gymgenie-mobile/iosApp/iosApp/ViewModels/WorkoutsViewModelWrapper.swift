@@ -22,6 +22,9 @@ final class WorkoutsViewModelWrapper: ObservableObject {
     @Published private(set) var errorMessage: String? = nil
     @Published private(set) var hasMoreExercises: Bool = true
     @Published private(set) var isLoggedOut: Bool = false
+    @Published private(set) var isLoadingSession: Bool = false
+    @Published private(set) var pendingSession: ActiveWorkoutSession? = nil
+    @Published private(set) var sessionError: String? = nil
 
     private var observationTask: Task<Void, Never>?
     private var logoutSubscription: SessionSubscription?
@@ -55,7 +58,7 @@ final class WorkoutsViewModelWrapper: ObservableObject {
                 self.exercisesLoaded = state.exercisesLoaded
                 self.searchQuery = state.searchQuery
                 self.selectedMuscleGroup = state.selectedMuscleGroup
-                self.selectedDifficulties = state.selectedDifficulties as? [String] ?? []
+                self.selectedDifficulties = state.selectedDifficulties as [String]
                 // KMM `Boolean?` is bridged as `KotlinBoolean?` — unwrap to
                 // the native optional Bool for SwiftUI bindings.
                 self.requiresEquipment = state.requiresEquipment?.boolValue
@@ -63,6 +66,9 @@ final class WorkoutsViewModelWrapper: ObservableObject {
                 self.sortByCalories = state.sortByCalories
                 self.errorMessage = state.errorMessage
                 self.hasMoreExercises = state.hasMoreExercises
+                self.isLoadingSession = state.isLoadingSession
+                self.pendingSession = state.pendingSession
+                self.sessionError = state.sessionError
 
                 try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
             }
@@ -112,6 +118,14 @@ final class WorkoutsViewModelWrapper: ObservableObject {
 
     func refresh() {
         vm.refresh()
+    }
+
+    func startWorkout(planId: String, planName: String) {
+        vm.startWorkout(planId: planId, planName: planName)
+    }
+
+    func clearPendingSession() {
+        vm.clearPendingSession()
     }
 
     deinit {

@@ -71,8 +71,6 @@ struct ActivityGoalSettingsView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            warmOffWhite.edgesIgnoringSafeArea(.all)
-
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 16) {
                     topBar
@@ -97,6 +95,9 @@ struct ActivityGoalSettingsView: View {
                 .padding(.top, 8)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(warmOffWhite.ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
     }
 
     // MARK: - Sections

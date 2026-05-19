@@ -16,4 +16,5 @@ sealed class WorkoutsConfig {
 
     @Serializable
     data object CreateWorkout : WorkoutsConfig()
+
 }

@@ -40,8 +40,7 @@ data class MealPlanDetailResponse(
     val scheduleType: WorkoutScheduleType?,
     /** Upper-case weekday names (e.g. ["MONDAY", "WEDNESDAY"]); empty unless [scheduleType] is RECURRING. */
     val scheduleDays: List<String>,
-    /** Bound calendar date; non-null only when [scheduleType] is ONE_TIME. */
-    val oneOffDate: LocalDate?,
+    val oneOffDate: String?,
     val meals: List<MealResponse>,
     val createdAt: Instant
 )
@@ -62,7 +61,9 @@ data class DishResponse(
     val calories: Int?,
     val proteinG: Int?,
     val carbsG: Int?,
-    val fatG: Int?
+    val fatG: Int?,
+    val foodProductId: UUID? = null,
+    val grams: Double? = null
 )
 
 // ===== Manual creation =====
@@ -103,12 +104,18 @@ data class CreateManualMealPlanRequest(
 
 data class ManualMealItemDto(
 
-    @field:NotNull
-    val foodProductId: UUID,
+    val foodProductId: UUID? = null,
 
     @field:DecimalMin(value = "0.1", inclusive = true)
     @field:DecimalMax(value = "5000.0", inclusive = true)
-    val grams: Double
+    val grams: Double,
+
+    val name: String? = null,
+    val calories: Int? = null,
+    val proteinG: Int? = null,
+    val carbsG: Int? = null,
+    val fatG: Int? = null,
+    val portionDescription: String? = null,
 )
 
 // ===== Booked-days view =====

@@ -21,6 +21,7 @@ import com.asc.gymgenie.feature.home.components.activities.PresetBottomSheet
 fun ActivityRowsCard(
     activities: List<ActivityTodayResponse>,
     onCheckIn: (activityId: String, value: Int) -> Unit,
+    onOpenScheduleSettings: ((ActivityTodayResponse) -> Unit)? = null,
 ) {
     var activeFilter by rememberSaveable { mutableStateOf(FILTER_ALL) }
     var presetTarget by remember { mutableStateOf<ActivityTodayResponse?>(null) }
@@ -45,6 +46,9 @@ fun ActivityRowsCard(
                     activity = activity,
                     onCheckIn = onCheckIn,
                     onOpenPreset = { presetTarget = activity },
+                    onOpenScheduleSettings = if (onOpenScheduleSettings != null) {
+                        { onOpenScheduleSettings(activity) }
+                    } else null,
                 )
             }
         }

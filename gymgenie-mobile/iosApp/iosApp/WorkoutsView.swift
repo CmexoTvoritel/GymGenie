@@ -17,18 +17,21 @@ private struct WorkoutsHeaderHeightKey: PreferenceKey {
 
 struct WorkoutsView: View {
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var tabBarState: TabBarState
     @StateObject private var viewModel = WorkoutsViewModelWrapper()
 
     @State private var localSearchQuery: String = ""
     @State private var selectedExerciseId: String? = nil
+    @State private var selectedPlanId: String? = nil
     @State private var showCreateWorkout: Bool = false
     @State private var activeWorkoutSession: ActiveWorkoutSession? = nil
     @State private var showWorkoutSession: Bool = false
     @State private var exercisesScrollOffset: CGFloat = 0
+    @State private var lastScrollOffset: CGFloat = 0
+    @State private var headerVisible: Bool = true
     @State private var headerHeight: CGFloat = 110
     @State private var displayedTab: Shared.WorkoutsTab = .workouts
     @State private var showFilterSheet: Bool = false
-
     private let orange = Color(red: 0.941, green: 0.439, blue: 0.188)
     private let warmOffWhite = Color(red: 0.980, green: 0.976, blue: 0.969)
 
@@ -39,25 +42,47 @@ struct WorkoutsView: View {
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            warmOffWhite.edgesIgnoringSafeArea(.all)
-
             mainContent
 
             if displayedTab == .workouts {
                 fabButton
             }
+
+            if viewModel.isLoadingSession {
+                Color.black.opacity(0.25).ignoresSafeArea()
+                ProgressView()
+                    .scaleEffect(1.4)
+                    .tint(.white)
+            }
         }
-        .fullScreenCover(
-            isPresented: Binding(
-                get: { selectedExerciseId != nil },
-                set: { if !$0 { selectedExerciseId = nil } }
-            )
-        ) {
+        .background(warmOffWhite.ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationDestination(isPresented: Binding(
+            get: { selectedExerciseId != nil },
+            set: { if !$0 { dismissExerciseDetail() } }
+        )) {
             if let id = selectedExerciseId {
                 ExerciseDetailView(
                     exerciseId: id,
-                    onBack: { selectedExerciseId = nil }
+                    onBack: { dismissExerciseDetail() }
                 )
+                .toolbar(.hidden, for: .navigationBar)
+            }
+        }
+        .navigationDestination(isPresented: Binding(
+            get: { selectedPlanId != nil },
+            set: { if !$0 { dismissPlanDetail() } }
+        )) {
+            if let id = selectedPlanId {
+                WorkoutDetailView(
+                    planId: id,
+                    onBack: { dismissPlanDetail() },
+                    onStartPlan: { planId, planName in
+                        dismissPlanDetail()
+                        startSession(planId: planId, planName: planName)
+                    }
+                )
+                .toolbar(.hidden, for: .navigationBar)
             }
         }
         .fullScreenCover(isPresented: $showCreateWorkout) {
@@ -79,6 +104,30 @@ struct WorkoutsView: View {
                 appState.navigate(to: .login)
             }
         }
+        .onChange(of: selectedExerciseId) { id in
+            tabBarState.isVisible = (id == nil && selectedPlanId == nil)
+        }
+        .onChange(of: selectedPlanId) { id in
+            tabBarState.isVisible = (id == nil && selectedExerciseId == nil)
+        }
+        .onChange(of: viewModel.pendingSession?.planId) { _ in
+            if let session = viewModel.pendingSession {
+                activeWorkoutSession = session
+                showWorkoutSession = true
+                viewModel.clearPendingSession()
+            }
+        }
+        .alert(
+            "Ошибка",
+            isPresented: Binding(
+                get: { viewModel.sessionError != nil },
+                set: { if !$0 { viewModel.clearPendingSession() } }
+            )
+        ) {
+            Button("OK") { viewModel.clearPendingSession() }
+        } message: {
+            Text(viewModel.sessionError ?? "Не удалось загрузить тренировку")
+        }
         .sheet(isPresented: $showFilterSheet) {
             ExerciseFilterSheet(
                 isPresented: $showFilterSheet,
@@ -98,19 +147,25 @@ struct WorkoutsView: View {
         }
     }
 
+    private func dismissExerciseDetail() {
+        selectedExerciseId = nil
+    }
+
+    private func dismissPlanDetail() {
+        selectedPlanId = nil
+        viewModel.loadWorkoutPlans()
+    }
+
     private func startSession(planId: String, planName: String) {
-        activeWorkoutSession = ActiveWorkoutSession(
-            planId: planId,
-            planName: planName,
-            exercises: [],
-            restSeconds: 60
-        )
-        showWorkoutSession = true
+        viewModel.startWorkout(planId: planId, planName: planName)
     }
 
     private var mainContent: some View {
         VStack(spacing: 0) {
-            GymGenieToolbar(title: "Тренировки")
+            GymGenieToolbar(
+                title: "Тренировки",
+                actions: []
+            )
 
             WorkoutTabSelector(
                 selectedTab: displayedTab,
@@ -214,7 +269,7 @@ struct WorkoutsView: View {
                         ForEach(viewModel.workoutPlans, id: \.id) { plan in
                             WorkoutPlanCard(
                                 plan: plan,
-                                onView: { },
+                                onView: { selectedPlanId = plan.id },
                                 onStart: {
                                     startSession(planId: plan.id, planName: plan.name)
                                 }
@@ -233,8 +288,6 @@ struct WorkoutsView: View {
     }
 
     private var exercisesTab: some View {
-        let collapseProgress = headerHeight > 0 ? min(max(exercisesScrollOffset / headerHeight, 0), 1) : 0
-
         return ZStack(alignment: .top) {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
@@ -282,6 +335,15 @@ struct WorkoutsView: View {
             }
             .coordinateSpace(name: "exercisesScroll")
             .onPreferenceChange(WorkoutsScrollOffsetKey.self) { offset in
+                let delta = offset - lastScrollOffset
+                if offset <= 0 {
+                    if !headerVisible { withAnimation(.easeInOut(duration: 0.25)) { headerVisible = true } }
+                } else if delta > 10 {
+                    if headerVisible { withAnimation(.easeInOut(duration: 0.25)) { headerVisible = false } }
+                } else if delta < -5 {
+                    if !headerVisible { withAnimation(.easeInOut(duration: 0.25)) { headerVisible = true } }
+                }
+                lastScrollOffset = offset
                 exercisesScrollOffset = offset
             }
             .onPreferenceChange(WorkoutsHeaderHeightKey.self) { height in
@@ -296,9 +358,9 @@ struct WorkoutsView: View {
                         Color.clear.preference(key: WorkoutsHeaderHeightKey.self, value: geo.size.height)
                     }
                 )
-                .offset(y: -headerHeight * collapseProgress)
-                .clipped()
-                .allowsHitTesting(collapseProgress < 1)
+                .offset(y: headerVisible ? 0 : -headerHeight)
+                .allowsHitTesting(headerVisible)
+                .animation(.easeInOut(duration: 0.25), value: headerVisible)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()

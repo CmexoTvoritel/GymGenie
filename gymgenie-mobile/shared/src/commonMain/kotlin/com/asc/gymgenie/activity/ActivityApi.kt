@@ -8,32 +8,24 @@ import io.ktor.client.call.body
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.post
+import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 
-/**
- * Activity (check-in / habit) backend client.
- *
- * Mirrors the call/auth conventions of [com.asc.gymgenie.workout.WorkoutApi]:
- * the injected [HttpClient] must already be authenticated; bearer-token
- * lifecycle and 401-driven refresh are handled by the Ktor `Auth` plugin
- * configured in `createAuthenticatedClient`.
- */
 class ActivityApi(
     private val client: HttpClient,
     private val baseUrl: String = AppConfig.BASE_URL,
 ) {
-    /**
-     * Returns today's activities for the signed-in user, including the
-     * per-activity log value for the current day. Used to drive the home
-     * rings + check-in rows.
-     */
-    suspend fun getTodayActivities(): Result<List<ActivityTodayResponse>> {
+    suspend fun getTodayActivities(date: String? = null): Result<List<ActivityTodayResponse>> {
         return try {
-            val response = client.get("$baseUrl/api/v1/activities/today")
+            val response = client.get("$baseUrl/api/v1/activities/today") {
+                if (date != null) {
+                    url { parameters.append("date", date) }
+                }
+            }
             if (response.status.isSuccess()) {
                 Result.success(response.body<List<ActivityTodayResponse>>())
             } else {
@@ -45,10 +37,6 @@ class ActivityApi(
         }
     }
 
-    /**
-     * Full catalog of activities the user can add to their daily plan.
-     * Independent from the per-day state — drives the catalog screen.
-     */
     suspend fun getCatalog(): Result<List<ActivityCatalogResponse>> {
         return try {
             val response = client.get("$baseUrl/api/v1/activities/catalog")
@@ -63,11 +51,6 @@ class ActivityApi(
         }
     }
 
-    /**
-     * Persists a check-in for the given activity on the date encoded in
-     * [request]. The [request.value] semantics depend on the activity kind
-     * — see [ActivityKind].
-     */
     suspend fun checkin(
         activityId: String,
         request: ActivityCheckinRequest,
@@ -88,14 +71,17 @@ class ActivityApi(
         }
     }
 
-    /**
-     * Adds a catalog activity to the user's daily plan. The backend is
-     * expected to respond with 2xx and an empty body; any non-success status
-     * surfaces as an [ApiException].
-     */
-    suspend fun addToPlan(activityId: String): Result<Unit> {
+    suspend fun addToPlan(
+        activityId: String,
+        request: AddActivityToPlanRequest? = null,
+    ): Result<Unit> {
         return try {
-            val response = client.post("$baseUrl/api/v1/activities/$activityId/plan")
+            val response = client.post("$baseUrl/api/v1/activities/$activityId/plan") {
+                if (request != null) {
+                    contentType(ContentType.Application.Json)
+                    setBody(request)
+                }
+            }
             if (response.status.isSuccess() || response.status.value == 409) {
                 Result.success(Unit)
             } else {
@@ -107,11 +93,26 @@ class ActivityApi(
         }
     }
 
-    /**
-     * Removes a previously added activity from the user's daily plan.
-     * Idempotent on the server side (a 2xx for an already-removed entry is
-     * still a success from the client's perspective).
-     */
+    suspend fun updateSchedule(
+        activityId: String,
+        request: UpdateActivityScheduleRequest,
+    ): Result<Unit> {
+        return try {
+            val response = client.put("$baseUrl/api/v1/activities/$activityId/plan/schedule") {
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }
+            if (response.status.isSuccess()) {
+                Result.success(Unit)
+            } else {
+                val errorBody = response.bodyAsText()
+                Result.failure(ApiException(response.status.value, errorBody))
+            }
+        } catch (e: Exception) {
+            Result.failure(NetworkException(e.message ?: "Ошибка сети"))
+        }
+    }
+
     suspend fun removeFromPlan(activityId: String): Result<Unit> {
         return try {
             val response = client.delete("$baseUrl/api/v1/activities/$activityId/plan")
@@ -126,15 +127,6 @@ class ActivityApi(
         }
     }
 
-    /**
-     * Returns the user's activity history bucketed per day for the inclusive
-     * range `[startDate, endDate]`. Both bounds are ISO-8601 strings
-     * (`YYYY-MM-DD`) — the backend parses them with `@DateTimeFormat` so
-     * any other format is rejected with a 400.
-     *
-     * Used by the Activities → "История" tab to drive the 7-day progress
-     * strip and the per-day log list.
-     */
     suspend fun getHistory(
         startDate: String,
         endDate: String,

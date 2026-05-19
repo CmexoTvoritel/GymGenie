@@ -1,6 +1,7 @@
 package com.asc.gymgenie.workout.dto
 
 import com.asc.gymgenie.workout.entity.SessionStatus
+import com.fasterxml.jackson.annotation.JsonFormat
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
@@ -13,7 +14,9 @@ data class WorkoutSessionResponse(
     val id: UUID,
     val name: String,
     val workoutPlanDayId: UUID?,
+    @JsonFormat(shape = JsonFormat.Shape.NUMBER)
     val startedAt: Instant,
+    @JsonFormat(shape = JsonFormat.Shape.NUMBER)
     val finishedAt: Instant?,
     val status: SessionStatus,
     val notes: String?,
@@ -23,11 +26,18 @@ data class WorkoutSessionResponse(
 data class WorkoutSessionShortResponse(
     val id: UUID,
     val name: String,
+    @JsonFormat(shape = JsonFormat.Shape.NUMBER)
     val startedAt: Instant,
+    @JsonFormat(shape = JsonFormat.Shape.NUMBER)
     val finishedAt: Instant?,
     val status: SessionStatus,
     val totalSets: Int,
-    val completedSets: Int
+    val completedSets: Int,
+    val totalExercises: Int,
+    val completedExercises: Int,
+    val totalReps: Int,
+    val primaryMuscleGroup: String?,
+    val durationMinutes: Int?,
 )
 
 data class WorkoutSessionSetResponse(
@@ -89,8 +99,10 @@ data class SubmitWorkoutSessionRequest(
 
     val workoutPlanDayId: UUID? = null,
 
+    @JsonFormat(shape = JsonFormat.Shape.NUMBER)
     val startedAt: Instant,
 
+    @JsonFormat(shape = JsonFormat.Shape.NUMBER)
     val finishedAt: Instant,
 
     val status: SessionStatus = SessionStatus.COMPLETED,

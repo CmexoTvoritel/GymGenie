@@ -115,6 +115,29 @@ class WorkoutApi(
         }
     }
 
+    /**
+     * Fetches all workout sessions for the given calendar date.
+     *
+     * [date] must be an ISO-8601 local date string (`"2026-05-15"`). The
+     * backend resolves it to the user's server-side timezone. Returns an
+     * empty list when no sessions exist for that day.
+     */
+    suspend fun getSessionsByDate(date: String): Result<List<WorkoutSessionHistoryItem>> {
+        return try {
+            val response = client.get("$baseUrl/api/v1/workout-sessions/by-date") {
+                parameter("date", date)
+            }
+            if (response.status.isSuccess()) {
+                Result.success(response.body<List<WorkoutSessionHistoryItem>>())
+            } else {
+                val errorBody = response.bodyAsText()
+                Result.failure(ApiException(response.status.value, errorBody))
+            }
+        } catch (e: Exception) {
+            Result.failure(NetworkException(e.message ?: "Ошибка сети"))
+        }
+    }
+
     suspend fun getPlanById(planId: String): Result<WorkoutPlanResponse> {
         return try {
             val response = client.get("$baseUrl/api/v1/workout-plans/$planId")

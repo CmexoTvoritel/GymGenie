@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,6 +37,7 @@ data class ToolbarAction(
 fun GymGenieToolbar(
     title: String,
     showBackNavigation: Boolean = false,
+    showCloseIcon: Boolean = false,
     onBackClick: () -> Unit = {},
     actions: List<ToolbarAction> = emptyList(),
 ) {
@@ -63,8 +65,9 @@ fun GymGenieToolbar(
                     horizontalArrangement = Arrangement.Center,
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = null,
+                        imageVector = if (showCloseIcon) Icons.Filled.Close
+                            else Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = if (showCloseIcon) "Закрыть" else "Назад",
                         tint = ToolbarTitleColor,
                         modifier = Modifier.size(20.dp),
                     )

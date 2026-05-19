@@ -13,9 +13,12 @@ import com.arkivanov.decompose.extensions.compose.subscribeAsState
 import com.asc.gymgenie.feature.activities.ActivitiesScreen
 import com.asc.gymgenie.feature.activities.ActivityCatalogScreen
 import com.asc.gymgenie.feature.activities.ActivityGoalSettingsScreen
+import com.asc.gymgenie.feature.activities.ActivityScheduleSettingsScreen
 import com.asc.gymgenie.feature.home.HomeScreen
+import com.asc.gymgenie.feature.meal_plan_detail.MealPlanDetailScreen
+import com.asc.gymgenie.feature.notifications.NotificationsScreen
 import com.asc.gymgenie.feature.nutrition.CreateMealPlanFlowScreen
-import com.asc.gymgenie.feature.nutrition.NutritionScreen
+import com.asc.gymgenie.feature.workouts.WorkoutDetailScreen
 import com.asc.gymgenie.ui.theme.WarmOffWhite
 import com.asc.gymgenie.workout.ActiveWorkoutSession
 import com.asc.gymgenie.workout.WorkoutPlanShortResponse
@@ -24,7 +27,11 @@ import com.asc.gymgenie.workout.WorkoutPlanShortResponse
 fun HomeContent(
     component: HomeComponent,
     onOpenWorkoutPlan: (WorkoutPlanShortResponse) -> Unit,
+    onStartPlan: (String, String) -> Unit,
     onSessionReady: (ActiveWorkoutSession) -> Unit,
+    onOpenPaywall: () -> Unit,
+    onSwitchToProfile: () -> Unit = {},
+    onSwitchToWorkouts: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val mealPlansReloadKey by component.mealPlansReloadKey.subscribeAsState()
@@ -41,15 +48,37 @@ fun HomeContent(
                     onOpenCatalog = component::openCatalog,
                     onViewPlan = onOpenWorkoutPlan,
                     onSessionReady = onSessionReady,
-                    onCreateMealPlan = { mealType -> component.openCreateMealPlan(mealType) },
-                    onViewMealPlan = { component.openNutrition() },
+                    onCreateMealPlan = { mealType, date -> component.openCreateMealPlan(mealType, date) },
+                    onViewMealPlan = { planId -> component.openMealPlanDetail(planId) },
                     mealPlansReloadKey = mealPlansReloadKey,
+                    onOpenPaywall = onOpenPaywall,
+                    onNotificationsClick = component::openNotifications,
+                    onSwitchToProfile = onSwitchToProfile,
+                    onSwitchToWorkouts = onSwitchToWorkouts,
+                    onOpenActivityScheduleSettings = { activityId, name, scheduleType, scheduleDays, oneOffDate ->
+                        component.openActivityScheduleSettings(
+                            activityId = activityId,
+                            activityName = name,
+                            scheduleType = scheduleType,
+                            scheduleDays = scheduleDays,
+                            oneOffDate = oneOffDate,
+                        )
+                    },
                 )
 
                 HomeComponent.Child.Activities -> ActivitiesScreen(
                     onBack = component::pop,
                     onOpenCatalog = component::openCatalog,
                     refreshSignal = activitiesRefreshSignal,
+                    onOpenScheduleSettings = { activityId, name, scheduleType, scheduleDays, oneOffDate ->
+                        component.openActivityScheduleSettings(
+                            activityId = activityId,
+                            activityName = name,
+                            scheduleType = scheduleType,
+                            scheduleDays = scheduleDays,
+                            oneOffDate = oneOffDate,
+                        )
+                    },
                 )
 
                 HomeComponent.Child.ActivityCatalog -> ActivityCatalogScreen(
@@ -61,14 +90,39 @@ fun HomeContent(
                     onBack = component::pop,
                 )
 
-                HomeComponent.Child.Nutrition -> NutritionScreen(
+                is HomeComponent.Child.ActivityScheduleSettings -> ActivityScheduleSettingsScreen(
+                    activityId = instance.activityId,
+                    activityName = instance.activityName,
+                    initialScheduleType = instance.scheduleType,
+                    initialScheduleDays = instance.scheduleDays,
+                    initialOneOffDate = instance.oneOffDate,
                     onBack = component::pop,
+                )
+
+                is HomeComponent.Child.MealPlanDetail -> MealPlanDetailScreen(
+                    planId = instance.planId,
+                    onBack = component::pop,
+                    onDeleted = component::onMealPlanDeleted,
+                    onEdit = { component.openCreateMealPlan(editPlanId = instance.planId) },
                 )
 
                 is HomeComponent.Child.CreateMealPlan -> CreateMealPlanFlowScreen(
                     initialMealType = instance.initialMealType,
+                    initialDate = instance.initialDate,
+                    editPlanId = instance.editPlanId,
                     onDismiss = component::pop,
+                    onDiscardToHome = component::resetToMain,
                     onSaved = component::onMealPlanSaved,
+                )
+
+                is HomeComponent.Child.WorkoutDetail -> WorkoutDetailScreen(
+                    planId = instance.planId,
+                    onBack = component::pop,
+                    onStartPlan = onStartPlan,
+                )
+
+                HomeComponent.Child.Notifications -> NotificationsScreen(
+                    onBack = component::pop,
                 )
             }
         }

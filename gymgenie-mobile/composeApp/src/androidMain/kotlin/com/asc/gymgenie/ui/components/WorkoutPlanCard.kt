@@ -185,7 +185,7 @@ private fun ChipsRow(
     ) {
         InfoChip(
             icon = Icons.Filled.Schedule,
-            text = "~${estimatedMinutes(plan)} мин",
+            text = "~${plan.estimatedMinutes} мин",
         )
         InfoChip(
             icon = Icons.AutoMirrored.Filled.List,
@@ -386,19 +386,6 @@ internal fun muscleGroupCardEmoji(group: String?): String = when (group?.upperca
     "CARDIO" -> "❤️"
     "FULL_BODY" -> "⭐"
     else -> "🏋"
-}
-
-/**
- * Lightweight time estimate that doesn't pretend to be precise: each set is
- * assumed to take ~1 min including the configured rest interval. This keeps
- * the chip useful even for plans that haven't been executed yet (so we can't
- * pull a real average from session history).
- */
-private fun estimatedMinutes(plan: WorkoutPlanShortResponse): Int {
-    if (plan.totalSets <= 0) return 0
-    val perSetSeconds = 30 + plan.restSeconds.coerceAtLeast(0)
-    val seconds = plan.totalSets * perSetSeconds
-    return (seconds / 60).coerceAtLeast(1)
 }
 
 private val DayAbbreviations = listOf(

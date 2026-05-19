@@ -75,7 +75,9 @@ fun MealPlanSection(
     selectedDate: LocalDate,
     onDateSelected: (LocalDate) -> Unit,
     onPlanTap: (planId: String) -> Unit,
-    onCreatePlan: (mealType: String?) -> Unit,
+    onCreatePlan: (mealType: String?, date: String?) -> Unit,
+    isPremium: Boolean = true,
+    onOpenPaywall: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val totalKcal = todayPlans.sumOf { it.estimatedCalories ?: 0 }
@@ -83,35 +85,42 @@ fun MealPlanSection(
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SectionHeaderPremium(
             title = "План питания",
-            subtitle = when {
-                isLoading -> "Загрузка..."
-                todayPlans.isEmpty() -> "Нет планов на эту дату"
-                else -> "${todayPlans.size} ${pluralizeMeals(todayPlans.size)} · $totalKcal ккал"
-            },
+            subtitle = if (!isPremium) "Доступен в Premium"
+                       else when {
+                           isLoading -> "Загрузка..."
+                           todayPlans.isEmpty() -> "Нет планов на эту дату"
+                           else -> "${todayPlans.size} ${pluralizeMeals(todayPlans.size)} · $totalKcal ккал"
+                       },
         )
 
-        MealDatePicker(
-            selectedDate = selectedDate,
-            onDateSelected = onDateSelected,
-        )
-
-        if (isLoading) {
-            MealPlansLoadingState()
-        } else if (todayPlans.isEmpty()) {
-            EmptyPlanCard(onCreate = { onCreatePlan(null) })
+        if (!isPremium) {
+            MealPlanLockedOverlay(onUnlock = onOpenPaywall)
         } else {
-            STANDARD_SLOTS.forEach { slot ->
-                val card = todayPlans.firstOrNull { it.mealType.uppercase() == slot }
-                if (card != null) {
-                    MealRow(
-                        card = card,
-                        onTap = { onPlanTap(card.planId) },
-                    )
-                } else {
-                    EmptyMealSlotCard(
-                        mealType = slot,
-                        onCreatePlan = onCreatePlan,
-                    )
+            MealDatePicker(
+                selectedDate = selectedDate,
+                onDateSelected = onDateSelected,
+            )
+
+            val dateIso = selectedDate.toString()
+
+            if (isLoading) {
+                MealPlansLoadingState()
+            } else if (todayPlans.isEmpty()) {
+                EmptyPlanCard(onCreate = { onCreatePlan(null, null) })
+            } else {
+                STANDARD_SLOTS.forEach { slot ->
+                    val card = todayPlans.firstOrNull { it.mealType.uppercase() == slot }
+                    if (card != null) {
+                        MealRow(
+                            card = card,
+                            onTap = { onPlanTap(card.planId) },
+                        )
+                    } else {
+                        EmptyMealSlotCard(
+                            mealType = slot,
+                            onCreatePlan = { mealType -> onCreatePlan(mealType, dateIso) },
+                        )
+                    }
                 }
             }
         }
@@ -320,14 +329,14 @@ private fun EmptyPlanCard(onCreate: () -> Unit) {
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = "Нет плана питания на эту дату",
-            fontSize = 16.sp,
+            fontSize = 17.sp,
             fontWeight = FontWeight.ExtraBold,
             color = DeepInk,
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = "Создай рацион — расписание сам подскажет, что есть в этот день",
-            fontSize = 13.sp,
+            text = "Создай рацион — расписание само подскажет, что есть в этот день",
+            fontSize = 15.sp,
             color = MutedText,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
@@ -353,7 +362,7 @@ private fun EmptyPlanCard(onCreate: () -> Unit) {
 }
 
 @Composable
-private fun EmptyMealSlotCard(mealType: String, onCreatePlan: (mealType: String?) -> Unit) {
+private fun EmptyMealSlotCard(mealType: String, onCreatePlan: (mealType: String) -> Unit) {
     val palette = paletteFor(mealType)
     val title = mealTypeDisplayName(mealType)
 

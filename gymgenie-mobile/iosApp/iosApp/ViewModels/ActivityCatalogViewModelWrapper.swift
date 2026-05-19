@@ -40,9 +40,7 @@ final class ActivityCatalogViewModelWrapper: ObservableObject {
                 }
                 self.isLoading = state.isLoading
                 self.catalog = state.catalog as [ActivityCatalogResponse]
-                // Kotlin `Set<String>` lands on the Swift side as `Set<AnyHashable>`
-                // — convert it explicitly so consumers get a typed `Set<String>`.
-                self.planIds = Set(state.planIds.compactMap { $0 as? String })
+                self.planIds = Set(state.planIds)
                 self.error = state.error
 
                 try? await Task.sleep(nanoseconds: 50_000_000)
@@ -52,6 +50,22 @@ final class ActivityCatalogViewModelWrapper: ObservableObject {
 
     func load() { vm.load() }
     func togglePlan(activityId: String) { vm.togglePlan(activityId: activityId) }
+
+    func addToPlanWithSchedule(
+        activityId: String,
+        scheduleType: String?,
+        scheduleDays: [String],
+        oneOffDate: String?,
+        goal: Int?
+    ) {
+        vm.addToPlanWithSchedule(
+            activityId: activityId,
+            scheduleType: scheduleType,
+            scheduleDays: scheduleDays,
+            oneOffDate: oneOffDate,
+            goal: goal.map { KotlinInt(int: Int32($0)) }
+        )
+    }
 
     deinit {
         observationTask?.cancel()

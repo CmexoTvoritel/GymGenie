@@ -21,7 +21,6 @@ struct WorkoutPlanCard: View {
     private var visual: MuscleGroupVisualStyle { muscleGroupStyle(plan.primaryMuscleGroup) }
     private var isAi: Bool { plan.createdBy.uppercased() == "AI" }
     private var isRecurring: Bool { plan.scheduleType.uppercased() == "RECURRING" }
-    private var estimatedMinutes: Int { max(1, Int(Double(plan.totalSets) * 1.5)) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -116,7 +115,7 @@ struct WorkoutPlanCard: View {
 
     private var chipsRow: some View {
         HStack(spacing: 6) {
-            InfoChip(icon: "clock", text: "~\(estimatedMinutes) мин")
+            InfoChip(icon: "clock", text: "~\(plan.estimatedMinutes) мин")
             InfoChip(icon: "list.bullet", text: "\(plan.exercisesCount) упр.")
             scheduleChip
         }

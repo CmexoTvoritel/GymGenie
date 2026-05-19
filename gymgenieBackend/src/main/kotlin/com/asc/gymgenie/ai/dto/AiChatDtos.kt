@@ -30,6 +30,7 @@ data class AiWorkoutDto(
     val name: String,
     val description: String?,
     val estimatedDurationMinutes: Int,
+    val restSeconds: Int? = null,
     val exercises: List<AiWorkoutExerciseParsedDto>
 )
 
@@ -39,27 +40,35 @@ data class AiWorkoutDto(
  * `reps` and `restSeconds` are nullable because GigaChat omits these fields
  * for bodyweight or time-based exercises. This DTO must NOT be exposed on
  * mobile-facing endpoints — use [AiWorkoutExerciseDto] there.
+ *
+ * `setWeightsKg` is optional and only emitted by GigaChat for exercises whose
+ * catalog entry has `requiresWeight = true`. When present, each element
+ * corresponds to a single set; nulls mark sets without a target weight.
  */
 data class AiWorkoutExerciseParsedDto(
     val exerciseId: UUID,
     val sets: Int,
     val reps: Int? = null,
     val restSeconds: Int? = null,
-    val notes: String? = null
+    val notes: String? = null,
+    val setWeightsKg: List<Double?>? = null
 )
 
 /**
  * Strict DTO used by the mobile-facing save/replace workout endpoints.
  *
  * All numeric prescription fields are required: clients must explicitly
- * specify `reps` and `restSeconds` before persistence.
+ * specify `reps` before persistence. Rest time is now a workout-level
+ * concern — see [SaveWorkoutRequest.restSeconds]. `setWeightsKg` stays
+ * optional because not every exercise tracks per-set weight; when present,
+ * the list size must match `sets` (validated server-side).
  */
 data class AiWorkoutExerciseDto(
     val exerciseId: UUID,
     val sets: Int,
     val reps: Int,
-    val restSeconds: Int,
-    val notes: String? = null
+    val notes: String? = null,
+    val setWeightsKg: List<Double?>? = null
 )
 
 data class SaveWorkoutRequest(
@@ -67,7 +76,8 @@ data class SaveWorkoutRequest(
     @field:NotEmpty
     val exercises: List<AiWorkoutExerciseDto>,
     val name: String,
-    val description: String? = null
+    val description: String? = null,
+    val restSeconds: Int = 60
 )
 
 data class SaveWorkoutResponse(

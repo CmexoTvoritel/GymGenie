@@ -53,11 +53,7 @@ final class AiMealViewModelWrapper: ObservableObject {
                     self.isSaving = state.isSaving
                     self.isSaved = state.isSaved
                     self.errorMessage = state.errorMessage
-                    if let list = state.messages as? [AiMealChatMessage] {
-                        self.messages = list
-                    } else {
-                        self.messages = (state.messages as NSArray).compactMap { $0 as? AiMealChatMessage }
-                    }
+                    self.messages = state.messages as [AiMealChatMessage]
                 }
                 try? await Task.sleep(nanoseconds: 50_000_000)
             }

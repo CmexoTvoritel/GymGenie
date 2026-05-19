@@ -26,10 +26,19 @@ data class ExerciseShortResponse(
     val muscleGroup: String = "",
     val category: String = "",
     val difficultyLevel: String = "",
-    val durationMinutes: Int? = null,
+    val secondsPer10Reps: Int? = null,
     val caloriesBurned: Int? = null,
     val rating: Double? = null,
     val imageUrl: String? = null,
+    /**
+     * Server-driven flag indicating that this exercise is performed with weight
+     * (dumbbells, barbell, kettlebell, etc.). The create-workout flow uses this
+     * to decide whether to ask the user to enter per-set kilograms.
+     *
+     * Defaults to `false` so older backend versions and bodyweight-only
+     * exercises keep working without configuration changes on the client.
+     */
+    val requiresWeight: Boolean = false,
 )
 
 @Serializable
@@ -42,11 +51,13 @@ data class ExerciseDetailResponse(
     val secondaryMuscleGroups: List<String> = emptyList(),
     val category: String = "",
     val difficultyLevel: String = "",
-    val durationMinutes: Int? = null,
+    val secondsPer10Reps: Int? = null,
     val caloriesBurned: Int? = null,
     val rating: Double? = null,
     val imageUrl: String? = null,
     val instructions: List<String> = emptyList(),
     val equipment: List<String> = emptyList(),
     val techniqueTip: String? = null,
+    /** Same meaning as [ExerciseShortResponse.requiresWeight]; see there. */
+    val requiresWeight: Boolean = false,
 )

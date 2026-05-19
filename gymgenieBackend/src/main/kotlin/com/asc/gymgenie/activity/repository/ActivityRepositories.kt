@@ -16,7 +16,21 @@ interface ActivityDefinitionRepository : JpaRepository<ActivityDefinitionEntity,
 
 interface UserActivityRepository : JpaRepository<UserActivityEntity, UUID> {
 
-    @Query("SELECT ua FROM UserActivityEntity ua JOIN FETCH ua.activity WHERE ua.user.id = :userId ORDER BY ua.activity.sortOrder ASC")
+    /**
+     * Fetches all planned activities for the user, eagerly loading both the
+     * activity definition and the schedule-days element collection to avoid
+     * N+1 queries during date filtering.
+     *
+     * Using `LEFT JOIN FETCH` for `scheduleDays` because the collection may
+     * be empty (every-day / one-time activities) and we still want those rows.
+     */
+    @Query("""
+        SELECT DISTINCT ua FROM UserActivityEntity ua
+        JOIN FETCH ua.activity
+        LEFT JOIN FETCH ua.scheduleDays
+        WHERE ua.user.id = :userId
+        ORDER BY ua.activity.sortOrder ASC
+    """)
     fun findAllByUserIdWithActivity(userId: UUID): List<UserActivityEntity>
 
     fun findByUserIdAndActivityId(userId: UUID, activityId: UUID): Optional<UserActivityEntity>

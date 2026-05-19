@@ -22,4 +22,10 @@ sealed class ProfileConfig {
 
     @Serializable
     data object Paywall : ProfileConfig()
+
+    @Serializable
+    data object History : ProfileConfig()
+
+    @Serializable
+    data class HistorySummary(val sessionId: String) : ProfileConfig()
 }

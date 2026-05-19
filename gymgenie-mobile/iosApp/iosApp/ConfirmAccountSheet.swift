@@ -13,16 +13,19 @@ struct ConfirmAccountSheet: View {
     let onDismiss: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
+        ZStack(alignment: .top) {
+            Color.white.ignoresSafeArea()
+
+            VStack(spacing: 0) {
             ZStack {
                 Circle()
                     .fill(isDelete ? csDangerSoft : csCoralSoft)
                     .frame(width: 56, height: 56)
                 Image(systemName: isDelete ? "trash.fill" : "rectangle.portrait.and.arrow.right")
-                    .font(.system(size: 22))
+                    .font(.system(size: 26))
                     .foregroundColor(isDelete ? csDangerRed : csCoral)
             }
-            .padding(.top, 24)
+            .padding(.top, 8)
 
             Text(isDelete ? "Удалить аккаунт?" : "Выйти из аккаунта?")
                 .font(.system(size: 21, weight: .bold))
@@ -35,7 +38,8 @@ struct ConfirmAccountSheet: View {
                 .font(.system(size: 16))
                 .foregroundColor(csMuted)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 24)
+                .lineLimit(nil)
+                .padding(.horizontal, 8)
                 .padding(.top, 8)
 
             Button(action: onConfirm) {
@@ -59,11 +63,11 @@ struct ConfirmAccountSheet: View {
             }
             .buttonStyle(.plain)
             .padding(.horizontal, 22)
-            .padding(.bottom, 12)
-
-            Spacer(minLength: 0)
+            .padding(.bottom, 8)
         }
         .frame(maxWidth: .infinity)
-        .background(Color.white)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+        }
     }
 }

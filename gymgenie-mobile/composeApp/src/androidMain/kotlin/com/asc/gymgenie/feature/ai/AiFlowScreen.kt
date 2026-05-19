@@ -1,6 +1,9 @@
 package com.asc.gymgenie.feature.ai
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -34,8 +37,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -45,10 +46,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -69,7 +66,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
@@ -78,17 +75,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.BackHandler
 import com.asc.gymgenie.R
 import com.asc.gymgenie.ai.AiChatMessage
 import com.asc.gymgenie.ai.AiFlowStep
 import com.asc.gymgenie.ai.AiProfileData
 import com.asc.gymgenie.ai.AiViewModel
 import com.asc.gymgenie.feature.nutrition.AiMealFlowScreen
+import com.asc.gymgenie.ui.components.GymGenieToolbar
 import com.asc.gymgenie.ui.theme.Coral
 import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.WarmOffWhite
+import kotlin.math.roundToInt
 import org.koin.core.context.GlobalContext
 
 private val OffWhite = WarmOffWhite
@@ -100,12 +101,20 @@ private val GreenLight = Color(0xFFF0FDF4)
 private val GreenText = Color(0xFF16A34A)
 
 @Composable
-fun AiFlowScreen() {
+fun AiFlowScreen(onBottomBarVisibilityChanged: (Boolean) -> Unit = {}) {
     val koin = remember { GlobalContext.get() }
     val viewModel = remember { koin.get<AiViewModel>() }
     DisposableEffect(Unit) { onDispose { viewModel.onCleared() } }
 
     val state by viewModel.state.collectAsState()
+
+    BackHandler(enabled = state.step != AiFlowStep.CHOOSE) {
+        viewModel.goBack()
+    }
+
+    LaunchedEffect(state.step) {
+        onBottomBarVisibilityChanged(state.step == AiFlowStep.CHOOSE)
+    }
 
     AnimatedContent(
         targetState = state.step,
@@ -124,6 +133,7 @@ fun AiFlowScreen() {
         when (step) {
             AiFlowStep.CHOOSE -> ChooseScreen(
                 onNext = { viewModel.goTo(AiFlowStep.PROFILE) },
+                onBottomBarVisibilityChanged = onBottomBarVisibilityChanged,
             )
             AiFlowStep.PROFILE -> ProfileScreen(
                 profile = state.profile,
@@ -162,6 +172,7 @@ fun AiFlowScreen() {
 @Composable
 private fun ChooseScreen(
     onNext: () -> Unit,
+    onBottomBarVisibilityChanged: (Boolean) -> Unit,
 ) {
     // Local presentation flag for the AI meal flow. The meal flow is
     // entirely self-contained (`AiMealFlowScreen`) and renders its own
@@ -169,21 +180,21 @@ private fun ChooseScreen(
     // overlay it on top of the chooser.
     var showMealFlow by remember { mutableStateOf(false) }
 
+    BackHandler(enabled = showMealFlow) {
+        showMealFlow = false
+    }
+
+    LaunchedEffect(showMealFlow) {
+        onBottomBarVisibilityChanged(!showMealFlow)
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(OffWhite)
-            .statusBarsPadding()
             .navigationBarsPadding(),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("AI", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = DeepInk)
-        }
+        GymGenieToolbar(title = "ИИ тренер")
 
         Column(
             modifier = Modifier
@@ -193,7 +204,7 @@ private fun ChooseScreen(
             Spacer(Modifier.height(40.dp))
             Text(
                 "Что вы хотите сгенерировать?",
-                fontSize = 22.sp,
+                fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 color = DeepInk,
                 textAlign = TextAlign.Center,
@@ -218,7 +229,11 @@ private fun ChooseScreen(
         }
     }
 
-    if (showMealFlow) {
+    AnimatedVisibility(
+        visible = showMealFlow,
+        enter = slideInVertically(initialOffsetY = { it }),
+        exit = slideOutVertically(targetOffsetY = { it }),
+    ) {
         AiMealFlowScreen(
             onDismiss = { showMealFlow = false },
         )
@@ -254,11 +269,11 @@ private fun GenerateTypeCard(
             .padding(24.dp),
     ) {
         Column {
-            Text(emoji, fontSize = 28.sp)
+            Text(emoji, fontSize = 30.sp)
             Spacer(Modifier.height(8.dp))
-            Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = DeepInk)
+            Text(title, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = DeepInk)
             Spacer(Modifier.height(4.dp))
-            Text(subtitle, fontSize = 13.sp, color = MutedGray)
+            Text(subtitle, fontSize = 15.sp, color = MutedGray)
         }
     }
 }
@@ -275,17 +290,20 @@ private fun ProfileScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(OffWhite)
-            .statusBarsPadding()
             .navigationBarsPadding(),
     ) {
-        FlowHeader(title = "План тренировки", onBack = onBack)
+        GymGenieToolbar(
+            title = "План тренировки",
+            showBackNavigation = true,
+            onBackClick = onBack,
+        )
         Column(
             modifier = Modifier
                 .weight(1f)
                 .padding(horizontal = 20.dp),
         ) {
             Spacer(Modifier.height(8.dp))
-            Text("Введите данные профиля", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = DeepInk)
+            Text("Введите данные профиля", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = DeepInk)
             Spacer(Modifier.height(24.dp))
             SliderField(label = "Возраст", value = profile.age, min = 10, max = 80) { v ->
                 onProfileChange(profile.copy(age = v))
@@ -309,7 +327,6 @@ private fun SliderField(
     max: Int,
     onChange: (Int) -> Unit,
 ) {
-    val density = LocalDensity.current
     var trackWidthPx by remember { mutableFloatStateOf(1f) }
     var accumulatedOffset by remember { mutableFloatStateOf(0f) }
     val pct = if (max > min) (value - min).toFloat() / (max - min) else 0f
@@ -333,7 +350,7 @@ private fun SliderField(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Bottom,
         ) {
-            Text(label, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Color(0xFF555555))
+            Text(label, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF555555))
             if (isEditing) {
                 BasicTextField(
                     value = inputText,
@@ -399,30 +416,31 @@ private fun SliderField(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(4.dp)
+                    .height(6.dp)
                     .align(Alignment.Center)
-                    .clip(RoundedCornerShape(2.dp))
+                    .clip(RoundedCornerShape(3.dp))
                     .background(BorderGray),
             )
             Box(
                 modifier = Modifier
                     .fillMaxWidth(pct)
-                    .height(4.dp)
+                    .height(6.dp)
                     .align(Alignment.CenterStart)
-                    .clip(RoundedCornerShape(2.dp))
+                    .clip(RoundedCornerShape(3.dp))
                     .background(Coral),
             )
             Box(
                 modifier = Modifier
-                    .size(20.dp)
                     .align(Alignment.CenterStart)
-                    .padding(start = 0.dp)
-                    .then(
-                        with(density) {
-                            val offset = ((pct * (trackWidthPx - 20.dp.toPx()))).toDp()
-                            Modifier.padding(start = offset.coerceAtLeast(0.dp))
-                        },
-                    )
+                    .offset {
+                        val thumbPx = 24.dp.toPx()
+                        IntOffset(
+                            x = (pct * (trackWidthPx - thumbPx)).roundToInt().coerceAtLeast(0),
+                            y = 0,
+                        )
+                    }
+                    .size(24.dp)
+                    .border(2.5.dp, Color.White, CircleShape)
                     .clip(CircleShape)
                     .background(Coral),
             )
@@ -430,8 +448,8 @@ private fun SliderField(
 
         Spacer(Modifier.height(4.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(min.toString(), fontSize = 11.sp, color = Color(0xFFAAAAAA))
-            Text(max.toString(), fontSize = 11.sp, color = Color(0xFFAAAAAA))
+            Text(min.toString(), fontSize = 13.sp, color = Color(0xFFAAAAAA))
+            Text(max.toString(), fontSize = 13.sp, color = Color(0xFFAAAAAA))
         }
     }
 }
@@ -449,22 +467,25 @@ private fun ExperienceScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(OffWhite)
-            .statusBarsPadding()
             .navigationBarsPadding(),
     ) {
-        FlowHeader(title = "План тренировки", onBack = onBack)
+        GymGenieToolbar(
+            title = "План тренировки",
+            showBackNavigation = true,
+            onBackClick = onBack,
+        )
         Column(
             modifier = Modifier
                 .weight(1f)
                 .padding(horizontal = 20.dp),
         ) {
             Spacer(Modifier.height(8.dp))
-            Text("Ваш опыт", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = DeepInk)
+            Text("Ваш опыт", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = DeepInk)
             Spacer(Modifier.height(24.dp))
             Text(
                 "Как давно вы занимаетесь спортом?",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
                 color = Color(0xFF555555),
             )
             Spacer(Modifier.height(8.dp))
@@ -476,8 +497,8 @@ private fun ExperienceScreen(
             Spacer(Modifier.height(28.dp))
             Text(
                 "Как часто вы занимаетесь спортом?",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
                 color = Color(0xFF555555),
             )
             Spacer(Modifier.height(8.dp))
@@ -507,7 +528,6 @@ private fun HealthScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(OffWhite)
-            .statusBarsPadding()
             .navigationBarsPadding()
             .imePadding()
             // Tap on any non-interactive area (paddings, labels, screen
@@ -521,19 +541,27 @@ private fun HealthScreen(
                 }
             },
     ) {
-        FlowHeader(title = "План тренировки", onBack = onBack)
+        GymGenieToolbar(
+            title = "План тренировки",
+            showBackNavigation = true,
+            onBackClick = {
+                focusManager.clearFocus()
+                keyboardController?.hide()
+                onBack()
+            },
+        )
         Column(
             modifier = Modifier
                 .weight(1f)
                 .padding(horizontal = 20.dp),
         ) {
             Spacer(Modifier.height(8.dp))
-            Text("Здоровье", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = DeepInk)
+            Text("Здоровье", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = DeepInk)
             Spacer(Modifier.height(24.dp))
             Text(
                 "Есть ли у вас ограничения по здоровью?",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
                 color = Color(0xFF555555),
             )
             Spacer(Modifier.height(8.dp))
@@ -554,8 +582,8 @@ private fun HealthScreen(
                 Spacer(Modifier.height(16.dp))
                 Text(
                     "Опишите ваши ограничения",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
                     color = Color(0xFF555555),
                 )
                 Spacer(Modifier.height(8.dp))
@@ -563,7 +591,7 @@ private fun HealthScreen(
                     value = profile.limitationsDesc,
                     onValueChange = { onProfileChange(profile.copy(limitationsDesc = it)) },
                     textStyle = TextStyle(
-                        fontSize = 14.sp,
+                        fontSize = 16.sp,
                         color = DeepInk,
                     ),
                     cursorBrush = SolidColor(Coral),
@@ -583,7 +611,7 @@ private fun HealthScreen(
                         if (profile.limitationsDesc.isEmpty()) {
                             Text(
                                 "Например: грыжа позвоночника",
-                                fontSize = 14.sp,
+                                fontSize = 16.sp,
                                 color = Color(0xFFAAAAAA),
                             )
                         }
@@ -624,11 +652,18 @@ private fun ChatScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(OffWhite)
-            .statusBarsPadding()
             .navigationBarsPadding()
             .imePadding(),
     ) {
-        FlowHeader(title = "AI Тренер", onBack = onBack)
+        GymGenieToolbar(
+            title = "AI Тренер",
+            showBackNavigation = true,
+            onBackClick = {
+                focusManager.clearFocus()
+                keyboardController?.hide()
+                onBack()
+            },
+        )
 
         LazyColumn(
             state = listState,
@@ -872,40 +907,12 @@ private fun ChipGroup(options: List<String>, selected: String, onSelect: (String
             ) {
                 Text(
                     opt,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
                     color = if (active) Color.White else DeepInk,
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun FlowHeader(title: String, onBack: () -> Unit) {
-    val focusManager = LocalFocusManager.current
-    val keyboardController = LocalSoftwareKeyboardController.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 4.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(onClick = {
-            // Going back must drop the keyboard so it doesn't linger over
-            // the previous step or the destination screen mid-transition.
-            focusManager.clearFocus()
-            keyboardController?.hide()
-            onBack()
-        }) {
-            Icon(
-                Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Назад",
-                tint = DeepInk,
-            )
-        }
-        Spacer(Modifier.width(4.dp))
-        Text(title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = DeepInk)
     }
 }
 

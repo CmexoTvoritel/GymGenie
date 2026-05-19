@@ -111,35 +111,47 @@ class MealPlanService(
         val user = userRepository.findById(userId)
             .orElseThrow { NotFoundException("User not found") }
 
-        // Resolve every catalog product up front. Failing fast here means we
-        // never end up with a half-persisted plan referencing a missing product.
-        val resolvedItems: List<Pair<ManualMealItemDto, FoodProductEntity>> = request.items.map { item ->
-            val product = foodProductRepository.findById(item.foodProductId)
-                .orElseThrow { BadRequestException("Food product not found: ${item.foodProductId}") }
-            item to product
-        }
-
         // Pre-compute macros so the meal/plan totals can be initialized before
         // dish entities are constructed (DishEntity.meal is non-null and we want
         // to avoid a placeholder reference).
+        //
+        // Two cases:
+        //  1. Items with foodProductId → resolve from catalog, scale per-100g macros.
+        //  2. Items without foodProductId → inline AI-generated dish, accept macros as-is.
         data class ScaledMacros(
-            val product: FoodProductEntity,
+            val name: String,
             val grams: Double,
             val calories: Int?,
             val proteinG: Int?,
             val carbsG: Int?,
-            val fatG: Int?
+            val fatG: Int?,
+            val foodProductId: UUID?,
         )
 
-        val scaledItems: List<ScaledMacros> = resolvedItems.map { (item, product) ->
-            ScaledMacros(
-                product = product,
-                grams = item.grams,
-                calories = scalePer100g(product.caloriesPer100g, item.grams),
-                proteinG = scalePer100g(product.proteinPer100g, item.grams),
-                carbsG = scalePer100g(product.carbsPer100g, item.grams),
-                fatG = scalePer100g(product.fatPer100g, item.grams)
-            )
+        val scaledItems: List<ScaledMacros> = request.items.map { item ->
+            if (item.foodProductId != null) {
+                val product = foodProductRepository.findById(item.foodProductId)
+                    .orElseThrow { BadRequestException("Food product not found: ${item.foodProductId}") }
+                ScaledMacros(
+                    name = product.nameRu,
+                    grams = item.grams,
+                    calories = scalePer100g(product.caloriesPer100g, item.grams),
+                    proteinG = scalePer100g(product.proteinPer100g, item.grams),
+                    carbsG = scalePer100g(product.carbsPer100g, item.grams),
+                    fatG = scalePer100g(product.fatPer100g, item.grams),
+                    foodProductId = product.id,
+                )
+            } else {
+                ScaledMacros(
+                    name = item.name ?: "Блюдо",
+                    grams = item.grams,
+                    calories = item.calories,
+                    proteinG = item.proteinG,
+                    carbsG = item.carbsG,
+                    fatG = item.fatG,
+                    foodProductId = null,
+                )
+            }
         }
 
         val mealEstimatedCalories = scaledItems.mapNotNull { it.calories }.sum().takeIf { it > 0 }
@@ -167,13 +179,15 @@ class MealPlanService(
             meal.dishes.add(
                 DishEntity(
                     meal = meal,
-                    name = scaled.product.nameRu.take(150),
+                    name = scaled.name.take(150),
                     description = null,
                     portionDescription = "${scaled.grams.toInt()}г",
                     calories = scaled.calories,
                     proteinG = scaled.proteinG,
                     carbsG = scaled.carbsG,
-                    fatG = scaled.fatG
+                    fatG = scaled.fatG,
+                    foodProductId = scaled.foodProductId,
+                    grams = scaled.grams
                 )
             )
         }
@@ -302,7 +316,7 @@ class MealPlanService(
         createdBy = createdBy,
         scheduleType = scheduleType,
         scheduleDays = scheduleDays.toList(),
-        oneOffDate = oneOffDate,
+        oneOffDate = oneOffDate?.toString(),
         meals = meals.map { it.toResponse() },
         createdAt = createdAt
     )
@@ -323,6 +337,8 @@ class MealPlanService(
         calories = calories,
         proteinG = proteinG,
         carbsG = carbsG,
-        fatG = fatG
+        fatG = fatG,
+        foodProductId = foodProductId,
+        grams = grams
     )
 }

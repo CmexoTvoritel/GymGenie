@@ -8,10 +8,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -37,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import com.asc.gymgenie.R
 import com.asc.gymgenie.exercise.MuscleGroupInfo
 import com.asc.gymgenie.presentation.CreateWorkoutUiState
+import com.asc.gymgenie.ui.components.GymGenieToolbar
 import com.asc.gymgenie.ui.theme.AccentOrange
 import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
@@ -55,16 +59,20 @@ fun MuscleGroupPickerScreen(
     onGroupSelected: (MuscleGroupInfo) -> Unit,
     onRetry: () -> Unit,
 ) {
+    val bottomSafeArea = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(WarmOffWhite),
     ) {
-        CreateWorkoutTopBar(
+        GymGenieToolbar(
             title = "Выбери группу мышц",
-            subtitle = "Шаг 1 из 4",
-            onBack = onBack,
+            showBackNavigation = true,
+            onBackClick = onBack,
         )
+
+        WorkoutFlowStepHeader(currentStep = 1)
 
         when {
             state.isMuscleGroupsLoading && state.muscleGroups.isEmpty() -> {
@@ -82,7 +90,15 @@ fun MuscleGroupPickerScreen(
             else -> {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+                    // Top inset is small (the step header already adds breathing room).
+                    // Bottom inset combines the navigation-bar safe area with a 16dp
+                    // floor so the last row never sits flush against the gesture handle.
+                    contentPadding = PaddingValues(
+                        start = 20.dp,
+                        end = 20.dp,
+                        top = 12.dp,
+                        bottom = bottomSafeArea + 16.dp,
+                    ),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.fillMaxSize(),

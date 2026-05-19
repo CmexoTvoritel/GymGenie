@@ -1,0 +1,2 @@
+- [Project: shared ScreenState contract](project_screen_state_contract.md) — canonical loading/error/content phase enum lives in shared `com.asc.gymgenie.ui.ScreenState`, paired with a per-screen `isContentLoaded` + `isRefreshing` pattern.
+- [Project: Decompose navigation (Android)](project_decompose_navigation.md) — composeApp uses Decompose ChildStack/ChildSlot under `navigation/{root,main,tabs}`; iOS keeps SwiftUI nav.

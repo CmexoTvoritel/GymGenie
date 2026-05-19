@@ -1,8 +1,3 @@
-// Required because StackNavigator.push (used by openActivities /
-// openCatalog / openGoalSettings / openNutrition / openCreateMealPlan) is
-// @DelicateDecomposeApi. Pushes are driven by explicit user actions, so
-// the duplicate-configuration risk that motivates the marker does not
-// apply.
 @file:OptIn(com.arkivanov.decompose.DelicateDecomposeApi::class)
 
 package com.asc.gymgenie.navigation.tabs.home
@@ -48,8 +43,17 @@ class DefaultHomeComponent(
         HomeConfig.Activities -> HomeComponent.Child.Activities
         HomeConfig.ActivityCatalog -> HomeComponent.Child.ActivityCatalog
         is HomeConfig.ActivityGoalSettings -> HomeComponent.Child.ActivityGoalSettings(config.category)
-        HomeConfig.Nutrition -> HomeComponent.Child.Nutrition
-        is HomeConfig.CreateMealPlan -> HomeComponent.Child.CreateMealPlan(config.initialMealType)
+        is HomeConfig.ActivityScheduleSettings -> HomeComponent.Child.ActivityScheduleSettings(
+            activityId = config.activityId,
+            activityName = config.activityName,
+            scheduleType = config.scheduleType,
+            scheduleDays = config.scheduleDays,
+            oneOffDate = config.oneOffDate,
+        )
+        is HomeConfig.MealPlanDetail -> HomeComponent.Child.MealPlanDetail(config.planId)
+        is HomeConfig.CreateMealPlan -> HomeComponent.Child.CreateMealPlan(config.initialMealType, config.initialDate, config.editPlanId)
+        is HomeConfig.WorkoutDetail -> HomeComponent.Child.WorkoutDetail(config.planId)
+        HomeConfig.Notifications -> HomeComponent.Child.Notifications
     }
 
     override fun openActivities() {
@@ -64,17 +68,45 @@ class DefaultHomeComponent(
         navigation.push(HomeConfig.ActivityGoalSettings(category))
     }
 
-    override fun openNutrition() {
-        navigation.push(HomeConfig.Nutrition)
+    override fun openActivityScheduleSettings(
+        activityId: String,
+        activityName: String,
+        scheduleType: String?,
+        scheduleDays: List<String>,
+        oneOffDate: String?,
+    ) {
+        navigation.push(
+            HomeConfig.ActivityScheduleSettings(
+                activityId = activityId,
+                activityName = activityName,
+                scheduleType = scheduleType,
+                scheduleDays = scheduleDays,
+                oneOffDate = oneOffDate,
+            )
+        )
     }
 
-    override fun openCreateMealPlan(initialMealType: String?) {
-        navigation.push(HomeConfig.CreateMealPlan(initialMealType))
+    override fun openMealPlanDetail(planId: String) {
+        navigation.push(HomeConfig.MealPlanDetail(planId))
+    }
+
+    override fun openCreateMealPlan(initialMealType: String?, initialDate: String?, editPlanId: String?) {
+        navigation.push(HomeConfig.CreateMealPlan(initialMealType, initialDate, editPlanId))
+    }
+
+    override fun openNotifications() {
+        navigation.push(HomeConfig.Notifications)
+    }
+
+    override fun openWorkoutDetail(planId: String) {
+        if (stack.value.active.configuration !is HomeConfig.WorkoutDetail) {
+            navigation.push(HomeConfig.WorkoutDetail(planId))
+        }
     }
 
     override fun pop() {
         val current = stack.value.active.configuration
-        if (current is HomeConfig.ActivityCatalog) {
+        if (current is HomeConfig.ActivityCatalog || current is HomeConfig.ActivityScheduleSettings) {
             _activitiesRefreshSignal.value = _activitiesRefreshSignal.value + 1
         }
         navigation.pop()
@@ -90,6 +122,11 @@ class DefaultHomeComponent(
     }
 
     override fun onMealPlanSaved() {
+        _mealPlansReloadKey.value = _mealPlansReloadKey.value + 1
+        navigation.popWhile { it !is HomeConfig.Main }
+    }
+
+    override fun onMealPlanDeleted() {
         _mealPlansReloadKey.value = _mealPlansReloadKey.value + 1
         navigation.pop()
     }

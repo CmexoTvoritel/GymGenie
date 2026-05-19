@@ -1,27 +1,20 @@
 import SwiftUI
 import Shared
 
-/// Read-only detail view for a saved AI meal plan.
-///
-/// Layout (top → bottom):
-///  - Header with close button and the plan name
-///  - Optional plan description + summary stats (goal / total kcal / meal count)
-///  - One section per meal slot (breakfast / lunch / dinner)
-///  - Each section lists its dishes with portion + macros
-///
-/// State machine:
-///  - first appear → `viewModel.load()` → loading spinner
-///  - success → render `plan` (always non-nil in the success branch)
-///  - failure → inline error card with retry CTA
 struct MealPlanDetailView: View {
     let planId: String
     let onClose: () -> Void
+    var onDeleted: (() -> Void)? = nil
+    var onEdit: (() -> Void)? = nil
 
     @StateObject private var viewModel: MealPlanDetailViewModelWrapper
+    @State private var showDeleteDialog = false
 
-    init(planId: String, onClose: @escaping () -> Void) {
+    init(planId: String, onClose: @escaping () -> Void, onDeleted: (() -> Void)? = nil, onEdit: (() -> Void)? = nil) {
         self.planId = planId
         self.onClose = onClose
+        self.onDeleted = onDeleted
+        self.onEdit = onEdit
         _viewModel = StateObject(wrappedValue: MealPlanDetailViewModelWrapper(planId: planId))
     }
 
@@ -41,16 +34,33 @@ struct MealPlanDetailView: View {
                     errorView(message: error)
                     Spacer()
                 } else if let plan = viewModel.plan {
-                    contentView(plan: plan)
+                    detailContent(plan: plan)
                 } else {
                     Spacer()
                 }
             }
         }
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear { viewModel.load() }
+        .onChange(of: viewModel.isDeleted) { deleted in
+            if deleted {
+                if let onDeleted {
+                    onDeleted()
+                } else {
+                    onClose()
+                }
+            }
+        }
+        .alert("Удалить план питания?", isPresented: $showDeleteDialog) {
+            Button("Отмена", role: .cancel) {}
+            Button("Удалить", role: .destructive) {
+                viewModel.delete()
+            }
+            .disabled(viewModel.isDeleting)
+        } message: {
+            Text("План питания и все добавленные продукты будут удалены. Действие нельзя отменить.")
+        }
     }
-
-    // MARK: - Header
 
     private var header: some View {
         HStack(spacing: 4) {
@@ -60,10 +70,12 @@ struct MealPlanDetailView: View {
                     .foregroundColor(Palette.deepInk)
                     .frame(width: 44, height: 44)
             }
-            Text(viewModel.plan?.name ?? "Рацион")
+
+            Text(titleText)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(Palette.deepInk)
                 .lineLimit(1)
+
             Spacer()
         }
         .padding(.leading, 4)
@@ -72,11 +84,15 @@ struct MealPlanDetailView: View {
         .padding(.bottom, 4)
     }
 
-    // MARK: - Error
+    private var titleText: String {
+        guard let plan = viewModel.plan else { return "" }
+        let firstMealType = plan.meals.first?.mealType ?? ""
+        return AiMealType.companion.fromWireValue(value: firstMealType)?.displayName ?? plan.name
+    }
 
     private func errorView(message: String) -> some View {
         VStack(spacing: 12) {
-            Text("⚠️").font(.system(size: 36))
+            Text("⚠️").font(.system(size: 40))
             Text(message)
                 .font(.system(size: 14))
                 .foregroundColor(Palette.mutedText)
@@ -89,199 +105,66 @@ struct MealPlanDetailView: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 10)
-                    .background(Capsule().fill(Palette.coral))
+                    .background(Capsule().fill(Palette.accentOrange))
             }
             .buttonStyle(.plain)
         }
     }
 
-    // MARK: - Content
+    private func detailContent(plan: MealPlanDetail) -> some View {
+        let allDishes = plan.meals.flatMap { ($0.dishes as? [MealPlanDetailDish]) ?? [] }
+        let totalKcal = allDishes.reduce(0) { $0 + ($1.calories?.intValue ?? 0) }
+        let totalProtein = allDishes.reduce(0) { $0 + ($1.proteinG?.intValue ?? 0) }
+        let totalFat = allDishes.reduce(0) { $0 + ($1.fatG?.intValue ?? 0) }
+        let totalCarbs = allDishes.reduce(0) { $0 + ($1.carbsG?.intValue ?? 0) }
 
-    private func contentView(plan: MealPlanDetail) -> some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 20) {
-                summaryCard(plan: plan)
+        return VStack(spacing: 0) {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 12) {
+                    ScheduleChipView(plan: plan)
 
-                ForEach(plan.meals, id: \.id) { meal in
-                    mealSection(meal: meal)
-                }
+                    HeroMacrosCard(
+                        totalKcal: totalKcal,
+                        proteinG: totalProtein,
+                        fatG: totalFat,
+                        carbsG: totalCarbs
+                    )
 
-                Color.clear.frame(height: 24)
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 8)
-            .padding(.bottom, 16)
-        }
-    }
-
-    private func summaryCard(plan: MealPlanDetail) -> some View {
-        let goalLabel = MealGoal.companion.fromWireValue(value: plan.goal)?.displayName
-
-        return VStack(alignment: .leading, spacing: 12) {
-            Text(plan.name)
-                .font(.system(size: 22, weight: .bold))
-                .foregroundColor(Palette.deepInk)
-
-            if let desc = plan.description_, !desc.isEmpty {
-                Text(desc)
-                    .font(.system(size: 14))
-                    .foregroundColor(Palette.mutedText)
-                    .lineSpacing(2)
-            }
-
-            HStack(spacing: 8) {
-                if let goal = goalLabel {
-                    SummaryChip(icon: "target", text: goal)
-                }
-                if let kcal = plan.totalCalories?.intValue, kcal > 0 {
-                    SummaryChip(icon: "flame.fill", text: "\(kcal) ккал")
-                }
-                SummaryChip(icon: "list.bullet", text: "\(plan.meals.count) приёма")
-            }
-        }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white)
-        .cornerRadius(20)
-        .overlay(
-            RoundedRectangle(cornerRadius: 20)
-                .strokeBorder(Color(red: 0.929, green: 0.929, blue: 0.937), lineWidth: 1.5)
-        )
-    }
-
-    private func mealSection(meal: MealPlanDetailMeal) -> some View {
-        let mealType = AiMealType.companion.fromWireValue(value: meal.mealType)
-
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center, spacing: 10) {
-                Text(mealType?.emoji ?? "🍽️").font(.system(size: 22))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(mealType?.displayName ?? meal.name)
-                        .font(.system(size: 16, weight: .bold))
+                    Text("ПРОДУКТЫ: \(allDishes.count) \(productDeclension(allDishes.count))")
+                        .font(.system(size: 14.5, weight: .bold))
                         .foregroundColor(Palette.deepInk)
-                    if mealType?.displayName != meal.name && !meal.name.isEmpty {
-                        Text(meal.name)
-                            .font(.system(size: 12))
-                            .foregroundColor(Palette.mutedText)
+                        .tracking(0.5)
+                        .padding(.top, 8)
+
+                    ForEach(allDishes, id: \.id) { dish in
+                        ProductCardView(dish: dish)
                     }
+
+                    Color.clear.frame(height: 12)
                 }
-                Spacer()
-                if let kcal = meal.estimatedCalories?.intValue, kcal > 0 {
-                    Text("\(kcal) ккал")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(Palette.coral)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Capsule().fill(Palette.coral.opacity(0.12)))
-                }
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
             }
 
-            if meal.dishes.isEmpty {
-                Text("Список блюд пуст")
-                    .font(.system(size: 13))
-                    .foregroundColor(Palette.mutedText)
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.white)
-                    .cornerRadius(12)
-            } else {
-                VStack(spacing: 8) {
-                    ForEach(meal.dishes, id: \.id) { dish in
-                        DishRow(dish: dish)
-                    }
-                }
-            }
+            MealPlanBottomActionBar(
+                onDelete: { showDeleteDialog = true },
+                onEdit: { onEdit?() }
+            )
         }
     }
-}
 
-// MARK: - Sub-components
-
-private struct DishRow: View {
-    let dish: MealPlanDetailDish
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(dish.name)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(Palette.deepInk)
-
-            if let desc = dish.description_, !desc.isEmpty {
-                Text(desc)
-                    .font(.system(size: 12))
-                    .foregroundColor(Palette.mutedText)
-                    .lineSpacing(2)
-            }
-
-            if let portion = dish.portionDescription, !portion.isEmpty {
-                Text(portion)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(Color(red: 0.361, green: 0.361, blue: 0.388))
-            }
-
-            macrosRow
+    private func productDeclension(_ count: Int) -> String {
+        let mod100 = count % 100
+        let mod10 = count % 10
+        if mod100 >= 11 && mod100 <= 19 {
+            return "продуктов"
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white)
-        .cornerRadius(14)
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(Color(red: 0.929, green: 0.929, blue: 0.937), lineWidth: 1)
-        )
-    }
-
-    private var macrosRow: some View {
-        // Build macro chips lazily so absent fields don't render as "—".
-        let chips: [(icon: String, label: String, color: Color)] = {
-            var out: [(String, String, Color)] = []
-            if let kcal = dish.calories?.intValue, kcal > 0 {
-                out.append(("flame.fill", "\(kcal) ккал", Palette.coral))
-            }
-            if let p = dish.proteinG?.intValue, p > 0 {
-                out.append(("p.circle.fill", "\(p) Б", Color(red: 0.298, green: 0.831, blue: 0.482)))
-            }
-            if let f = dish.fatG?.intValue, f > 0 {
-                out.append(("f.circle.fill", "\(f) Ж", Color(red: 0.984, green: 0.502, blue: 0.580)))
-            }
-            if let c = dish.carbsG?.intValue, c > 0 {
-                out.append(("c.circle.fill", "\(c) У", Color(red: 0.231, green: 0.671, blue: 0.969)))
-            }
-            return out
-        }()
-
-        return Group {
-            if chips.isEmpty {
-                EmptyView()
-            } else {
-                HStack(spacing: 6) {
-                    ForEach(Array(chips.enumerated()), id: \.offset) { _, chip in
-                        HStack(spacing: 4) {
-                            Image(systemName: chip.icon).font(.system(size: 10, weight: .semibold))
-                            Text(chip.label).font(.system(size: 11, weight: .semibold))
-                        }
-                        .foregroundColor(chip.color)
-                        .padding(.horizontal, 8).padding(.vertical, 4)
-                        .background(Capsule().fill(chip.color.opacity(0.12)))
-                    }
-                }
-                .padding(.top, 2)
-            }
+        if mod10 == 1 {
+            return "продукт"
         }
-    }
-}
-
-private struct SummaryChip: View {
-    let icon: String
-    let text: String
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon).font(.system(size: 11, weight: .semibold))
-            Text(text).font(.system(size: 12, weight: .semibold))
+        if mod10 >= 2 && mod10 <= 4 {
+            return "продукта"
         }
-        .foregroundColor(Color(red: 0.227, green: 0.227, blue: 0.251))
-        .padding(.horizontal, 10).padding(.vertical, 5)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color(red: 0.957, green: 0.957, blue: 0.965)))
+        return "продуктов"
     }
 }

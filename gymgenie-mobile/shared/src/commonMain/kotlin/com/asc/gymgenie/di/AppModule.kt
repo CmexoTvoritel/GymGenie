@@ -27,11 +27,13 @@ import com.asc.gymgenie.presentation.HomeViewModel
 import com.asc.gymgenie.presentation.PaywallViewModel
 import com.asc.gymgenie.presentation.ProfileViewModel
 import com.asc.gymgenie.presentation.WorkoutDetailViewModel
+import com.asc.gymgenie.presentation.WorkoutHistoryViewModel
 import com.asc.gymgenie.presentation.WorkoutsViewModel
 import com.asc.gymgenie.storage.TokenStorage
 import com.asc.gymgenie.storage.createTokenStorage
 import com.asc.gymgenie.user.UserApi
 import com.asc.gymgenie.user.UserProfileStore
+import com.asc.gymgenie.workout.PendingSessionUploader
 import com.asc.gymgenie.workout.WorkoutApi
 import io.ktor.client.HttpClient
 import org.koin.core.parameter.parametersOf
@@ -68,6 +70,7 @@ val networkModule = module {
     single { AiMealApi(get()) }
     single { MealPlansApi(get()) }
     single { ManualMealPlanApi(get()) }
+    single { PendingSessionUploader(get(), get()) }
 }
 
 val profileModule = module {
@@ -90,7 +93,7 @@ val profileModule = module {
  */
 val viewModelModule = module {
     factory { AuthViewModel(get(), get()) }
-    factory { HomeViewModel(get(), get(), get(), get(), get(), get(), get()) }
+    single { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get()) }
     factory { ActivitiesViewModel(get(), get()) }
     factory { ActivityCatalogViewModel(get(), get()) }
     factory { WorkoutsViewModel(get(), get(), get(), get()) }
@@ -102,8 +105,9 @@ val viewModelModule = module {
     factory { ProfileViewModel(get(), get()) }
     factory { AiViewModel(get(), get()) }
     factory { AiMealViewModel(get(), get()) }
-    factory { CreateMealPlanViewModel(get(), get()) }
+    factory { CreateMealPlanViewModel(get(), get(), get()) }
     factory { MealPlansListViewModel(get()) }
+    factory { WorkoutHistoryViewModel(get(), get()) }
     factory { (planId: String) -> WorkoutDetailViewModel(planId, get(), get(), get()) }
     factory { (planId: String) -> MealPlanDetailViewModel(get(), planId) }
 }

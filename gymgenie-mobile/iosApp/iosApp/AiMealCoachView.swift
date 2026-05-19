@@ -19,16 +19,69 @@ import Shared
 struct AiMealCoachView: View {
     @EnvironmentObject private var profileStore: UserProfileStoreWrapper
     @StateObject private var vm = AiMealViewModelWrapper()
-    @State private var previousStepIndex: Int32 = 0
+
+    @State private var showGoal = false
+    @State private var showRestrictions = false
+    @State private var showChat = false
 
     var onClose: (() -> Void)? = nil
 
     var body: some View {
-        ZStack {
-            Palette.warmOffWhite.ignoresSafeArea()
-            content
+        NavigationStack {
+            AiMealProfileScreen(
+                profile: vm.profile,
+                onBack: { onClose?() },
+                onNext: {
+                    vm.goTo(step: .goal)
+                    showGoal = true
+                },
+                onAge: { vm.setAge($0) },
+                onHeight: { vm.setHeight($0) },
+                onWeight: { vm.setWeight($0) }
+            )
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(isPresented: $showGoal) {
+                AiMealGoalScreen(
+                    selectedGoal: vm.goal,
+                    onBack: { showGoal = false },
+                    onNext: {
+                        vm.goTo(step: .restrictions)
+                        showRestrictions = true
+                    },
+                    onSelect: { vm.setGoal($0) }
+                )
+                .toolbar(.hidden, for: .navigationBar)
+                .navigationDestination(isPresented: $showRestrictions) {
+                    AiMealRestrictionsScreen(
+                        dietaryRestrictions: vm.dietaryRestrictions,
+                        allergies: vm.allergies,
+                        onBack: { showRestrictions = false },
+                        onNext: {
+                            vm.goTo(step: .chat)
+                            showChat = true
+                        },
+                        onDietary: { vm.setDietaryRestrictions($0) },
+                        onAllergies: { vm.setAllergies($0) }
+                    )
+                    .toolbar(.hidden, for: .navigationBar)
+                    .navigationDestination(isPresented: $showChat) {
+                        AiMealChatScreen(
+                            messages: vm.messages,
+                            isTyping: vm.isTyping,
+                            hasMealPlan: vm.lastMealPlan != nil,
+                            savedPlanId: vm.savedPlanId,
+                            isSaving: vm.isSaving,
+                            isSaved: vm.isSaved,
+                            errorMessage: vm.errorMessage,
+                            onBack: { showChat = false },
+                            onSend: { vm.sendMessage($0) },
+                            onSave: { vm.saveMealPlan() }
+                        )
+                        .toolbar(.hidden, for: .navigationBar)
+                    }
+                }
+            }
         }
-        .animation(.easeInOut(duration: 0.3), value: vm.step.index)
         .onAppear {
             if let profile = profileStore.profile {
                 vm.prefillProfile(profile)
@@ -39,184 +92,17 @@ struct AiMealCoachView: View {
                 vm.prefillProfile(profile)
             }
         }
-    }
-
-    private func transition(for step: AiMealFlowStep) -> AnyTransition {
-        let forward = step.index >= previousStepIndex
-        return .asymmetric(
-            insertion: .move(edge: forward ? .trailing : .leading),
-            removal: .move(edge: forward ? .leading : .trailing)
-        )
-    }
-
-    @ViewBuilder
-    private var content: some View {
-        switch vm.step {
-        case .choose:
-            EmptyView()
-        case .profile:
-            AiMealProfileScreen(
-                profile: vm.profile,
-                onBack: {
-                    previousStepIndex = vm.step.index
-                    onClose?()
-                },
-                onNext: {
-                    previousStepIndex = vm.step.index
-                    vm.goTo(step: .goal)
-                },
-                onAge: { vm.setAge($0) },
-                onHeight: { vm.setHeight($0) },
-                onWeight: { vm.setWeight($0) }
-            )
-            .transition(transition(for: .profile))
-        case .goal:
-            AiMealGoalScreen(
-                selectedGoal: vm.goal,
-                onBack: {
-                    previousStepIndex = vm.step.index
-                    vm.goBack()
-                },
-                onNext: {
-                    previousStepIndex = vm.step.index
-                    vm.goTo(step: .restrictions)
-                },
-                onSelect: { vm.setGoal($0) }
-            )
-            .transition(transition(for: .goal))
-        case .restrictions:
-            AiMealRestrictionsScreen(
-                dietaryRestrictions: vm.dietaryRestrictions,
-                allergies: vm.allergies,
-                onBack: {
-                    previousStepIndex = vm.step.index
-                    vm.goBack()
-                },
-                onNext: {
-                    previousStepIndex = vm.step.index
-                    vm.goTo(step: .chat)
-                },
-                onDietary: { vm.setDietaryRestrictions($0) },
-                onAllergies: { vm.setAllergies($0) }
-            )
-            .transition(transition(for: .restrictions))
-        case .chat:
-            AiMealChatScreen(
-                messages: vm.messages,
-                isTyping: vm.isTyping,
-                hasMealPlan: vm.lastMealPlan != nil,
-                savedPlanId: vm.savedPlanId,
-                isSaving: vm.isSaving,
-                isSaved: vm.isSaved,
-                errorMessage: vm.errorMessage,
-                onBack: {
-                    previousStepIndex = vm.step.index
-                    vm.goBack()
-                },
-                onSend: { vm.sendMessage($0) },
-                onSave: { vm.saveMealPlan() }
-            )
-            .transition(transition(for: .chat))
-        default:
-            EmptyView()
-        }
-    }
-}
-
-// MARK: - Step 0: Choose
-
-private struct AiMealChooseScreen: View {
-    let onClose: (() -> Void)?
-    let onNext: () -> Void
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                if let onClose = onClose {
-                    Button(action: onClose) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundColor(Palette.deepInk)
-                            .frame(width: 44, height: 44)
-                    }
-                }
-                Spacer()
-                Text("AI Питание")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(Palette.deepInk)
-                Spacer()
-                Color.clear.frame(width: 44, height: 44)
-            }
-            .padding(.top, 4)
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    Spacer().frame(height: 40)
-                    Text("Что хотите получить от ИИ-нутрициолога?")
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundColor(Palette.deepInk)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity)
-                        .padding(.horizontal, 20)
-
-                    Spacer().frame(height: 32)
-
-                    VStack(spacing: 14) {
-                        AiMealGenerateCard(
-                            emoji: "🥗",
-                            title: "Составить рацион на день",
-                            subtitle: "Завтрак, обед и ужин с учётом ваших целей",
-                            enabled: true,
-                            action: onNext
-                        )
-                    }
-                    .padding(.horizontal, 20)
-                }
+        .onChange(of: showGoal) { showing in
+            if !showing {
+                showRestrictions = false
+                showChat = false
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Palette.warmOffWhite)
-    }
-}
-
-private struct AiMealGenerateCard: View {
-    let emoji: String
-    let title: String
-    let subtitle: String
-    let enabled: Bool
-    let action: () -> Void
-
-    @State private var pressed = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(emoji).font(.system(size: 28))
-            Text(title)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundColor(Palette.deepInk)
-            Text(subtitle)
-                .font(.system(size: 13))
-                .foregroundColor(Color(aiMealHex: "888888"))
+        .onChange(of: showRestrictions) { showing in
+            if !showing {
+                showChat = false
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(24)
-        .background(Color.white)
-        .cornerRadius(16)
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(pressed && enabled ? Palette.coral : Color(aiMealHex: "EEEEEE"), lineWidth: 2)
-        )
-        .scaleEffect(pressed && enabled ? 1.02 : 1.0)
-        .opacity(enabled ? 1.0 : 0.45)
-        .animation(.easeInOut(duration: 0.15), value: pressed)
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in if enabled { pressed = true } }
-                .onEnded { _ in
-                    pressed = false
-                    if enabled { action() }
-                }
-        )
     }
 }
 
@@ -234,12 +120,19 @@ private struct AiMealProfileScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            AiMealFlowHeader(title: "Рацион на день", onBack: onBack)
+            GymGenieToolbar(
+                title: "Рацион на день",
+                showBackNavigation: true,
+                onBackTap: {
+                    dismissAiMealFlowKeyboard()
+                    onBack()
+                }
+            )
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Spacer().frame(height: 8)
                     Text("Ваши параметры")
-                        .font(.system(size: 22, weight: .bold))
+                        .font(.system(size: 24, weight: .bold))
                         .foregroundColor(Palette.deepInk)
                         .padding(.horizontal, 20)
                     Spacer().frame(height: 24)
@@ -303,7 +196,7 @@ private struct AiMealSliderField: View {
         VStack(spacing: 0) {
             HStack(alignment: .bottom) {
                 Text(label)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 16, weight: .bold))
                     .foregroundColor(Color(aiMealHex: "555555"))
                 Spacer()
                 if isEditing {
@@ -338,15 +231,19 @@ private struct AiMealSliderField: View {
 
             GeometryReader { geo in
                 let w = geo.size.width
-                let thumbSize: CGFloat = 20
+                let thumbSize: CGFloat = 24
                 let thumbX = pct * (w - thumbSize)
 
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color(aiMealHex: "E0E0E0")).frame(height: 4)
+                    Capsule().fill(Color(aiMealHex: "E0E0E0")).frame(height: 6)
                     Capsule().fill(Palette.coral)
-                        .frame(width: Swift.max(0, thumbX + thumbSize / 2), height: 4)
+                        .frame(width: Swift.max(0, thumbX + thumbSize / 2), height: 6)
                     Circle()
                         .fill(Palette.coral)
+                        .overlay(
+                            Circle()
+                                .stroke(Color.white, lineWidth: 2.5)
+                        )
                         .shadow(color: Palette.coral.opacity(0.35), radius: 3)
                         .frame(width: thumbSize, height: thumbSize)
                         .offset(x: thumbX)
@@ -361,13 +258,13 @@ private struct AiMealSliderField: View {
                         }
                 )
             }
-            .frame(height: 20)
+            .frame(height: 24)
 
             Spacer().frame(height: 4)
             HStack {
-                Text("\(min)").font(.system(size: 11)).foregroundColor(Color(aiMealHex: "AAAAAA"))
+                Text("\(min)").font(.system(size: 13)).foregroundColor(Color(aiMealHex: "AAAAAA"))
                 Spacer()
-                Text("\(max)").font(.system(size: 11)).foregroundColor(Color(aiMealHex: "AAAAAA"))
+                Text("\(max)").font(.system(size: 13)).foregroundColor(Color(aiMealHex: "AAAAAA"))
             }
         }
         .padding(.horizontal, 20)
@@ -406,12 +303,19 @@ private struct AiMealGoalScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            AiMealFlowHeader(title: "Рацион на день", onBack: onBack)
+            GymGenieToolbar(
+                title: "Рацион на день",
+                showBackNavigation: true,
+                onBackTap: {
+                    dismissAiMealFlowKeyboard()
+                    onBack()
+                }
+            )
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Spacer().frame(height: 8)
                     Text("Ваша цель")
-                        .font(.system(size: 22, weight: .bold))
+                        .font(.system(size: 24, weight: .bold))
                         .foregroundColor(Palette.deepInk)
                         .padding(.horizontal, 20)
                     Spacer().frame(height: 24)
@@ -451,16 +355,16 @@ private struct AiMealGoalCard: View {
                 Text(emoji).font(.system(size: 28))
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(Palette.deepInk)
                     Text(subtitle)
-                        .font(.system(size: 12))
+                        .font(.system(size: 14))
                         .foregroundColor(Color(aiMealHex: "888888"))
                 }
                 Spacer()
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 22))
+                        .font(.system(size: 24))
                         .foregroundColor(Palette.coral)
                 }
             }
@@ -495,16 +399,23 @@ private struct AiMealRestrictionsScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            AiMealFlowHeader(title: "Рацион на день", onBack: onBack)
+            GymGenieToolbar(
+                title: "Рацион на день",
+                showBackNavigation: true,
+                onBackTap: {
+                    dismissAiMealFlowKeyboard()
+                    onBack()
+                }
+            )
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Spacer().frame(height: 8)
                     Text("Ограничения и аллергии")
-                        .font(.system(size: 22, weight: .bold))
+                        .font(.system(size: 24, weight: .bold))
                         .foregroundColor(Palette.deepInk)
                         .padding(.horizontal, 20)
                     Text("Можно оставить пустым")
-                        .font(.system(size: 13))
+                        .font(.system(size: 15))
                         .foregroundColor(Color(aiMealHex: "888888"))
                         .padding(.horizontal, 20)
                         .padding(.top, 4)
@@ -553,12 +464,12 @@ private struct AiMealTextEditorField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(label)
-                .font(.system(size: 14, weight: .medium))
+                .font(.system(size: 16, weight: .medium))
                 .foregroundColor(Color(aiMealHex: "555555"))
             ZStack(alignment: .topLeading) {
                 if text.isEmpty {
                     Text(placeholder)
-                        .font(.system(size: 14))
+                        .font(.system(size: 16))
                         .foregroundColor(Color(aiMealHex: "AAAAAA"))
                         .padding(14)
                         .allowsHitTesting(false)
@@ -567,7 +478,7 @@ private struct AiMealTextEditorField: View {
                     get: { text },
                     set: onChange
                 ))
-                .font(.system(size: 14))
+                .font(.system(size: 16))
                 .foregroundColor(Palette.deepInk)
                 .frame(minHeight: 90)
                 .padding(10)
@@ -609,7 +520,14 @@ private struct AiMealChatScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            AiMealFlowHeader(title: "AI Нутрициолог", onBack: onBack)
+            GymGenieToolbar(
+                title: "AI диетолог",
+                showBackNavigation: true,
+                onBackTap: {
+                    dismissAiMealFlowKeyboard()
+                    onBack()
+                }
+            )
 
             ScrollViewReader { proxy in
                 ScrollView {
@@ -617,12 +535,15 @@ private struct AiMealChatScreen: View {
                         if messages.isEmpty && !isTyping {
                             VStack(spacing: 0) {
                                 Spacer().frame(height: 40)
-                                Text("🥗")
-                                    .font(.system(size: 64))
-                                Spacer().frame(height: 20)
+                                Image("ic_chatbot_preview")
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .padding(.horizontal, 32)
+                                    .frame(maxWidth: .infinity)
+                                Spacer().frame(height: 16)
                                 Text("Опишите, какой рацион вы хотите получить")
                                     .font(.system(size: 18, weight: .semibold))
-                                    .foregroundColor(Palette.deepInk)
+                                    .foregroundColor(Color(aiMealHex: "AAAAAA"))
                                     .multilineTextAlignment(.center)
                                     .padding(.horizontal, 32)
                                 Text("Например: «1700 ккал, без молочного, без глютена»")
@@ -673,7 +594,7 @@ private struct AiMealChatScreen: View {
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(isSaving ? Color.green.opacity(0.6) : Color.green)
+                        .background(isSaving ? Color(aiMealHex: "22C55E").opacity(0.6) : Color(aiMealHex: "22C55E"))
                         .cornerRadius(28)
                 }
                 .disabled(isSaving)
@@ -798,33 +719,6 @@ private struct AiMealTypingBubbleView: View {
 }
 
 // MARK: - Shared in-flow controls
-
-private struct AiMealFlowHeader: View {
-    let title: String
-    let onBack: () -> Void
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Button(action: {
-                dismissAiMealFlowKeyboard()
-                onBack()
-            }) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(Palette.deepInk)
-                    .frame(width: 44, height: 44)
-            }
-            Text(title)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(Palette.deepInk)
-            Spacer()
-        }
-        .padding(.leading, 4)
-        .padding(.trailing, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 4)
-    }
-}
 
 private struct AiMealPrimaryButton: View {
     let title: String

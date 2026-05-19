@@ -1,8 +1,11 @@
 import SwiftUI
 import Shared
 
-/// Step 4 — the builder screen where the user names the workout, tunes the
+/// Builder (hub) — the screen where the user names the workout, tunes the
 /// rest interval, reviews added exercises, and saves.
+///
+/// Intentionally not a numbered step: the 3-step indicator only applies to
+/// the group → exercise → config sub-flow used when adding an exercise.
 ///
 /// All persistent state lives in `CreateWorkoutViewModelWrapper`; this view
 /// only owns a local string binding to bridge SwiftUI's `TextField` with the
@@ -11,8 +14,13 @@ struct WorkoutBuilderView: View {
     @ObservedObject var vm: CreateWorkoutViewModelWrapper
     let onBack: () -> Void
     let onAddExercise: () -> Void
+    let onEditExercise: (Int, Shared.PendingExercise) -> Void
 
     @State private var localName: String = ""
+    @State private var localDescription: String = ""
+    @State private var dragFromIndex: Int? = nil
+    @State private var dragOffset: CGFloat = 0
+    @State private var rowHeight: CGFloat = 68
 
     private let orange = Color(red: 0.941, green: 0.439, blue: 0.188)
     private let deepInk = Color(red: 0.161, green: 0.141, blue: 0.125)
@@ -25,14 +33,13 @@ struct WorkoutBuilderView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            warmOffWhite.edgesIgnoringSafeArea(.all)
-
             VStack(spacing: 0) {
                 header
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 16) {
                         nameField
+                        descriptionField
                         scheduleTypeCard
                         if vm.scheduleType == .recurring {
                             scheduleDaysCard
@@ -48,8 +55,11 @@ struct WorkoutBuilderView: View {
 
             bottomBar
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(warmOffWhite.ignoresSafeArea())
         .onAppear {
             if localName != vm.workoutName { localName = vm.workoutName }
+            if localDescription != vm.workoutDescription { localDescription = vm.workoutDescription }
         }
         .alert(
             "Ошибка",
@@ -69,43 +79,24 @@ struct WorkoutBuilderView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: 12) {
-            Button(action: onBack) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(deepInk)
-                    .frame(width: 40, height: 40)
-                    .background(Circle().fill(.white))
-                    .shadow(color: Color.black.opacity(0.06), radius: 2, y: 1)
-            }
-            .buttonStyle(.plain)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Новая тренировка")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(deepInk)
-                Text("Настрой параметры и сохрани")
-                    .font(.system(size: 12))
-                    .foregroundColor(mutedText)
-            }
-
-            Spacer()
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 12)
-        .padding(.bottom, 12)
+        GymGenieToolbar(
+            title: "Создание тренировки",
+            showBackNavigation: true,
+            useCloseIcon: true,
+            onBackTap: onBack
+        )
     }
 
     // MARK: - Name
 
     private var nameField: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Название тренировки")
-                .font(.system(size: 13, weight: .semibold))
+            Text("Название")
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(mutedText)
 
             TextField("Например: Грудь и трицепс", text: $localName)
-                .font(.system(size: 15))
+                .font(.system(size: 16))
                 .foregroundColor(deepInk)
                 .padding(14)
                 .background(RoundedRectangle(cornerRadius: 14).fill(.white))
@@ -115,6 +106,34 @@ struct WorkoutBuilderView: View {
                 )
                 .onChange(of: localName) { newValue in
                     vm.setWorkoutName(newValue)
+                }
+        }
+    }
+
+    // MARK: - Description
+
+    private var descriptionField: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Описание")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(mutedText)
+
+            TextField("Короткое описание (необязательно)", text: $localDescription, axis: .vertical)
+                .font(.system(size: 16))
+                .foregroundColor(deepInk)
+                .lineLimit(2...4)
+                .padding(14)
+                .background(RoundedRectangle(cornerRadius: 14).fill(.white))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(deepInk.opacity(0.08), lineWidth: 1)
+                )
+                .onChange(of: localDescription) { newValue in
+                    if newValue.count <= 500 {
+                        vm.setDescription(newValue)
+                    } else {
+                        localDescription = String(newValue.prefix(500))
+                    }
                 }
         }
     }
@@ -183,7 +202,7 @@ struct WorkoutBuilderView: View {
         let isSelected = vm.scheduleType == type
         return Button(action: { vm.setScheduleType(type) }) {
             Text(label)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(isSelected ? .white : deepInk)
                 .frame(maxWidth: .infinity)
                 .frame(height: 38)
@@ -256,7 +275,7 @@ struct WorkoutBuilderView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Упражнения")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(mutedText)
                 Spacer()
                 Text("\(vm.exercises.count)")
@@ -273,6 +292,37 @@ struct WorkoutBuilderView: View {
                 VStack(spacing: 10) {
                     ForEach(Array(vm.exercises.enumerated()), id: \.offset) { index, exercise in
                         exerciseRow(exercise, index: index)
+                            .zIndex(dragFromIndex == index ? 1 : 0)
+                            .offset(y: dragYOffset(for: index))
+                            .animation(.easeInOut(duration: 0.2), value: dragFromIndex)
+                            .onLongPressGesture(minimumDuration: 0.3) {
+                                let impact = UIImpactFeedbackGenerator(style: .medium)
+                                impact.impactOccurred()
+                                dragFromIndex = index
+                            }
+                            .simultaneousGesture(
+                                dragFromIndex != nil
+                                ? DragGesture()
+                                    .onChanged { value in
+                                        dragOffset = value.translation.height
+                                    }
+                                    .onEnded { _ in
+                                        if let from = dragFromIndex {
+                                            let to = clampedTargetIndex(from: from, offset: dragOffset)
+                                            if from != to {
+                                                vm.moveExercise(from: from, to: to)
+                                            }
+                                        }
+                                        dragFromIndex = nil
+                                        dragOffset = 0
+                                    }
+                                : nil
+                            )
+                            .background(
+                                GeometryReader { geo in
+                                    Color.clear.onAppear { rowHeight = geo.size.height + 10 }
+                                }
+                            )
                     }
                 }
             }
@@ -305,15 +355,29 @@ struct WorkoutBuilderView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(exercise.exerciseNameRu)
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(size: 16, weight: .bold))
                     .foregroundColor(deepInk)
                     .lineLimit(1)
-                Text("\(exercise.sets) подх • \(exercise.reps) пов")
-                    .font(.system(size: 12))
+                Text(exerciseRowSubtitle(exercise))
+                    .font(.system(size: 14))
                     .foregroundColor(mutedText)
             }
 
             Spacer()
+
+            // Edit (pencil) sits left of delete, 12pt apart, sharing the same
+            // 36pt circular surface and neutral fill so the pair reads as a
+            // matched row of secondary actions.
+            Button(action: { onEditExercise(index, exercise) }) {
+                Image(systemName: "pencil")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(deepInk)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(softCard))
+            }
+            .buttonStyle(.plain)
+
+            Spacer().frame(width: 8)
 
             Button(action: { vm.removeExercise(at: index) }) {
                 Image(systemName: "trash")
@@ -327,6 +391,45 @@ struct WorkoutBuilderView: View {
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 12).fill(.white))
         .shadow(color: Color.black.opacity(0.04), radius: 3, y: 1)
+    }
+
+    /// Builds the subtitle for an exercise row:
+    ///   - "<sets> подх • <reps> пов"
+    ///   - + " • X кг" if every set has the same weight
+    ///   - + " • min-max кг" if weights vary
+    ///
+    /// Skipped entirely for bodyweight rows or rows without recorded weights
+    /// so the subtitle stays clean for non-weight exercises.
+    private func exerciseRowSubtitle(_ exercise: Shared.PendingExercise) -> String {
+        let base = "\(exercise.sets) подх • \(exercise.reps) пов"
+        guard exercise.requiresWeight,
+              let raw = exercise.setWeightsKg
+        else { return base }
+
+        // Kotlin's `List<Double?>?` is bridged as `NSArray` of `KotlinDouble`,
+        // exposed as `[Any]` in Swift. Cast each entry through `KotlinDouble`
+        // before reading the underlying `Double`; drop nils so the layout
+        // logic only inspects concrete values.
+        let weights: [Double] = raw.compactMap { ($0 as? KotlinDouble)?.doubleValue }
+        guard !weights.isEmpty else { return base }
+
+        let unique = Array(Set(weights))
+        if unique.count == 1 {
+            return "\(base) • \(formatWeightShort(unique[0])) кг"
+        }
+        let minW = weights.min() ?? 0
+        let maxW = weights.max() ?? 0
+        return "\(base) • \(formatWeightShort(minW))-\(formatWeightShort(maxW)) кг"
+    }
+
+    /// Same convention as the config stepper: integer for whole numbers,
+    /// single-decimal for fractional values. No unit suffix — the caller
+    /// places "кг" once at the end of the range.
+    private func formatWeightShort(_ kg: Double) -> String {
+        if kg.truncatingRemainder(dividingBy: 1) == 0 {
+            return String(Int(kg))
+        }
+        return String(format: "%.1f", kg)
     }
 
     // MARK: - Bottom bar
@@ -346,7 +449,7 @@ struct WorkoutBuilderView: View {
                         Image(systemName: "plus")
                             .font(.system(size: 14, weight: .bold))
                         Text("Добавить упражнение")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.system(size: 17, weight: .semibold))
                     }
                     .foregroundColor(orange)
                     .frame(maxWidth: .infinity)
@@ -367,7 +470,7 @@ struct WorkoutBuilderView: View {
                             ProgressView().tint(.white)
                         } else {
                             Text("Сохранить")
-                                .font(.system(size: 16, weight: .bold))
+                                .font(.system(size: 18, weight: .bold))
                                 .foregroundColor(.white)
                         }
                     }
@@ -401,5 +504,25 @@ struct WorkoutBuilderView: View {
         let remainder = s % 60
         if remainder == 0 { return "\(minutes)м" }
         return "\(minutes)м \(remainder)с"
+    }
+
+    // MARK: - Drag reorder helpers
+
+    private func dragYOffset(for index: Int) -> CGFloat {
+        guard let from = dragFromIndex else { return 0 }
+        if index == from { return dragOffset }
+        let targetIndex = clampedTargetIndex(from: from, offset: dragOffset)
+        if from < targetIndex && index > from && index <= targetIndex {
+            return -rowHeight
+        } else if from > targetIndex && index < from && index >= targetIndex {
+            return rowHeight
+        }
+        return 0
+    }
+
+    private func clampedTargetIndex(from: Int, offset: CGFloat) -> Int {
+        let steps = Int(round(offset / rowHeight))
+        let target = from + steps
+        return max(0, min(target, vm.exercises.count - 1))
     }
 }

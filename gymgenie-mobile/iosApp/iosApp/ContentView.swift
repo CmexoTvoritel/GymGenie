@@ -33,5 +33,10 @@ struct ContentView: View {
             }
         }
         .environmentObject(appState)
+        .onChange(of: appState.currentScreen == .login) { isLogin in
+            if isLogin {
+                authViewModel.resetState()
+            }
+        }
     }
 }

@@ -148,7 +148,7 @@ struct ExerciseFilterSheet: View {
         .padding(.horizontal, 20)
         .padding(.bottom, 20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .onAppear {
             // Re-syncing on appear protects against stale state when the sheet

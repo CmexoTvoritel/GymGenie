@@ -96,10 +96,6 @@ fun todayLocalDate(): LocalDate =
 
 /**
  * Wire-format `DayOfWeek` name (`"MONDAY"`, `"TUESDAY"`, ...) for a date.
- *
- * `kotlinx.datetime.DayOfWeek` is `expect` on KMP so the compiler does not
- * consider its 7 cases exhaustive in `commonMain`; the explicit `else`
- * branches into `name` keep the function total.
  */
 fun LocalDate.toWireDayOfWeek(): String = when (dayOfWeek) {
     DayOfWeek.MONDAY -> "MONDAY"
@@ -109,5 +105,4 @@ fun LocalDate.toWireDayOfWeek(): String = when (dayOfWeek) {
     DayOfWeek.FRIDAY -> "FRIDAY"
     DayOfWeek.SATURDAY -> "SATURDAY"
     DayOfWeek.SUNDAY -> "SUNDAY"
-    else -> dayOfWeek.name
 }

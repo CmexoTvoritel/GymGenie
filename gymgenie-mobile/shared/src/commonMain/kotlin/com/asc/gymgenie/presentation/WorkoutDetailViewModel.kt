@@ -162,6 +162,15 @@ class WorkoutDetailViewModel(
      * the single source of truth for set/rep configuration.
      */
     fun addExercise(exercise: ExerciseShortResponse) {
+        // When the catalog marks the exercise as weight-tracked, seed every
+        // set with the default kilograms so the saved plan carries a sensible
+        // payload even though the detail screen does not expose a per-set
+        // weight editor. Users can still refine via the create-workout flow.
+        val seededWeights: List<Double?>? = if (exercise.requiresWeight) {
+            List(CreateWorkoutLimits.DEFAULT_SETS) { CreateWorkoutLimits.DEFAULT_WEIGHT_KG }
+        } else {
+            null
+        }
         val pending = PendingExercise(
             exerciseId = exercise.id,
             exerciseNameRu = exercise.nameRu,
@@ -169,6 +178,8 @@ class WorkoutDetailViewModel(
             muscleGroupKey = exercise.muscleGroup,
             sets = CreateWorkoutLimits.DEFAULT_SETS,
             reps = CreateWorkoutLimits.DEFAULT_REPS,
+            requiresWeight = exercise.requiresWeight,
+            setWeightsKg = seededWeights,
         )
         _state.update { it.copy(editExercises = it.editExercises + pending) }
     }
@@ -193,6 +204,65 @@ class WorkoutDetailViewModel(
             current.copy(
                 editExercises = current.editExercises.toMutableList().apply { removeAt(index) },
             )
+        }
+    }
+
+    /**
+     * Replaces the pending exercise at [index] with a normalized [updated] copy.
+     *
+     * Mirrors [CreateWorkoutViewModel.normalizeExercise]: clamps sets/reps to the
+     * declared limits and enforces the `setWeightsKg.size == sets` invariant so
+     * downstream save logic does not need to defensively re-validate. Out-of-range
+     * indices are no-ops to keep this safe to call from UI code that might lag
+     * one frame behind a delete.
+     */
+    fun updatePendingExerciseAt(index: Int, updated: PendingExercise) {
+        _state.update { current ->
+            if (index !in current.editExercises.indices) return@update current
+            val clampedSets = updated.sets.coerceIn(
+                CreateWorkoutLimits.MIN_SETS,
+                CreateWorkoutLimits.MAX_SETS,
+            )
+            val clampedReps = updated.reps.coerceIn(
+                CreateWorkoutLimits.MIN_REPS,
+                CreateWorkoutLimits.MAX_REPS,
+            )
+            val normalizedWeights: List<Double?>? = when {
+                !updated.requiresWeight -> null
+                updated.setWeightsKg == null ->
+                    List(clampedSets) { CreateWorkoutLimits.DEFAULT_WEIGHT_KG }
+                updated.setWeightsKg.size == clampedSets ->
+                    updated.setWeightsKg.map { it?.coerceIn(CreateWorkoutLimits.MIN_WEIGHT_KG, CreateWorkoutLimits.MAX_WEIGHT_KG) }
+                updated.setWeightsKg.size < clampedSets -> {
+                    val padded = updated.setWeightsKg
+                        .map { it?.coerceIn(CreateWorkoutLimits.MIN_WEIGHT_KG, CreateWorkoutLimits.MAX_WEIGHT_KG) }
+                    padded + List(clampedSets - padded.size) {
+                        padded.lastOrNull() ?: CreateWorkoutLimits.DEFAULT_WEIGHT_KG
+                    }
+                }
+                else -> updated.setWeightsKg
+                    .take(clampedSets)
+                    .map { it?.coerceIn(CreateWorkoutLimits.MIN_WEIGHT_KG, CreateWorkoutLimits.MAX_WEIGHT_KG) }
+            }
+            current.copy(
+                editExercises = current.editExercises.toMutableList().apply {
+                    this[index] = updated.copy(
+                        sets = clampedSets,
+                        reps = clampedReps,
+                        setWeightsKg = normalizedWeights,
+                    )
+                },
+            )
+        }
+    }
+
+    fun moveExercise(fromIndex: Int, toIndex: Int) {
+        _state.update { current ->
+            if (fromIndex !in current.editExercises.indices || toIndex !in current.editExercises.indices) return@update current
+            val list = current.editExercises.toMutableList()
+            val item = list.removeAt(fromIndex)
+            list.add(toIndex, item)
+            current.copy(editExercises = list)
         }
     }
 
@@ -240,6 +310,7 @@ class WorkoutDetailViewModel(
                     exerciseId = it.exerciseId,
                     sets = it.sets,
                     reps = it.reps,
+                    setWeightsKg = it.setWeightsKg,
                 )
             },
         )
@@ -364,21 +435,29 @@ class WorkoutDetailViewModel(
     }
 
     private fun collectPendingExercises(plan: WorkoutPlanResponse): List<PendingExercise> {
-        return plan.days
+        // For RECURRING plans every day carries the same exercise list.
+        // Taking only the first day avoids flattening all days into one
+        // list which the backend would then replicate across days again,
+        // causing a ×N duplication on every save.
+        val referenceDay = plan.days.minByOrNull { it.orderIndex } ?: return emptyList()
+        return referenceDay.exercises
             .sortedBy { it.orderIndex }
-            .flatMap { day ->
-                day.exercises
-                    .sortedBy { it.orderIndex }
-                    .map { ex ->
-                        PendingExercise(
-                            exerciseId = ex.exerciseId,
-                            exerciseNameRu = ex.exerciseNameRu,
-                            exerciseNameEn = ex.exerciseNameEn,
-                            muscleGroupKey = ex.muscleGroup,
-                            sets = ex.sets,
-                            reps = ex.reps,
-                        )
-                    }
+            .map { ex ->
+                val perSetWeights: List<Double?>? = when {
+                    ex.setWeightsKg != null -> ex.setWeightsKg
+                    ex.weightKg != null -> List(ex.sets) { ex.weightKg }
+                    else -> null
+                }
+                PendingExercise(
+                    exerciseId = ex.exerciseId,
+                    exerciseNameRu = ex.exerciseNameRu,
+                    exerciseNameEn = ex.exerciseNameEn,
+                    muscleGroupKey = ex.muscleGroup,
+                    sets = ex.sets,
+                    reps = ex.reps,
+                    requiresWeight = perSetWeights != null,
+                    setWeightsKg = perSetWeights,
+                )
             }
     }
 }

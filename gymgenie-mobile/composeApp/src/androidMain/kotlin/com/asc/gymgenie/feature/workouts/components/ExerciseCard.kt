@@ -1,7 +1,9 @@
 package com.asc.gymgenie.feature.workouts.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,15 +35,32 @@ private val CardBorder = Color(0xFFEDEDEF)
 private val ImageBackground = Color(0xFFF8F8FA)
 private val PrimaryText = Color(0xFF0A0A0A)
 private val MetaText = Color(0xFF4C4C53)
+private val InfoBadgeColor = Color(0xFFF07030) // AccentOrange — duplicated here to keep this card self-contained
 
 private val BeginnerColor = Color(0xFF22A06B)
 private val IntermediateColor = Color(0xFFE89B12)
 private val AdvancedColor = Color(0xFFD14343)
 
+/**
+ * Equal-height exercise tile used in the workouts list and the create-workout
+ * picker.
+ *
+ * Tap semantics:
+ * - [onClick] is the primary action (select for filtering, navigate, etc.).
+ * - [onLongClick] is an optional long-press shortcut, typically used by the
+ *   create-workout picker to surface the detail bottom sheet without
+ *   committing the selection.
+ * - [onInfoClick] is an optional callback for the small "i" info badge
+ *   anchored to the top-right of the image area. When `null` the badge is
+ *   hidden, keeping the legacy look intact for screens that don't need it.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ExerciseCard(
     exercise: ExerciseShortResponse,
     onClick: () -> Unit = {},
+    onLongClick: (() -> Unit)? = null,
+    onInfoClick: (() -> Unit)? = null,
 ) {
     // Note: we intentionally do NOT call fillMaxHeight() here. LazyVerticalGrid
     // does not provide a bounded height to its cells, so fillMaxHeight() would
@@ -49,6 +68,12 @@ fun ExerciseCard(
     // structurally: the image area is a square of identical width across both
     // columns, and the title reserves two lines (minLines = 2). Cards in the
     // same row therefore align naturally.
+    val rootModifier = if (onLongClick != null) {
+        Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
+    } else {
+        Modifier.clickable(onClick = onClick)
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -56,7 +81,7 @@ fun ExerciseCard(
             .clip(RoundedCornerShape(18.dp))
             .background(Color.White)
             .border(1.5.dp, CardBorder, RoundedCornerShape(18.dp))
-            .clickable { onClick() }
+            .then(rootModifier)
             .padding(12.dp),
     ) {
         Box(
@@ -71,6 +96,29 @@ fun ExerciseCard(
                 fontSize = 54.sp,
                 modifier = Modifier.align(Alignment.Center),
             )
+
+            // Info badge — opt-in. When supplied the badge floats over the image
+            // area, anchored to the top-right corner with the 8dp inset spec.
+            if (onInfoClick != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 8.dp, end = 8.dp)
+                        .size(28.dp)
+                        .shadow(2.dp, CircleShape)
+                        .clip(CircleShape)
+                        .background(InfoBadgeColor)
+                        .clickable(onClick = onInfoClick),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "i",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(12.dp))

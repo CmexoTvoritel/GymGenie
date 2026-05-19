@@ -22,10 +22,14 @@ final class ExerciseDetailViewModelWrapper: ObservableObject {
         observationTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self = self else { break }
-                guard let state = self.vm.state.value as? ExerciseDetailUiState else { continue }
-                self.exercise = state.exercise
-                self.isLoading = state.isLoading
-                self.errorMessage = state.errorMessage
+                guard let state = self.vm.state.value as? ExerciseDetailUiState else {
+                    try? await Task.sleep(nanoseconds: 50_000_000)
+                    continue
+                }
+                if self.isLoading != state.isLoading { self.isLoading = state.isLoading }
+                if self.errorMessage != state.errorMessage { self.errorMessage = state.errorMessage }
+                let exerciseChanged = (self.exercise == nil) != (state.exercise == nil)
+                if exerciseChanged { self.exercise = state.exercise }
                 try? await Task.sleep(nanoseconds: 50_000_000)
             }
         }
@@ -60,8 +64,6 @@ struct ExerciseDetailView: View {
 
     var body: some View {
         ZStack {
-            warmOffWhite.edgesIgnoringSafeArea(.all)
-
             if viewModel.isLoading && viewModel.exercise == nil {
                 ProgressView().scaleEffect(1.2).tint(orange)
             } else if let error = viewModel.errorMessage, viewModel.exercise == nil {
@@ -70,6 +72,9 @@ struct ExerciseDetailView: View {
                 content(for: exercise)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(warmOffWhite.ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear { viewModel.load(id: exerciseId) }
     }
 
@@ -312,8 +317,8 @@ struct ExerciseDetailView: View {
     private func statsRow(exercise: ExerciseDetailResponse) -> some View {
         let items: [(String, Color)] = {
             var result: [(String, Color)] = []
-            if let duration = exercise.durationMinutes {
-                result.append(("⏱ \(duration.intValue) мин", orange))
+            if let secPer10 = exercise.secondsPer10Reps {
+                result.append(("⏱ \(secPer10.intValue) сек / 10 повт.", orange))
             }
             if !exercise.difficultyLevel.isEmpty {
                 result.append(("📊 \(difficultyLabel(exercise.difficultyLevel))",

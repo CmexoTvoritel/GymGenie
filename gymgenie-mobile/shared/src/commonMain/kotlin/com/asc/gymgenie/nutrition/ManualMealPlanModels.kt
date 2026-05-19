@@ -51,8 +51,13 @@ data class BookedDaysResponse(
  */
 @Serializable
 data class ManualMealItemRequest(
-    val foodProductId: String,
+    val foodProductId: String? = null,
     val grams: Double,
+    val name: String? = null,
+    val calories: Int? = null,
+    val proteinG: Int? = null,
+    val carbsG: Int? = null,
+    val fatG: Int? = null,
 )
 
 /**
@@ -99,6 +104,7 @@ data class AddedMealItem(
     val uid: Long,
     val product: FoodProduct,
     val grams: Double,
+    val hasCatalogProduct: Boolean = true,
 ) {
     /** Live macro totals scaled to the chosen portion. */
     val portion: FoodPortionMacros get() = product.macrosForGrams(grams)

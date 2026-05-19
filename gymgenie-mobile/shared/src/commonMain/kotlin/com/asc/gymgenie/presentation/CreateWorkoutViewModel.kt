@@ -29,8 +29,21 @@ object CreateWorkoutLimits {
     const val MAX_REST_SECONDS = 600
     const val REST_STEP_SECONDS = 5
     const val DEFAULT_REST_SECONDS = 60
+
+    const val MIN_WEIGHT_KG = 0.0
+    const val MAX_WEIGHT_KG = 500.0
+    const val DEFAULT_WEIGHT_KG = 20.0
+    const val WEIGHT_STEP_KG = 2.5
 }
 
+/**
+ * A user-configured exercise waiting to be appended to the workout draft.
+ *
+ * [requiresWeight] mirrors the backend flag — when `true`, the UI is expected
+ * to surface a weight configuration step and produce a non-null
+ * [setWeightsKg] list whose size equals [sets]. When `false`, [setWeightsKg]
+ * must be `null` so the workout plan stays free of meaningless `0 kg` rows.
+ */
 data class PendingExercise(
     val exerciseId: String,
     val exerciseNameRu: String,
@@ -38,6 +51,17 @@ data class PendingExercise(
     val muscleGroupKey: String,
     val sets: Int,
     val reps: Int,
+    val requiresWeight: Boolean = false,
+    /**
+     * Per-set weight in kilograms.
+     *
+     * `null` means "no weight tracking for this exercise" (typically because
+     * [requiresWeight] is `false`). When non-null, the list length **must**
+     * equal [sets]. Individual entries may still be `null` to model "set
+     * recorded without weight" but the size invariant is enforced by the
+     * presenter on normalization.
+     */
+    val setWeightsKg: List<Double?>? = null,
 )
 
 data class CreateWorkoutUiState(
@@ -138,17 +162,18 @@ class CreateWorkoutViewModel(
     }
 
     fun addExercise(exercise: PendingExercise) {
-        val normalized = exercise.copy(
-            sets = exercise.sets.coerceIn(
-                CreateWorkoutLimits.MIN_SETS,
-                CreateWorkoutLimits.MAX_SETS,
-            ),
-            reps = exercise.reps.coerceIn(
-                CreateWorkoutLimits.MIN_REPS,
-                CreateWorkoutLimits.MAX_REPS,
-            ),
-        )
-        _state.update { it.copy(exercises = it.exercises + normalized) }
+        _state.update { it.copy(exercises = it.exercises + normalizeExercise(exercise)) }
+    }
+
+    fun updateExerciseAt(index: Int, updated: PendingExercise) {
+        _state.update { current ->
+            if (index !in current.exercises.indices) return@update current
+            current.copy(
+                exercises = current.exercises.toMutableList().apply {
+                    this[index] = normalizeExercise(updated)
+                },
+            )
+        }
     }
 
     fun removeExerciseAt(index: Int) {
@@ -159,6 +184,30 @@ class CreateWorkoutViewModel(
             )
         }
     }
+
+    // Enforces the size-equals-sets invariant on setWeightsKg and clamps all
+    // numeric fields to their declared limits. Called by both addExercise and
+    // updateExerciseAt so normalization rules stay in one place.
+    private fun normalizeExercise(exercise: PendingExercise): PendingExercise {
+        val clampedSets = exercise.sets.coerceIn(CreateWorkoutLimits.MIN_SETS, CreateWorkoutLimits.MAX_SETS)
+        val clampedReps = exercise.reps.coerceIn(CreateWorkoutLimits.MIN_REPS, CreateWorkoutLimits.MAX_REPS)
+        val normalizedWeights: List<Double?>? = when {
+            !exercise.requiresWeight -> null
+            exercise.setWeightsKg == null -> List(clampedSets) { CreateWorkoutLimits.DEFAULT_WEIGHT_KG }
+            exercise.setWeightsKg.size == clampedSets -> exercise.setWeightsKg.map { clampWeight(it) }
+            exercise.setWeightsKg.size < clampedSets -> {
+                val padded = exercise.setWeightsKg.map { clampWeight(it) }
+                padded + List(clampedSets - padded.size) { padded.lastOrNull() ?: CreateWorkoutLimits.DEFAULT_WEIGHT_KG }
+            }
+            else -> exercise.setWeightsKg.take(clampedSets).map { clampWeight(it) }
+        }
+        return exercise.copy(sets = clampedSets, reps = clampedReps, setWeightsKg = normalizedWeights)
+    }
+
+    private fun clampWeight(value: Double?): Double? = value?.coerceIn(
+        CreateWorkoutLimits.MIN_WEIGHT_KG,
+        CreateWorkoutLimits.MAX_WEIGHT_KG,
+    )
 
     fun saveWorkout() {
         val current = _state.value
@@ -196,6 +245,7 @@ class CreateWorkoutViewModel(
                         exerciseId = it.exerciseId,
                         sets = it.sets,
                         reps = it.reps,
+                        setWeightsKg = it.setWeightsKg,
                     )
                 },
             )

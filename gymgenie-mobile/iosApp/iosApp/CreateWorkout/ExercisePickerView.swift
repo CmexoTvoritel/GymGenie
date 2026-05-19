@@ -27,14 +27,17 @@ struct ExercisePickerView: View {
     ]
 
     var body: some View {
-        ZStack {
-            warmOffWhite.edgesIgnoringSafeArea(.all)
-
-            VStack(spacing: 0) {
-                header
-                content
-            }
+        VStack(spacing: 0) {
+            GymGenieToolbar(
+                title: muscleGroupNameRu,
+                showBackNavigation: true,
+                onBackTap: onBack
+            )
+            WorkoutFlowStepHeader(currentStep: 2, totalSteps: 3)
+            content
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(warmOffWhite.ignoresSafeArea())
         .onAppear {
             picker.load(muscleGroup: muscleGroupKey)
         }
@@ -52,36 +55,6 @@ struct ExercisePickerView: View {
                 )
             }
         }
-    }
-
-    // MARK: - Header
-
-    private var header: some View {
-        HStack(spacing: 12) {
-            Button(action: onBack) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(deepInk)
-                    .frame(width: 40, height: 40)
-                    .background(Circle().fill(.white))
-                    .shadow(color: Color.black.opacity(0.06), radius: 2, y: 1)
-            }
-            .buttonStyle(.plain)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(muscleGroupNameRu)
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(deepInk)
-                Text("Выбери упражнение")
-                    .font(.system(size: 12))
-                    .foregroundColor(mutedText)
-            }
-
-            Spacer()
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 12)
-        .padding(.bottom, 12)
     }
 
     // MARK: - Content
@@ -106,53 +79,46 @@ struct ExercisePickerView: View {
     }
 
     private var grid: some View {
-        ScrollView(showsIndicators: false) {
-            LazyVGrid(columns: columns, spacing: 12) {
-                ForEach(picker.exercises, id: \.id) { exercise in
-                    exerciseCell(exercise)
-                        .onAppear {
-                            if exercise.id == picker.exercises.last?.id && picker.hasMore {
-                                picker.loadMore()
+        GeometryReader { proxy in
+            ScrollView(showsIndicators: false) {
+                LazyVGrid(columns: columns, spacing: 12) {
+                    ForEach(picker.exercises, id: \.id) { exercise in
+                        exerciseCell(exercise)
+                            .onAppear {
+                                if exercise.id == picker.exercises.last?.id && picker.hasMore {
+                                    picker.loadMore()
+                                }
                             }
-                        }
+                    }
                 }
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 8)
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
 
-            if picker.isLoadingMore {
-                ProgressView().tint(orange).padding(.vertical, 12)
-            }
+                if picker.isLoadingMore {
+                    ProgressView().tint(orange).padding(.vertical, 12)
+                }
 
-            Color.clear.frame(height: 32)
+                // Safe-area + 16pt floor so the last row clears the home indicator.
+                Color.clear.frame(height: proxy.safeAreaInsets.bottom + 16)
+            }
         }
     }
 
+    /// Renders a single exercise card with three gestures:
+    /// - tap on the card body → select & advance the flow.
+    /// - long-press on the card → open the read-only detail sheet.
+    /// - tap on the floating "i" badge inside the image area → also opens the
+    ///   detail sheet.
+    ///
+    /// The info badge and the long-press handler now live inside
+    /// `ExerciseCard` itself so the picker stays free of layout glue.
     private func exerciseCell(_ exercise: Shared.ExerciseShortResponse) -> some View {
-        ZStack(alignment: .topTrailing) {
-            ExerciseCard(
-                exercise: exercise,
-                onTap: { onExerciseSelected(exercise) }
-            )
-
-            Button {
-                detailExerciseId = exercise.id
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(orange)
-                        .frame(width: 28, height: 28)
-                        .shadow(color: Color.black.opacity(0.15), radius: 2, y: 1)
-                    Text("i")
-                        .font(.system(size: 14, weight: .bold, design: .serif))
-                        .italic()
-                        .foregroundColor(.white)
-                }
-            }
-            .buttonStyle(.plain)
-            .padding(6)
-            .accessibilityLabel("Подробнее об упражнении")
-        }
+        ExerciseCard(
+            exercise: exercise,
+            onTap: { onExerciseSelected(exercise) },
+            onLongPress: { detailExerciseId = exercise.id },
+            onInfoTap: { detailExerciseId = exercise.id }
+        )
     }
 
     private var emptyView: some View {

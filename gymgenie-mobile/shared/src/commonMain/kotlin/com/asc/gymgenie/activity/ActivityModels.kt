@@ -25,6 +25,18 @@ enum class ActivityKind { BINARY, COUNTER, PRESET }
  */
 enum class ActivityRing { MOVE, MIND, LIFE }
 
+/**
+ * How an activity is scheduled on the user's plan.
+ *
+ * - `null` / absent — every day (the default).
+ * - [RECURRING] — only on specific days of the week ([ActivityTodayResponse.scheduleDays]).
+ * - [ONE_TIME] — a single calendar date ([ActivityTodayResponse.oneOffDate]).
+ */
+enum class ScheduleType { RECURRING, ONE_TIME }
+
+internal fun parseScheduleTypeOrNull(raw: String?): ScheduleType? =
+    raw?.let { runCatching { ScheduleType.valueOf(it) }.getOrNull() }
+
 internal fun parseKindOrNull(raw: String?): ActivityKind? =
     raw?.let { runCatching { ActivityKind.valueOf(it) }.getOrNull() }
 
@@ -47,6 +59,9 @@ data class ActivityTodayResponse(
     val goal: Int? = null,
     val inverse: Boolean = false,
     val logValue: Int = 0,
+    val scheduleType: String? = null,
+    val scheduleDays: List<String> = emptyList(),
+    val oneOffDate: String? = null,
 )
 
 /**
@@ -80,6 +95,29 @@ data class ActivityLogResponse(
     val activityId: String,
     val date: String,
     val value: Int,
+)
+
+/**
+ * Body for `POST /{activityId}/plan`. When all fields are null the backend
+ * falls back to the "every day" schedule (backward compat).
+ */
+@Serializable
+data class AddActivityToPlanRequest(
+    val scheduleType: String? = null,
+    val scheduleDays: List<String>? = null,
+    val oneOffDate: String? = null,
+    val goal: Int? = null,
+)
+
+/**
+ * Body for `PUT /{activityId}/plan/schedule`. Updates the schedule of an
+ * activity that is already in the user's plan.
+ */
+@Serializable
+data class UpdateActivityScheduleRequest(
+    val scheduleType: String? = null,
+    val scheduleDays: List<String>? = null,
+    val oneOffDate: String? = null,
 )
 
 /**

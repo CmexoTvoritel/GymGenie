@@ -5,6 +5,8 @@ import com.asc.gymgenie.activity.dto.ActivityCheckinRequest
 import com.asc.gymgenie.activity.dto.ActivityHistoryDayResponse
 import com.asc.gymgenie.activity.dto.ActivityLogResponse
 import com.asc.gymgenie.activity.dto.ActivityTodayResponse
+import com.asc.gymgenie.activity.dto.AddActivityToPlanRequest
+import com.asc.gymgenie.activity.dto.UpdateActivityScheduleRequest
 import com.asc.gymgenie.activity.entity.ActivityDefinitionEntity
 import com.asc.gymgenie.activity.entity.ActivityKind
 import com.asc.gymgenie.activity.entity.ActivityLogEntity
@@ -16,8 +18,10 @@ import com.asc.gymgenie.common.exception.BadRequestException
 import com.asc.gymgenie.common.exception.ConflictException
 import com.asc.gymgenie.common.exception.NotFoundException
 import com.asc.gymgenie.user.repository.UserRepository
+import com.asc.gymgenie.workout.entity.WorkoutScheduleType
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.util.*
 
@@ -36,31 +40,22 @@ class ActivityService(
     }
 
     @Transactional(readOnly = true)
-    fun getTodayActivities(userId: UUID): List<ActivityTodayResponse> {
-        val today = LocalDate.now()
+    fun getTodayActivities(userId: UUID, date: LocalDate = LocalDate.now()): List<ActivityTodayResponse> {
         val plan = userActivityRepository.findAllByUserIdWithActivity(userId)
         if (plan.isEmpty()) return emptyList()
 
+        val dayOfWeek = date.dayOfWeek.name // "MONDAY", "TUESDAY", etc.
+
+        val filteredPlan = plan.filter { ua -> isScheduledFor(ua, date, dayOfWeek) }
+        if (filteredPlan.isEmpty()) return emptyList()
+
         val logsByActivityId: Map<UUID, ActivityLogEntity> = activityLogRepository
-            .findByUserIdAndLogDate(userId, today)
+            .findByUserIdAndLogDate(userId, date)
             .associateBy { it.activity.id!! }
 
-        return plan
+        return filteredPlan
             .sortedBy { it.activity.sortOrder }
-            .map { ua ->
-                val def = ua.activity
-                ActivityTodayResponse(
-                    activityId = def.id!!,
-                    name = def.name,
-                    ring = def.ring,
-                    kind = def.kind,
-                    presets = parsePresets(def.presets),
-                    unit = def.unit,
-                    goal = ua.goal ?: def.defaultGoal,
-                    inverse = def.inverse,
-                    logValue = logsByActivityId[def.id]?.value ?: 0
-                )
-            }
+            .map { ua -> ua.toTodayResponse(logsByActivityId) }
     }
 
     @Transactional
@@ -73,7 +68,6 @@ class ActivityService(
         val activity = activityDefinitionRepository.findById(activityId)
             .orElseThrow { NotFoundException("Activity not found") }
 
-        // BINARY: value is always 1 regardless of what the client sends.
         val effectiveValue = if (activity.kind == ActivityKind.BINARY) 1 else request.value
 
         val existing = activityLogRepository
@@ -102,7 +96,7 @@ class ActivityService(
     }
 
     @Transactional
-    fun addToPlan(userId: UUID, activityId: UUID) {
+    fun addToPlan(userId: UUID, activityId: UUID, request: AddActivityToPlanRequest) {
         val user = userRepository.findById(userId)
             .orElseThrow { NotFoundException("User not found") }
         val activity = activityDefinitionRepository.findById(activityId)
@@ -112,13 +106,66 @@ class ActivityService(
             throw ConflictException("Activity is already in the user's plan")
         }
 
+        if (request.scheduleType != null) {
+            validateScheduling(request.scheduleType, request.scheduleDays.orEmpty(), request.oneOffDate)
+        }
+
+        val normalizedDays = if (request.scheduleType == WorkoutScheduleType.RECURRING) {
+            normalizeScheduleDays(request.scheduleDays.orEmpty())
+        } else {
+            mutableSetOf()
+        }
+
+        val effectiveOneOffDate = if (request.scheduleType == WorkoutScheduleType.ONE_TIME) {
+            request.oneOffDate
+        } else {
+            null
+        }
+
         userActivityRepository.save(
             UserActivityEntity(
                 user = user,
                 activity = activity,
-                goal = null
+                goal = request.goal,
+                scheduleType = request.scheduleType,
+                scheduleDays = normalizedDays,
+                oneOffDate = effectiveOneOffDate
             )
         )
+    }
+
+    @Transactional
+    fun updateSchedule(userId: UUID, activityId: UUID, request: UpdateActivityScheduleRequest): ActivityTodayResponse {
+        val ua = userActivityRepository.findByUserIdAndActivityId(userId, activityId)
+            .orElseThrow { NotFoundException("Activity is not in the user's plan") }
+
+        val scheduleType = request.scheduleType
+
+        if (scheduleType != null) {
+            validateScheduling(scheduleType, request.scheduleDays, request.oneOffDate)
+        }
+
+        ua.scheduleType = scheduleType
+
+        ua.scheduleDays.clear()
+        if (scheduleType == WorkoutScheduleType.RECURRING) {
+            ua.scheduleDays.addAll(normalizeScheduleDays(request.scheduleDays))
+        }
+
+        ua.oneOffDate = if (scheduleType == WorkoutScheduleType.ONE_TIME) {
+            request.oneOffDate
+        } else {
+            null
+        }
+
+        val saved = userActivityRepository.save(ua)
+
+        val today = LocalDate.now()
+        val log = activityLogRepository
+            .findByUserIdAndActivityIdAndLogDate(userId, activityId, today)
+            .orElse(null)
+
+        return saved.toTodayResponse(log)
     }
 
     @Transactional
@@ -143,27 +190,30 @@ class ActivityService(
         val logs = activityLogRepository.findByUserIdAndLogDateBetween(userId, startDate, endDate)
         if (plan.isEmpty() && logs.isEmpty()) return emptyList()
 
-        // Effective goal lookup per activity, derived from the user's current plan.
         val effectiveGoalByActivity: Map<UUID, Int?> = plan.associate {
             it.activity.id!! to (it.goal ?: it.activity.defaultGoal)
         }
-        val plannedActivityIds: Set<UUID> = plan.mapNotNull { it.activity.id }.toSet()
-        val plannedCount = plannedActivityIds.size
 
         val logsByDate: Map<LocalDate, List<ActivityLogEntity>> = logs.groupBy { it.logDate }
 
-        // Enumerate every date in the inclusive range so the client gets a dense result,
-        // even for days with no logs (completionPct = 0.0).
         val days = mutableListOf<ActivityHistoryDayResponse>()
         var cursor = startDate
         while (!cursor.isAfter(endDate)) {
+            val dayOfWeek = cursor.dayOfWeek.name
+            val scheduledPlan = plan.filter { ua -> isScheduledFor(ua, cursor, dayOfWeek) }
+            val scheduledActivityIds = scheduledPlan.mapNotNull { it.activity.id }.toSet()
+            val scheduledCount = scheduledActivityIds.size
+
+            val scheduledGoals: Map<UUID, Int?> = effectiveGoalByActivity
+                .filterKeys { it in scheduledActivityIds }
+
             val dayLogs = logsByDate[cursor].orEmpty()
 
             val completionPct = computeCompletion(
                 dayLogs = dayLogs,
-                plannedActivityIds = plannedActivityIds,
-                plannedCount = plannedCount,
-                effectiveGoalByActivity = effectiveGoalByActivity
+                plannedActivityIds = scheduledActivityIds,
+                plannedCount = scheduledCount,
+                effectiveGoalByActivity = scheduledGoals
             )
 
             days += ActivityHistoryDayResponse(
@@ -182,15 +232,73 @@ class ActivityService(
         return days
     }
 
+    // ================================================================
+    // Scheduling helpers
+    // ================================================================
+
     /**
-     * Share of currently planned activities that hit their goal on this day.
+     * Determines whether a [UserActivityEntity] is scheduled for the given [date].
      *
-     * Notes:
-     * - "Hit goal" means recorded value >= effective goal (or value > 0 when no goal is set, e.g. BINARY).
-     * - Logs for activities the user no longer has in their plan are still returned in [ActivityHistoryDayResponse.logs]
-     *   but do *not* contribute to the completion ratio — completion is measured against the *current* plan.
-     * - Returns 0.0 when the user has no planned activities (avoids division by zero and matches an empty plan UX).
+     *  - null scheduleType → every day (backward compatible)
+     *  - RECURRING → matches if [dayOfWeek] is in [UserActivityEntity.scheduleDays]
+     *  - ONE_TIME → matches if [date] equals [UserActivityEntity.oneOffDate]
      */
+    private fun isScheduledFor(ua: UserActivityEntity, date: LocalDate, dayOfWeek: String): Boolean {
+        return when (ua.scheduleType) {
+            WorkoutScheduleType.RECURRING -> ua.scheduleDays.contains(dayOfWeek)
+            WorkoutScheduleType.ONE_TIME -> ua.oneOffDate == date
+            null -> true
+        }
+    }
+
+    // ================================================================
+    // Validation helpers
+    // ================================================================
+
+    private fun validateScheduling(
+        scheduleType: WorkoutScheduleType,
+        scheduleDays: List<String>,
+        oneOffDate: LocalDate?
+    ) {
+        when (scheduleType) {
+            WorkoutScheduleType.RECURRING -> {
+                if (scheduleDays.isEmpty()) {
+                    throw BadRequestException("scheduleDays is required for RECURRING activities")
+                }
+                scheduleDays.forEach { raw ->
+                    if (!isValidDayOfWeek(raw.uppercase())) {
+                        throw BadRequestException("Invalid day-of-week value: $raw")
+                    }
+                }
+            }
+            WorkoutScheduleType.ONE_TIME -> {
+                if (oneOffDate == null) {
+                    throw BadRequestException("oneOffDate is required for ONE_TIME activities")
+                }
+            }
+        }
+    }
+
+    private fun normalizeScheduleDays(raw: List<String>): MutableSet<String> =
+        raw.asSequence()
+            .map { it.trim().uppercase() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .sortedBy { DayOfWeek.valueOf(it).value }
+            .toMutableSet()
+
+    private fun isValidDayOfWeek(raw: String): Boolean =
+        try {
+            DayOfWeek.valueOf(raw)
+            true
+        } catch (_: IllegalArgumentException) {
+            false
+        }
+
+    // ================================================================
+    // Completion computation
+    // ================================================================
+
     private fun computeCompletion(
         dayLogs: List<ActivityLogEntity>,
         plannedActivityIds: Set<UUID>,
@@ -207,6 +315,10 @@ class ActivityService(
         return completed.toDouble() / plannedCount.toDouble()
     }
 
+    // ================================================================
+    // Mapping helpers
+    // ================================================================
+
     private fun ActivityDefinitionEntity.toCatalogResponse() = ActivityCatalogResponse(
         id = id!!,
         name = name,
@@ -217,6 +329,54 @@ class ActivityService(
         defaultGoal = defaultGoal,
         inverse = inverse
     )
+
+    /**
+     * Maps a [UserActivityEntity] to [ActivityTodayResponse] using a pre-loaded
+     * map of today's logs keyed by activity ID.
+     */
+    private fun UserActivityEntity.toTodayResponse(
+        logsByActivityId: Map<UUID, ActivityLogEntity>
+    ): ActivityTodayResponse {
+        val def = activity
+        return ActivityTodayResponse(
+            activityId = def.id!!,
+            name = def.name,
+            ring = def.ring,
+            kind = def.kind,
+            presets = parsePresets(def.presets),
+            unit = def.unit,
+            goal = goal ?: def.defaultGoal,
+            inverse = def.inverse,
+            logValue = logsByActivityId[def.id]?.value ?: 0,
+            scheduleType = scheduleType,
+            scheduleDays = scheduleDays.toList().sortedBy { DayOfWeek.valueOf(it).value },
+            oneOffDate = oneOffDate
+        )
+    }
+
+    /**
+     * Maps a [UserActivityEntity] to [ActivityTodayResponse] using a single
+     * nullable log (used when returning a single activity after schedule update).
+     */
+    private fun UserActivityEntity.toTodayResponse(
+        log: ActivityLogEntity?
+    ): ActivityTodayResponse {
+        val def = activity
+        return ActivityTodayResponse(
+            activityId = def.id!!,
+            name = def.name,
+            ring = def.ring,
+            kind = def.kind,
+            presets = parsePresets(def.presets),
+            unit = def.unit,
+            goal = goal ?: def.defaultGoal,
+            inverse = def.inverse,
+            logValue = log?.value ?: 0,
+            scheduleType = scheduleType,
+            scheduleDays = scheduleDays.toList().sortedBy { DayOfWeek.valueOf(it).value },
+            oneOffDate = oneOffDate
+        )
+    }
 
     private fun parsePresets(raw: String?): List<Int> {
         if (raw.isNullOrBlank()) return emptyList()

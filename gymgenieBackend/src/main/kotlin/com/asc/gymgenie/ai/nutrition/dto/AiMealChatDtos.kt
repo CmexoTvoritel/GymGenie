@@ -68,7 +68,9 @@ data class AiDishDto(
     val calories: Int? = null,
     val proteinG: Int? = null,
     val carbsG: Int? = null,
-    val fatG: Int? = null
+    val fatG: Int? = null,
+    val foodProductId: UUID? = null,
+    val grams: Double? = null
 )
 
 // ===== Save / replace =====
@@ -119,7 +121,9 @@ data class SaveDishRequest(
     val calories: Int? = null,
     val proteinG: Int? = null,
     val carbsG: Int? = null,
-    val fatG: Int? = null
+    val fatG: Int? = null,
+    val foodProductId: UUID? = null,
+    val grams: Double? = null
 )
 
 data class SaveMealPlanResponse(

@@ -61,6 +61,7 @@ fun WorkoutsContent(
                     },
                     onSaved = component::onWorkoutCreated,
                 )
+
             }
         }
     }

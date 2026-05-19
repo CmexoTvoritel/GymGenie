@@ -83,8 +83,18 @@ CREATE TABLE dishes (
     protein_g            INTEGER,
     carbs_g              INTEGER,
     fat_g                INTEGER,
+    food_product_id      UUID,
+    grams                DOUBLE PRECISION,
     CONSTRAINT fk_dishes_meal
         FOREIGN KEY (meal_id) REFERENCES meals(id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_dishes_meal_id ON dishes(meal_id);
+
+-- ============================================================
+-- Backfill columns for environments where the table already exists
+-- (Hibernate ddl-auto: update should have added them, but this ensures
+-- they are present regardless of JPA auto-DDL configuration.)
+-- ============================================================
+ALTER TABLE dishes ADD COLUMN IF NOT EXISTS food_product_id UUID;
+ALTER TABLE dishes ADD COLUMN IF NOT EXISTS grams DOUBLE PRECISION;

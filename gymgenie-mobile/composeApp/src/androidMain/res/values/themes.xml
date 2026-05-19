@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.GymGenie" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/warm_off_white</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+
+    <style name="Theme.GymGenie.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/warm_off_white</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="postSplashScreenTheme">@style/Theme.GymGenie</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

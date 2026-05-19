@@ -4,6 +4,7 @@ import Shared
 struct HomeView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var profileStore: UserProfileStoreWrapper
+    @EnvironmentObject private var tabBarState: TabBarState
     @StateObject private var viewModel = HomeViewModelWrapper()
 
     @State private var showingSession = false
@@ -11,84 +12,171 @@ struct HomeView: View {
 
     @State private var openMealPlanId: String? = nil
     @State private var showingAiCoach = false
-    @State private var showingNutrition = false
     @State private var showingCreateMealPlan = false
     @State private var createMealPlanInitialType: String? = nil
+    @State private var createMealPlanInitialDate: String? = nil
+    @State private var editMealPlanId: String? = nil
+    @State private var showingNotifications = false
+    @State private var scheduleTarget: ActivityTodayResponse? = nil
+    @StateObject private var activitiesViewModel = ActivitiesViewModelWrapper()
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Palette.warmOffWhite.ignoresSafeArea()
+        ZStack {
+            Palette.warmOffWhite.ignoresSafeArea()
 
-                switch viewModel.screenState {
-                case .loading:
-                    loadingView
-                case .error(let message):
-                    errorView(message: message)
-                case .content:
-                    contentView
-                        .refreshable {
-                            await refreshAndWait()
-                        }
-                        .tint(Palette.coral)
-                        .alert(
-                            "Ошибка обновления",
-                            isPresented: Binding(
-                                get: { viewModel.isContentLoaded && viewModel.errorMessage != nil },
-                                set: { if !$0 { viewModel.clearTransientError() } }
-                            ),
-                            presenting: viewModel.errorMessage
-                        ) { _ in
-                            Button("OK") { viewModel.clearTransientError() }
-                        } message: { message in
-                            Text(message)
-                        }
-                }
-            }
-            .fullScreenCover(isPresented: $showingSession) {
-                if let session = activeSession {
-                    WorkoutSessionView(session: session)
-                }
-            }
-            .fullScreenCover(item: Binding(
-                get: { openMealPlanId.map { MealPlanIdHolder(value: $0) } },
-                set: { openMealPlanId = $0?.value }
-            )) { holder in
-                MealPlanDetailView(
-                    planId: holder.value,
-                    onClose: { openMealPlanId = nil }
-                )
-            }
-            .fullScreenCover(isPresented: $showingAiCoach) {
-                AiCoachView()
-                    .environmentObject(profileStore)
-            }
-            .fullScreenCover(isPresented: $showingNutrition) {
-                NutritionView(onClose: { showingNutrition = false })
-                    .environmentObject(profileStore)
-            }
-            .fullScreenCover(isPresented: $showingCreateMealPlan) {
-                CreateMealPlanFlowView(
-                    initialMealType: createMealPlanInitialType,
-                    onClose: { showingCreateMealPlan = false },
-                    onSaved: {
-                        showingCreateMealPlan = false
-                        viewModel.refreshMealPlans()
+            switch viewModel.screenState {
+            case .loading:
+                loadingView
+            case .error(let message):
+                errorView(message: message)
+            case .content:
+                contentView
+                    .refreshable {
+                        await refreshAndWait()
                     }
-                )
+                    .tint(Palette.coral)
+                    .alert(
+                        "Ошибка обновления",
+                        isPresented: Binding(
+                            get: { viewModel.isContentLoaded && viewModel.errorMessage != nil },
+                            set: { if !$0 { viewModel.clearTransientError() } }
+                        ),
+                        presenting: viewModel.errorMessage
+                    ) { _ in
+                        Button("OK") { viewModel.clearTransientError() }
+                    } message: { message in
+                        Text(message)
+                    }
+                    .onChange(of: viewModel.pendingSession?.planId) { _ in
+                        if let session = viewModel.pendingSession {
+                            activeSession = session
+                            showingSession = true
+                            viewModel.clearPendingSession()
+                        }
+                    }
+                    .alert(
+                        "Ошибка",
+                        isPresented: Binding(
+                            get: { viewModel.sessionError != nil },
+                            set: { if !$0 { viewModel.clearPendingSession() } }
+                        )
+                    ) {
+                        Button("OK") { viewModel.clearPendingSession() }
+                    } message: {
+                        Text(viewModel.sessionError ?? "Не удалось загрузить тренировку")
+                    }
+                    .alert(
+                        "Ошибка",
+                        isPresented: Binding(
+                            get: { viewModel.activityError != nil },
+                            set: { if !$0 { viewModel.clearActivityError() } }
+                        )
+                    ) {
+                        Button("OK") { viewModel.clearActivityError() }
+                    } message: {
+                        Text(viewModel.activityError ?? "Не удалось сохранить активность")
+                    }
             }
-            .onAppear {
-                viewModel.setProfileStore(profileStore.store)
-                if !viewModel.isContentLoaded {
-                    viewModel.loadData()
-                }
-            }
-            .onChange(of: viewModel.isLoggedOut) { loggedOut in
-                if loggedOut {
-                    appState.navigate(to: .login)
-                }
+
+            if viewModel.isLoadingSession {
+                Color.black.opacity(0.25).ignoresSafeArea()
+                ProgressView()
+                    .scaleEffect(1.4)
+                    .tint(.white)
             }
         }
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationDestination(isPresented: Binding(
+            get: { openMealPlanId != nil },
+            set: { if !$0 { dismissMealPlanDetail() } }
+        )) {
+            if let id = openMealPlanId {
+                MealPlanDetailView(
+                    planId: id,
+                    onClose: { dismissMealPlanDetail() },
+                    onDeleted: { dismissMealPlanDetail() },
+                    onEdit: {
+                        editMealPlanId = id
+                        openMealPlanId = nil
+                        showingCreateMealPlan = true
+                    }
+                )
+                .toolbar(.hidden, for: .navigationBar)
+            }
+        }
+        .fullScreenCover(isPresented: $showingSession) {
+            if let session = activeSession {
+                WorkoutSessionView(session: session)
+            }
+        }
+        .fullScreenCover(isPresented: $showingAiCoach) {
+            AiCoachView()
+                .environmentObject(profileStore)
+        }
+        .sheet(item: $scheduleTarget) { activity in
+            ActivityScheduleSettingsView(
+                activityId: activity.activityId,
+                activityName: activity.name,
+                initialScheduleType: activity.scheduleType,
+                initialScheduleDays: activity.scheduleDays as [String],
+                initialOneOffDate: activity.oneOffDate,
+                viewModel: activitiesViewModel,
+                onDismiss: {
+                    scheduleTarget = nil
+                    viewModel.refresh()
+                }
+            )
+        }
+        .navigationDestination(isPresented: $showingCreateMealPlan) {
+            CreateMealPlanFlowView(
+                initialMealType: createMealPlanInitialType,
+                initialDate: createMealPlanInitialDate,
+                editPlanId: editMealPlanId,
+                onClose: {
+                    showingCreateMealPlan = false
+                    editMealPlanId = nil
+                },
+                onSaved: {
+                    showingCreateMealPlan = false
+                    editMealPlanId = nil
+                    viewModel.refreshMealPlans()
+                }
+            )
+            .toolbar(.hidden, for: .navigationBar)
+        }
+        .navigationDestination(isPresented: $showingNotifications) {
+            NotificationsView(onClose: { showingNotifications = false })
+                .toolbar(.hidden, for: .navigationBar)
+        }
+        .onAppear {
+            viewModel.setProfileStore(profileStore.store)
+            if !viewModel.isContentLoaded {
+                viewModel.loadData()
+            }
+        }
+        .onChange(of: viewModel.isLoggedOut) { loggedOut in
+            if loggedOut {
+                appState.navigate(to: .login)
+            }
+        }
+        .onChange(of: openMealPlanId) { id in
+            tabBarState.isVisible = (id == nil)
+        }
+        .onChange(of: showingCreateMealPlan) { showing in
+            if !showing {
+                tabBarState.isVisible = true
+            } else {
+                tabBarState.isVisible = false
+            }
+        }
+        .onChange(of: showingNotifications) { showing in
+            tabBarState.isVisible = !showing
+        }
+    }
+
+    private func dismissMealPlanDetail() {
+        openMealPlanId = nil
+        viewModel.refreshMealPlans()
     }
 
     private func refreshAndWait() async {
@@ -146,14 +234,17 @@ struct HomeView: View {
         return ScrollView(showsIndicators: false) {
             LazyVStack(alignment: .leading, spacing: 12) {
                 HomeHeaderSection(
-                    username: viewModel.username.isEmpty ? "друг" : viewModel.username
+                    username: viewModel.username.isEmpty ? "друг" : viewModel.username,
+                    onNotificationsClick: { showingNotifications = true },
+                    onProfileClick: { tabBarState.switchTo(.profile) }
                 )
 
                 ActivitiesSectionHeader(
                     title: slot.title,
                     subtitle: slot.subtitle,
                     actionTitle: slot.showAll ? "Все" : nil,
-                    destination: nil
+                    destination: nil,
+                    onAction: slot.showAll ? { tabBarState.switchTo(.workouts) } : nil
                 )
                 .padding(.top, 24)
 
@@ -173,6 +264,9 @@ struct HomeView: View {
                     activities: viewModel.todayActivities,
                     onCheckIn: { id, value in
                         viewModel.checkIn(activityId: id, value: value)
+                    },
+                    onOpenScheduleSettings: { activity in
+                        scheduleTarget = activity
                     }
                 )
 
@@ -184,10 +278,13 @@ struct HomeView: View {
                     selectedDate: viewModel.selectedMealDate,
                     onDateSelected: { date in viewModel.selectMealDate(date) },
                     onPlanTap: { planId in openMealPlanId = planId },
-                    onCreatePlan: { mealType in
+                    onCreatePlan: { mealType, date in
                         createMealPlanInitialType = mealType
+                        createMealPlanInitialDate = date
                         showingCreateMealPlan = true
-                    }
+                    },
+                    isPremium: viewModel.subscriptionType != "FREE",
+                    onOpenPaywall: { appState.navigate(to: .paywall) }
                 )
                 .padding(.top, 12)
 
@@ -211,13 +308,7 @@ struct HomeView: View {
                 isRecommended: slot.isRecommended,
                 onView: { _ in },
                 onStart: { plan in
-                    activeSession = ActiveWorkoutSession(
-                        planId: plan.id,
-                        planName: plan.name,
-                        exercises: [],
-                        restSeconds: 60
-                    )
-                    showingSession = true
+                    viewModel.startWorkout(planId: plan.id, planName: plan.name)
                 }
             )
         }
@@ -308,30 +399,37 @@ struct HomeView: View {
 
 private struct HomeHeaderSection: View {
     let username: String
+    var onNotificationsClick: () -> Void = {}
+    var onProfileClick: () -> Void = {}
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            ZStack {
-                Circle().fill(Palette.coral)
-                Text(String(username.prefix(1)).uppercased())
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.white)
-            }
-            .frame(width: 48, height: 48)
+            Button(action: onProfileClick) {
+                HStack(alignment: .center, spacing: 12) {
+                    ZStack {
+                        Circle().fill(Palette.coral)
+                        Text(String(username.prefix(1)).uppercased())
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                    .frame(width: 48, height: 48)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(Self.currentDateString())
-                    .font(.system(size: 16, weight: .regular))
-                    .foregroundColor(Palette.mutedText)
-                Text("Привет, \(username)!")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(Palette.deepInk)
-                    .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(Self.currentDateString())
+                            .font(.system(size: 16, weight: .regular))
+                            .foregroundColor(Palette.mutedText)
+                        Text("Привет, \(username)!")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(Palette.deepInk)
+                            .lineLimit(1)
+                    }
+                }
             }
+            .buttonStyle(.plain)
 
             Spacer()
 
-            Button(action: {}) {
+            Button(action: onNotificationsClick) {
                 Image(systemName: "bell")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(Palette.deepInk)
@@ -448,6 +546,7 @@ struct ActivitiesSectionHeader: View {
     let subtitle: String?
     let actionTitle: String?
     let destination: AnyView?
+    var onAction: (() -> Void)? = nil
 
     var body: some View {
         HStack(alignment: .center, spacing: 16) {
@@ -473,7 +572,7 @@ struct ActivitiesSectionHeader: View {
                             .foregroundColor(Palette.accentOrange)
                     }
                 } else {
-                    Button(action: {}) {
+                    Button(action: { onAction?() }) {
                         Text(actionTitle)
                             .font(.system(size: 18, weight: .medium))
                             .foregroundColor(Palette.accentOrange)
@@ -484,7 +583,7 @@ struct ActivitiesSectionHeader: View {
     }
 }
 
-#if swift(>=6.0)
+#if compiler(>=6.0)
 extension Shared.ActivityTodayResponse: @retroactive Identifiable {
     public var id: String { activityId }
 }
@@ -621,6 +720,7 @@ private struct RingLegendRow: View {
 struct ActivityRowsCard: View {
     let activities: [ActivityTodayResponse]
     let onCheckIn: (String, Int) -> Void
+    var onOpenScheduleSettings: ((ActivityTodayResponse) -> Void)? = nil
 
     @State private var activeFilter: String = ActivityFilter.all
     @State private var presetTarget: ActivityTodayResponse? = nil
@@ -642,7 +742,10 @@ struct ActivityRowsCard: View {
                     ActivityCardRow(
                         activity: activity,
                         onCheckIn: onCheckIn,
-                        onOpenPreset: { presetTarget = activity }
+                        onOpenPreset: { presetTarget = activity },
+                        onOpenScheduleSettings: onOpenScheduleSettings != nil
+                            ? { onOpenScheduleSettings?(activity) }
+                            : nil
                     )
                 }
             }
@@ -671,6 +774,38 @@ private func ringColor(for ring: String) -> Color {
     case "MIND": return Palette.ringMind
     case "LIFE": return Palette.ringLife
     default: return Palette.deepInk
+    }
+}
+
+private let backendDayToShort: [String: String] = [
+    "MONDAY": "Пн", "TUESDAY": "Вт", "WEDNESDAY": "Ср",
+    "THURSDAY": "Чт", "FRIDAY": "Пт", "SATURDAY": "Сб", "SUNDAY": "Вс"
+]
+
+/// Returns a short human-readable schedule label, or nil when the activity
+/// runs every day (the default).
+private func formatScheduleLabel(activity: ActivityTodayResponse) -> String? {
+    guard let scheduleType = activity.scheduleType as String? else { return nil }
+    switch scheduleType {
+    case "RECURRING":
+        let days = activity.scheduleDays as [String]
+        if days.isEmpty { return nil }
+        let ordered = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]
+        let sorted = days.sorted { (ordered.firstIndex(of: $0) ?? 99) < (ordered.firstIndex(of: $1) ?? 99) }
+        return sorted.compactMap { backendDayToShort[$0] }.joined(separator: " ")
+    case "ONE_TIME":
+        guard let raw = activity.oneOffDate as String? else { return nil }
+        let parser = DateFormatter()
+        parser.calendar = Calendar(identifier: .iso8601)
+        parser.dateFormat = "yyyy-MM-dd"
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        guard let date = parser.date(from: raw) else { return raw }
+        let display = DateFormatter()
+        display.locale = Locale(identifier: "ru_RU")
+        display.dateFormat = "d MMM"
+        return display.string(from: date)
+    default:
+        return nil
     }
 }
 
@@ -741,6 +876,7 @@ private struct ActivityCardRow: View {
     let activity: ActivityTodayResponse
     let onCheckIn: (String, Int) -> Void
     let onOpenPreset: () -> Void
+    var onOpenScheduleSettings: (() -> Void)? = nil
 
     private var progress: ActivityProgress {
         activity.toProgress()
@@ -766,6 +902,10 @@ private struct ActivityCardRow: View {
         isDone ? ring : Palette.activityCardBorder
     }
 
+    private var scheduleLabel: String? {
+        formatScheduleLabel(activity: activity)
+    }
+
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             EmojiBadge(name: activity.name, ring: ring, isDone: isDone)
@@ -782,6 +922,13 @@ private struct ActivityCardRow: View {
                     fraction: CGFloat(progress.fraction),
                     ring: ring
                 )
+
+                if let label = scheduleLabel {
+                    Text(label)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Palette.mutedText.opacity(0.7))
+                        .onTapGesture { onOpenScheduleSettings?() }
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -978,9 +1125,23 @@ private struct PresetSheetView: View {
     let onDismiss: () -> Void
 
     private var ring: Color { ringColor(for: activity.ring) }
-    private var presets: [Int] {
-        guard let raw = activity.presets else { return [] }
-        return raw.map { $0.intValue }
+    private var maxValue: Int {
+        let goal = activity.goal?.intValue ?? 0
+        return goal > 0 ? goal : 120
+    }
+    private var unit: String { activity.unit ?? "" }
+
+    @State private var sliderValue: Double
+
+    init(activity: ActivityTodayResponse, onPick: @escaping (String, Int) -> Void, onDismiss: @escaping () -> Void) {
+        self.activity = activity
+        self.onPick = onPick
+        self.onDismiss = onDismiss
+        self._sliderValue = State(initialValue: Double(activity.logValue))
+    }
+
+    private var chips: [Int] {
+        [maxValue / 4, maxValue / 2, maxValue * 3 / 4, maxValue]
     }
 
     var body: some View {
@@ -1006,51 +1167,66 @@ private struct PresetSheetView: View {
             }
             .padding(.top, 8)
 
-            Spacer().frame(height: 20)
+            Spacer().frame(height: 24)
 
-            if presets.isEmpty {
-                Text("Нет вариантов для быстрого выбора")
-                    .font(.system(size: 14))
-                    .foregroundColor(Palette.mutedText)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 24)
-            } else {
-                LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(), spacing: 10),
-                        GridItem(.flexible(), spacing: 10),
-                    ],
-                    spacing: 10
-                ) {
-                    ForEach(presets, id: \.self) { value in
-                        Button(action: { onPick(activity.activityId, value) }) {
-                            VStack(spacing: 2) {
-                                Text("\(value)")
-                                    .font(.system(size: 24, weight: .heavy))
-                                    .foregroundColor(Palette.deepInk)
-                                if let unit = activity.unit, !unit.isEmpty {
-                                    Text(unit)
-                                        .font(.system(size: 12))
-                                        .foregroundColor(Palette.mutedText)
-                                }
-                            }
+            HStack(alignment: .lastTextBaseline, spacing: 6) {
+                Spacer()
+                Text("\(Int(sliderValue.rounded()))")
+                    .font(.system(size: 36, weight: .heavy))
+                    .foregroundColor(Palette.deepInk)
+                if !unit.isEmpty {
+                    Text(unit)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(Palette.mutedText)
+                }
+                Spacer()
+            }
+
+            Slider(
+                value: $sliderValue,
+                in: 0...Double(maxValue),
+                step: 1
+            )
+            .tint(ring)
+
+            Spacer().frame(height: 12)
+
+            HStack(spacing: 8) {
+                ForEach(chips, id: \.self) { chipValue in
+                    let isSelected = Int(sliderValue.rounded()) == chipValue
+                    let chipLabel = unit.isEmpty ? "\(chipValue)" : "\(chipValue) \(unit)"
+                    Button(action: { sliderValue = Double(chipValue) }) {
+                        Text(chipLabel)
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(isSelected ? .white : Palette.deepInk)
                             .frame(maxWidth: .infinity)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 18)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 9)
                             .background(
-                                RoundedRectangle(cornerRadius: 16).fill(ring.opacity(0.10))
+                                Capsule().fill(isSelected ? ring : .white)
                             )
                             .overlay(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .strokeBorder(ring.opacity(0.20), lineWidth: 1.5)
+                                isSelected ? nil :
+                                Capsule().strokeBorder(Palette.activityCardBorder, lineWidth: 1.5)
                             )
-                        }
-                        .buttonStyle(.plain)
                     }
+                    .buttonStyle(.plain)
                 }
             }
 
-            Spacer().frame(height: 16)
+            Spacer().frame(height: 24)
+
+            Button(action: { onPick(activity.activityId, Int(sliderValue.rounded())) }) {
+                Text("Сохранить")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(RoundedRectangle(cornerRadius: 14).fill(ring))
+            }
+            .buttonStyle(.plain)
+
+            Spacer().frame(height: 8)
 
             Button(action: onDismiss) {
                 Text("Отмена")
@@ -1407,7 +1583,9 @@ struct MealPlanSection: View {
     let selectedDate: Date
     let onDateSelected: (Date) -> Void
     let onPlanTap: (String) -> Void
-    let onCreatePlan: (String?) -> Void
+    let onCreatePlan: (String?, String?) -> Void
+    let isPremium: Bool
+    let onOpenPaywall: () -> Void
 
     private static let standardSlots: [String] = ["BREAKFAST", "LUNCH", "DINNER"]
 
@@ -1418,6 +1596,7 @@ struct MealPlanSection: View {
     }
 
     private var subtitle: String {
+        if !isPremium { return "Доступен в Premium" }
         if isLoading { return "Загрузка..." }
         if todayPlans.isEmpty { return "Нет планов на эту дату" }
         return "\(todayPlans.count) \(Self.pluralizeMeals(todayPlans.count)) · \(totalKcal) ккал"
@@ -1432,33 +1611,44 @@ struct MealPlanSection: View {
                 destination: nil
             )
 
-            MealDatePicker(
-                selectedDate: selectedDate,
-                onDateSelected: onDateSelected
-            )
-
-            if isLoading {
-                MealPlansLoadingState()
-            } else if todayPlans.isEmpty {
-                EmptyMealPlanCard(onCreate: { onCreatePlan(nil) })
+            if !isPremium {
+                MealPlanLockedOverlay(onUnlock: onOpenPaywall)
             } else {
-                VStack(spacing: 10) {
-                    ForEach(Self.standardSlots, id: \.self) { slot in
-                        if let card = todayPlans.first(where: { $0.mealType.uppercased() == slot }) {
-                            TodayMealPlanRow(
-                                card: card,
-                                onTap: { onPlanTap(card.planId) }
-                            )
-                        } else {
-                            EmptyMealSlotCard(
-                                mealType: slot,
-                                onTap: { onCreatePlan(slot) }
-                            )
+                MealDatePicker(
+                    selectedDate: selectedDate,
+                    onDateSelected: onDateSelected
+                )
+
+                if isLoading {
+                    MealPlansLoadingState()
+                } else if todayPlans.isEmpty {
+                    EmptyMealPlanCard(onCreate: { onCreatePlan(nil, nil) })
+                } else {
+                    let dateIso = Self.isoDateString(from: selectedDate)
+                    VStack(spacing: 10) {
+                        ForEach(Self.standardSlots, id: \.self) { slot in
+                            if let card = todayPlans.first(where: { $0.mealType.uppercased() == slot }) {
+                                TodayMealPlanRow(
+                                    card: card,
+                                    onTap: { onPlanTap(card.planId) }
+                                )
+                            } else {
+                                EmptyMealSlotCard(
+                                    mealType: slot,
+                                    onTap: { onCreatePlan(slot, dateIso) }
+                                )
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    private static func isoDateString(from date: Date) -> String {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        return fmt.string(from: date)
     }
 
     private static func pluralizeMeals(_ count: Int) -> String {
@@ -1585,7 +1775,7 @@ private struct MealDatePicker: View {
             ZStack {
                 Circle().fill(Color(red: 0.957, green: 0.957, blue: 0.965))
                 Image(systemName: symbol)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundColor(Color(red: 0.039, green: 0.039, blue: 0.039))
             }
             .frame(width: 40, height: 40)
@@ -1625,8 +1815,8 @@ private struct EmptyMealSlotCard: View {
 
                 ZStack {
                     Circle().fill(Palette.deepInk)
-                    Image(systemName: "plus")
-                        .font(.system(size: 12, weight: .bold))
+                    Text("+")
+                        .font(.system(size: 14, weight: .bold))
                         .foregroundColor(.white)
                 }
                 .frame(width: 24, height: 24)
@@ -1648,38 +1838,35 @@ private struct EmptyMealPlanCard: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 16).fill(Color(red: 0.957, green: 0.957, blue: 0.965))
-                Text("🥗").font(.system(size: 28))
-            }
-            .frame(width: 56, height: 56)
+            Text("🍽️").font(.system(size: 30))
+
+            Spacer().frame(height: 8)
 
             Text("Нет плана питания на эту дату")
-                .font(.system(size: 15, weight: .bold))
+                .font(.system(size: 17, weight: .heavy))
                 .foregroundColor(Palette.deepInk)
 
-            Text("Создайте рацион — он появится в нужный день недели или дату")
-                .font(.system(size: 13))
+            Text("Создай рацион — расписание само подскажет, что есть в этот день")
+                .font(.system(size: 15))
                 .foregroundColor(Palette.mutedText)
                 .multilineTextAlignment(.center)
 
             Button(action: onCreate) {
                 Text("Создать план")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Palette.coral))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(RoundedRectangle(cornerRadius: 14).fill(Palette.coral))
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)
         .padding(.horizontal, 20)
-        .background(RoundedRectangle(cornerRadius: 24).fill(.white))
+        .background(RoundedRectangle(cornerRadius: 18).fill(.white))
         .overlay(
-            RoundedRectangle(cornerRadius: 24)
-                .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
-                .foregroundColor(Color(red: 0.878, green: 0.878, blue: 0.898))
+            RoundedRectangle(cornerRadius: 18)
+                .strokeBorder(mealCardBorder, lineWidth: 1.5)
         )
     }
 }

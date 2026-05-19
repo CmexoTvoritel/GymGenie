@@ -21,12 +21,13 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -78,23 +79,26 @@ fun HomeScreen(
     onOpenCatalog: () -> Unit,
     onViewPlan: (WorkoutPlanShortResponse) -> Unit,
     onSessionReady: (ActiveWorkoutSession) -> Unit,
-    onCreateMealPlan: (mealType: String?) -> Unit,
+    onCreateMealPlan: (mealType: String?, date: String?) -> Unit,
     onViewMealPlan: (planId: String) -> Unit,
     mealPlansReloadKey: Int = 0,
+    onOpenPaywall: () -> Unit = {},
+    onNotificationsClick: () -> Unit = {},
+    onSwitchToProfile: () -> Unit = {},
+    onSwitchToWorkouts: () -> Unit = {},
+    onOpenActivityScheduleSettings: (activityId: String, name: String, scheduleType: String?, scheduleDays: List<String>, oneOffDate: String?) -> Unit = { _, _, _, _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     val koin = remember { GlobalContext.get() }
     val viewModel = remember { koin.get<HomeViewModel>() }
-
-    DisposableEffect(Unit) {
-        onDispose { viewModel.onCleared() }
-    }
 
     val state by viewModel.state.collectAsState()
 
     LaunchedEffect(Unit) {
         if (!state.isContentLoaded) {
             viewModel.load()
+        } else {
+            viewModel.refresh()
         }
     }
 
@@ -115,6 +119,15 @@ fun HomeScreen(
         if (state.errorMessage != null && state.isContentLoaded) {
             delay(4_000)
             viewModel.clearTransientError()
+        }
+    }
+
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(state.activityError) {
+        state.activityError?.let { msg ->
+            snackbarHostState.showSnackbar(msg)
+            viewModel.clearActivityError()
         }
     }
 
@@ -146,9 +159,20 @@ fun HomeScreen(
                     onCheckIn = viewModel::checkIn,
                     selectedMealDate = state.selectedMealDate,
                     onMealDateSelected = viewModel::selectMealDate,
+                    isPremium = state.subscriptionType != "FREE",
+                    onOpenPaywall = onOpenPaywall,
+                    onNotificationsClick = onNotificationsClick,
+                    onSwitchToProfile = onSwitchToProfile,
+                    onSwitchToWorkouts = onSwitchToWorkouts,
+                    onOpenActivityScheduleSettings = onOpenActivityScheduleSettings,
                 )
             }
         }
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
     }
 }
 
@@ -162,10 +186,16 @@ private fun ContentWithPullToRefresh(
     onOpenActivities: () -> Unit,
     onOpenCatalog: () -> Unit,
     onViewMealPlan: (planId: String) -> Unit,
-    onCreateMealPlan: (mealType: String?) -> Unit,
+    onCreateMealPlan: (mealType: String?, date: String?) -> Unit,
     onCheckIn: (String, Int) -> Unit,
     selectedMealDate: LocalDate,
     onMealDateSelected: (LocalDate) -> Unit,
+    isPremium: Boolean,
+    onOpenPaywall: () -> Unit,
+    onNotificationsClick: () -> Unit,
+    onSwitchToProfile: () -> Unit,
+    onSwitchToWorkouts: () -> Unit,
+    onOpenActivityScheduleSettings: (activityId: String, name: String, scheduleType: String?, scheduleDays: List<String>, oneOffDate: String?) -> Unit,
 ) {
     val refreshState = rememberPullToRefreshState()
     PullToRefreshBox(
@@ -200,7 +230,12 @@ private fun ContentWithPullToRefresh(
             onCheckIn = onCheckIn,
             isLoadingSession = state.isLoadingSession,
             sessionError = state.sessionError,
-            transientError = state.errorMessage,
+            isPremium = isPremium,
+            onOpenPaywall = onOpenPaywall,
+            onNotificationsClick = onNotificationsClick,
+            onSwitchToProfile = onSwitchToProfile,
+            onSwitchToWorkouts = onSwitchToWorkouts,
+            onOpenActivityScheduleSettings = onOpenActivityScheduleSettings,
         )
     }
 }
@@ -258,11 +293,16 @@ private fun HomeContent(
     onOpenActivities: () -> Unit,
     onOpenCatalog: () -> Unit,
     onViewMealPlan: (planId: String) -> Unit,
-    onCreateMealPlan: (mealType: String?) -> Unit,
+    onCreateMealPlan: (mealType: String?, date: String?) -> Unit,
     onCheckIn: (String, Int) -> Unit,
     isLoadingSession: Boolean,
     sessionError: String?,
-    transientError: String?,
+    isPremium: Boolean,
+    onOpenPaywall: () -> Unit,
+    onNotificationsClick: () -> Unit,
+    onSwitchToProfile: () -> Unit,
+    onSwitchToWorkouts: () -> Unit,
+    onOpenActivityScheduleSettings: (activityId: String, name: String, scheduleType: String?, scheduleDays: List<String>, oneOffDate: String?) -> Unit,
 ) {
     val today = remember { currentDayOfWeek() }
     val todaySlot = remember(activePlans, today) {
@@ -278,6 +318,8 @@ private fun HomeContent(
             HomeHeaderSection(
                 username = username,
                 date = remember { currentDateLabel() },
+                onNotificationsClick = onNotificationsClick,
+                onProfileClick = onSwitchToProfile,
             )
         }
 
@@ -287,7 +329,7 @@ private fun HomeContent(
                 subtitle = todaySlot.subtitle,
                 actionTitle = if (todaySlot.showAll) "Все" else null,
                 onAction = if (todaySlot.showAll) {
-                    { }
+                    { onSwitchToWorkouts() }
                 } else null,
                 modifier = Modifier.padding(top = 24.dp),
             )
@@ -306,11 +348,11 @@ private fun HomeContent(
             }
         }
 
-        if (isLoadingSession || sessionError != null || transientError != null) {
+        if (isLoadingSession || sessionError != null) {
             item {
                 SessionStatusBanner(
                     isLoading = isLoadingSession,
-                    errorMessage = sessionError ?: transientError,
+                    errorMessage = sessionError,
                 )
             }
         }
@@ -327,7 +369,21 @@ private fun HomeContent(
 
         item { ActivityRingsCard(activities = todayActivities) }
 
-        item { ActivityRowsCard(activities = todayActivities, onCheckIn = onCheckIn) }
+        item {
+            ActivityRowsCard(
+                activities = todayActivities,
+                onCheckIn = onCheckIn,
+                onOpenScheduleSettings = { activity ->
+                    onOpenActivityScheduleSettings(
+                        activity.activityId,
+                        activity.name,
+                        activity.scheduleType,
+                        activity.scheduleDays,
+                        activity.oneOffDate,
+                    )
+                },
+            )
+        }
 
         item {
             AddActivityButton(onClick = onOpenCatalog)
@@ -341,6 +397,8 @@ private fun HomeContent(
                 onDateSelected = onMealDateSelected,
                 onPlanTap = onViewMealPlan,
                 onCreatePlan = onCreateMealPlan,
+                isPremium = isPremium,
+                onOpenPaywall = onOpenPaywall,
                 modifier = Modifier.padding(top = 12.dp),
             )
         }

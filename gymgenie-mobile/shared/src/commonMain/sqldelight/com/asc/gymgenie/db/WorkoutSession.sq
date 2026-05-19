@@ -10,7 +10,9 @@ CREATE TABLE IF NOT EXISTS PendingWorkoutSession (
     plan_id TEXT,
     plan_day_id TEXT,
     name TEXT NOT NULL,
-    started_at INTEGER NOT NULL
+    started_at INTEGER NOT NULL,
+    finished_at INTEGER,
+    status TEXT NOT NULL DEFAULT 'COMPLETED'
 );
 
 CREATE TABLE IF NOT EXISTS PendingWorkoutSet (
@@ -26,8 +28,8 @@ CREATE TABLE IF NOT EXISTS PendingWorkoutSet (
 );
 
 insertSession:
-INSERT OR REPLACE INTO PendingWorkoutSession(id, plan_id, plan_day_id, name, started_at)
-VALUES (?, ?, ?, ?, ?);
+INSERT OR REPLACE INTO PendingWorkoutSession(id, plan_id, plan_day_id, name, started_at, status)
+VALUES (?, ?, ?, ?, ?, ?);
 
 insertSet:
 INSERT INTO PendingWorkoutSet(session_id, exercise_id, set_number, reps, weight_kg, completed, duration_seconds)
@@ -44,3 +46,12 @@ DELETE FROM PendingWorkoutSession WHERE id = ?;
 
 deleteSetsBySession:
 DELETE FROM PendingWorkoutSet WHERE session_id = ?;
+
+getAllSessions:
+SELECT * FROM PendingWorkoutSession WHERE finished_at IS NOT NULL;
+
+markSessionFinished:
+UPDATE PendingWorkoutSession SET finished_at = ? WHERE id = ?;
+
+updateSessionStatus:
+UPDATE PendingWorkoutSession SET status = ? WHERE id = ?;

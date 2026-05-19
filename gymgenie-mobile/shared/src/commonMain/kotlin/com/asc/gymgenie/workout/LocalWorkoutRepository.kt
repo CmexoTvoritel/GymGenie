@@ -21,13 +21,13 @@ class LocalWorkoutRepository(driverFactory: DatabaseDriverFactory) {
     private val database = GymGenieDatabase(driverFactory.createDriver())
     private val queries = database.workoutSessionQueries
 
-    /** Persist (or replace) the metadata row for a workout session. */
     fun saveSession(
         sessionId: String,
         planId: String?,
         planDayId: String?,
         name: String,
         startedAtEpochMillis: Long = Clock.System.now().toEpochMilliseconds(),
+        status: String = "COMPLETED",
     ) {
         queries.insertSession(
             id = sessionId,
@@ -35,6 +35,7 @@ class LocalWorkoutRepository(driverFactory: DatabaseDriverFactory) {
             plan_day_id = planDayId,
             name = name,
             started_at = startedAtEpochMillis,
+            status = status,
         )
     }
 
@@ -59,6 +60,28 @@ class LocalWorkoutRepository(driverFactory: DatabaseDriverFactory) {
         )
     }
 
+    /**
+     * Stamp the session row as finished. Only sessions with a non-null
+     * `finished_at` are eligible for background retry via
+     * [getAllPendingSessions]; in-progress sessions are intentionally
+     * invisible to the uploader so it cannot race against
+     * [WorkoutSessionViewModel].
+     */
+    fun markSessionFinished(sessionId: String, finishedAtEpochMillis: Long) {
+        queries.markSessionFinished(finishedAtEpochMillis, sessionId)
+    }
+
+    fun markSessionFinishedWithStatus(sessionId: String, finishedAtEpochMillis: Long, status: String) {
+        queries.transaction {
+            queries.markSessionFinished(finishedAtEpochMillis, sessionId)
+            queries.updateSessionStatus(status, sessionId)
+        }
+    }
+
+    fun updateSessionStatus(sessionId: String, status: String) {
+        queries.updateSessionStatus(status, sessionId)
+    }
+
     fun getSession(sessionId: String): PendingSession? {
         val row = queries.getSession(sessionId).executeAsOneOrNull() ?: return null
         return PendingSession(
@@ -67,7 +90,34 @@ class LocalWorkoutRepository(driverFactory: DatabaseDriverFactory) {
             planDayId = row.plan_day_id,
             name = row.name,
             startedAt = row.started_at,
+            finishedAt = row.finished_at,
+            status = row.status,
         )
+    }
+
+    /**
+     * Returns the metadata for every session currently persisted locally that
+     * has been explicitly marked as finished.
+     *
+     * Used by [PendingSessionUploader] on app startup to discover sessions
+     * that were never successfully submitted (the user dismissed the summary
+     * screen, the process died, etc.) so they can be retried in the
+     * background. In-progress sessions (no `finished_at`) are filtered out by
+     * the underlying query so the uploader cannot trample on rows that
+     * [WorkoutSessionViewModel] is still writing to.
+     */
+    fun getAllPendingSessions(): List<PendingSession> {
+        return queries.getAllSessions().executeAsList().map { row ->
+            PendingSession(
+                id = row.id,
+                planId = row.plan_id,
+                planDayId = row.plan_day_id,
+                name = row.name,
+                startedAt = row.started_at,
+                finishedAt = row.finished_at,
+                status = row.status,
+            )
+        }
     }
 
     fun getSetsForSession(sessionId: String): List<PendingSet> {
@@ -98,6 +148,8 @@ class LocalWorkoutRepository(driverFactory: DatabaseDriverFactory) {
         val planDayId: String?,
         val name: String,
         val startedAt: Long,
+        val finishedAt: Long? = null,
+        val status: String = "COMPLETED",
     )
 
     data class PendingSet(

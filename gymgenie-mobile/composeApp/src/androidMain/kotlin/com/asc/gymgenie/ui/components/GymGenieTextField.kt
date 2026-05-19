@@ -2,6 +2,7 @@ package com.asc.gymgenie.ui.components
 
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -12,8 +13,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 @Composable
 fun GymGenieTextField(
@@ -24,6 +27,7 @@ fun GymGenieTextField(
     modifier: Modifier = Modifier,
     visualTransformation: VisualTransformation = VisualTransformation.None,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
     isError: Boolean = false,
     enabled: Boolean = true,
     accentColor: Color = MaterialTheme.colorScheme.primary,
@@ -31,7 +35,7 @@ fun GymGenieTextField(
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
-        label = { Text(label) },
+        label = { Text(label, fontSize = 16.sp) },
         leadingIcon = {
             Icon(
                 imageVector = leadingIcon,
@@ -40,6 +44,7 @@ fun GymGenieTextField(
             )
         },
         modifier = modifier.fillMaxWidth(),
+        textStyle = TextStyle(fontSize = 16.sp),
         shape = RoundedCornerShape(12.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = accentColor,
@@ -50,6 +55,7 @@ fun GymGenieTextField(
         ),
         visualTransformation = visualTransformation,
         keyboardOptions = keyboardOptions,
+        keyboardActions = keyboardActions,
         singleLine = true,
         isError = isError,
         enabled = enabled,

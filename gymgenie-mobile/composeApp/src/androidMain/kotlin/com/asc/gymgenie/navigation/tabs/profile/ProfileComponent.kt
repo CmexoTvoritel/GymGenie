@@ -4,6 +4,7 @@ import com.arkivanov.decompose.router.stack.ChildStack
 import com.arkivanov.decompose.value.Value
 import com.asc.gymgenie.feature.profile.EditFormHolder
 import com.asc.gymgenie.presentation.ProfileViewModel
+import com.asc.gymgenie.workout.WorkoutSessionHistoryItem
 
 interface ProfileComponent {
 
@@ -16,6 +17,8 @@ interface ProfileComponent {
     fun openEditExperience()
     fun openEditHealth()
     fun openPaywall()
+    fun openHistory()
+    fun openHistorySummary(session: WorkoutSessionHistoryItem)
     fun pop()
     fun resetToMain()
 
@@ -26,5 +29,7 @@ interface ProfileComponent {
         data object EditExperience : Child()
         data object EditHealth : Child()
         data object Paywall : Child()
+        data object History : Child()
+        data class HistorySummary(val session: WorkoutSessionHistoryItem) : Child()
     }
 }

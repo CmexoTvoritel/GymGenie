@@ -42,6 +42,7 @@ data class WorkoutPlanShortResponse(
     val primaryMuscleGroup: String? = null,
     val exercisesCount: Int = 0,
     val totalSets: Int = 0,
+    val estimatedMinutes: Int = 0,
 )
 
 /**
@@ -79,6 +80,7 @@ data class ActiveExercise(
     val sets: Int,
     val reps: Int,
     val weightKg: Double?,
+    val setWeightsKg: List<Double?>? = null,
 )
 
 data class CompletedSet(
@@ -108,11 +110,20 @@ data class CreateSimpleWorkoutRequest(
     val exercises: List<SimpleWorkoutExerciseItem>,
 )
 
+/**
+ * Single exercise entry in a create/update workout-plan payload.
+ *
+ * [setWeightsKg] is optional: `null` means the exercise is bodyweight (or the
+ * server should fall back to its default weight), while a non-null list
+ * must have exactly [sets] elements — one weight per set. Individual entries
+ * may still be `null` if the user opted to leave a set's weight unrecorded.
+ */
 @Serializable
 data class SimpleWorkoutExerciseItem(
     val exerciseId: String,
     val sets: Int,
     val reps: Int,
+    val setWeightsKg: List<Double?>? = null,
 )
 
 /**
@@ -187,6 +198,45 @@ data class WorkoutPlanExerciseResponse(
     val weightKg: Double? = null,
     val restSeconds: Int = 60,
     val orderIndex: Int = 0,
+    /**
+     * Seconds it takes the average user to perform 10 reps of this exercise.
+     * Used in time estimation formulas on the detail screen. `null` for older
+     * plans where the backend did not yet backfill this value — callers should
+     * default to 30 seconds.
+     */
+    val secondsPer10Reps: Int? = null,
+    /**
+     * Per-set weight history when the plan was created with weighted sets.
+     *
+     * `null` keeps the legacy contract for plans saved before this field
+     * existed; UI should fall back to [weightKg] in that case. When non-null,
+     * the list length matches [sets] (entries may be `null` if a single set
+     * was logged without a weight).
+     */
+    val setWeightsKg: List<Double?>? = null,
+)
+
+/**
+ * Lightweight session summary returned by `GET /api/v1/workout-sessions/by-date`.
+ *
+ * [startedAt] and [finishedAt] arrive as epoch milliseconds (Jackson with
+ * `WRITE_DATES_AS_TIMESTAMPS` + `WRITE_DATE_TIMESTAMPS_AS_NANOSECONDS=false`).
+ * Consumers convert via `Instant.fromEpochMilliseconds(startedAt.toLong())`.
+ */
+@Serializable
+data class WorkoutSessionHistoryItem(
+    val id: String,
+    val name: String,
+    val startedAt: Double,
+    val finishedAt: Double? = null,
+    val status: String,
+    val totalSets: Int = 0,
+    val completedSets: Int = 0,
+    val totalExercises: Int = 0,
+    val completedExercises: Int = 0,
+    val totalReps: Int = 0,
+    val primaryMuscleGroup: String? = null,
+    val durationMinutes: Int? = null,
 )
 
 fun WorkoutPlanResponse.toActiveSession(): ActiveWorkoutSession {
@@ -203,6 +253,7 @@ fun WorkoutPlanResponse.toActiveSession(): ActiveWorkoutSession {
                 sets = ex.sets,
                 reps = ex.reps,
                 weightKg = ex.weightKg,
+                setWeightsKg = ex.setWeightsKg,
             )
         } ?: emptyList()
     val restSeconds = day?.exercises?.firstOrNull()?.restSeconds ?: 60

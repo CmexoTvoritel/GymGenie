@@ -21,9 +21,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -34,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -41,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import com.asc.gymgenie.presentation.CreateWorkoutLimits
 import com.asc.gymgenie.presentation.CreateWorkoutUiState
 import com.asc.gymgenie.presentation.PendingExercise
+import com.asc.gymgenie.ui.components.GymGenieToolbar
 import com.asc.gymgenie.ui.theme.AccentOrange
 import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
@@ -49,7 +54,10 @@ import com.asc.gymgenie.ui.theme.WarmOffWhite
 import com.asc.gymgenie.workout.WorkoutScheduleType
 
 /**
- * Step 4 of the create-workout flow: review, edit, save.
+ * Builder (hub) screen of the create-workout flow: review, edit, save.
+ *
+ * Not a numbered wizard step — the 3-step indicator only applies to the
+ * group → exercise → config sub-flow used when adding an exercise.
  *
  * Reads directly from the shared [CreateWorkoutUiState] so the list of already
  * configured exercises survives back-and-forth navigation to add more items.
@@ -67,6 +75,7 @@ fun WorkoutBuilderScreen(
     onSave: () -> Unit,
     onScheduleTypeChange: (WorkoutScheduleType) -> Unit = {},
     onToggleScheduleDay: (String) -> Unit = {},
+    onEditExerciseAt: (Int) -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -74,10 +83,14 @@ fun WorkoutBuilderScreen(
             .background(WarmOffWhite)
             .imePadding(),
     ) {
-        CreateWorkoutTopBar(
-            title = state.workoutName.ifBlank { "Моя тренировка" },
-            subtitle = "Шаг 4 из 4",
-            onBack = onBack,
+        // The builder is the "home" of the flow and intentionally is NOT a
+        // numbered step in the wizard — dropping the subtitle keeps the
+        // step counter (1/3, 2/3, 3/3) honest while users add exercises.
+        GymGenieToolbar(
+            title = "Создание тренировки",
+            showBackNavigation = true,
+            showCloseIcon = true,
+            onBackClick = onBack,
         )
 
         LazyColumn(
@@ -140,6 +153,7 @@ fun WorkoutBuilderScreen(
                 ) { index, exercise ->
                     ExerciseRow(
                         exercise = exercise,
+                        onEdit = { onEditExerciseAt(index) },
                         onRemove = { onRemoveExerciseAt(index) },
                     )
                 }
@@ -174,21 +188,31 @@ private fun WorkoutNameField(
     value: String,
     onValueChange: (String) -> Unit,
 ) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        placeholder = { Text("Название тренировки", color = MutedText) },
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        singleLine = true,
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = AccentOrange,
-            unfocusedBorderColor = SoftCard,
-            cursorColor = AccentOrange,
-            focusedContainerColor = Color.White,
-            unfocusedContainerColor = Color.White,
-        ),
-    )
+    Column {
+        Text(
+            text = "Название",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MutedText,
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = { Text("Название тренировки", color = MutedText) },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            singleLine = true,
+            textStyle = TextStyle(fontSize = 16.sp, color = DeepInk),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = AccentOrange,
+                unfocusedBorderColor = SoftCard,
+                cursorColor = AccentOrange,
+                focusedContainerColor = Color.White,
+                unfocusedContainerColor = Color.White,
+            ),
+        )
+    }
 }
 
 /**
@@ -207,22 +231,32 @@ private fun WorkoutDescriptionField(
     value: String,
     onValueChange: (String) -> Unit,
 ) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        placeholder = { Text("Короткое описание (необязательно)", color = MutedText) },
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        singleLine = false,
-        maxLines = 2,
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = AccentOrange,
-            unfocusedBorderColor = SoftCard,
-            cursorColor = AccentOrange,
-            focusedContainerColor = Color.White,
-            unfocusedContainerColor = Color.White,
-        ),
-    )
+    Column {
+        Text(
+            text = "Описание",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MutedText,
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = { Text("Короткое описание (необязательно)", color = MutedText) },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            singleLine = false,
+            maxLines = 2,
+            textStyle = TextStyle(fontSize = 16.sp, color = DeepInk),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = AccentOrange,
+                unfocusedBorderColor = SoftCard,
+                cursorColor = AccentOrange,
+                focusedContainerColor = Color.White,
+                unfocusedContainerColor = Color.White,
+            ),
+        )
+    }
 }
 
 private const val WorkoutDescriptionMaxLength = 500
@@ -291,7 +325,7 @@ private fun RestTimeCard(
 private fun SectionHeader(text: String) {
     Text(
         text = text,
-        fontSize = 13.sp,
+        fontSize = 16.sp,
         fontWeight = FontWeight.SemiBold,
         color = MutedText,
     )
@@ -319,6 +353,7 @@ private fun EmptyExercisesHint() {
 @Composable
 private fun ExerciseRow(
     exercise: PendingExercise,
+    onEdit: () -> Unit,
     onRemove: () -> Unit,
 ) {
     Row(
@@ -348,18 +383,39 @@ private fun ExerciseRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = exercise.exerciseNameRu,
-                fontSize = 14.sp,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = DeepInk,
                 maxLines = 2,
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = "${exercise.sets} подх • ${exercise.reps} пов",
-                fontSize = 12.sp,
+                text = buildExerciseRowSubtitle(exercise),
+                fontSize = 14.sp,
                 color = MutedText,
             )
         }
+
+        // Edit button — pencil affordance on the trailing side, 12dp ahead of
+        // delete. Kept visually identical to delete (same size/surface) so the
+        // pair reads as a row of paired secondary actions.
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(SoftCard)
+                .clickable { onEdit() },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Edit,
+                contentDescription = "Редактировать",
+                tint = DeepInk,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
 
         Box(
             modifier = Modifier
@@ -373,6 +429,39 @@ private fun ExerciseRow(
         }
     }
 }
+
+/**
+ * Renders the row subtitle as "<sets> подх • <reps> пов" and, when the
+ * exercise is weight-tracked, appends a compact weight summary:
+ *  - "X кг" when every set uses the same weight
+ *  - "min-max кг" when the user pyramided up/down across sets
+ *
+ * Skips the weight segment entirely when the list is null or has no concrete
+ * values (e.g. legacy rows) so the subtitle stays unchanged for bodyweight
+ * exercises.
+ */
+private fun buildExerciseRowSubtitle(exercise: PendingExercise): String = buildString {
+    append("${exercise.sets} подх • ${exercise.reps} пов")
+    val weights = exercise.setWeightsKg
+        ?.filterNotNull()
+        ?.takeIf { it.isNotEmpty() }
+        ?: return@buildString
+    if (!exercise.requiresWeight) return@buildString
+    val unique = weights.distinct()
+    if (unique.size == 1) {
+        append(" • ${formatRowWeight(unique.first())} кг")
+    } else {
+        append(" • ${formatRowWeight(weights.min())}-${formatRowWeight(weights.max())} кг")
+    }
+}
+
+/**
+ * Compact kg formatter for the builder row — same convention as the config
+ * stepper, but without the unit suffix so the subtitle can place the "кг"
+ * once at the end of the range.
+ */
+private fun formatRowWeight(kg: Double): String =
+    if (kg % 1.0 == 0.0) kg.toInt().toString() else kg.toString()
 
 @Composable
 private fun BottomActionBar(
@@ -401,7 +490,7 @@ private fun BottomActionBar(
         ) {
             Text(
                 text = "Добавить",
-                fontSize = 15.sp,
+                fontSize = 17.sp,
                 fontWeight = FontWeight.SemiBold,
             )
         }
@@ -429,7 +518,7 @@ private fun BottomActionBar(
             } else {
                 Text(
                     text = "Сохранить",
-                    fontSize = 15.sp,
+                    fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
                 )
             }
@@ -486,7 +575,7 @@ private fun ScheduleTypeOption(
     ) {
         Text(
             text = label,
-            fontSize = 14.sp,
+            fontSize = 16.sp,
             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
             color = if (isSelected) Color.White else MutedText,
         )

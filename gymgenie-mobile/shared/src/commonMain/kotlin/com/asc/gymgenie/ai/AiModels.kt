@@ -49,6 +49,7 @@ data class AiWorkoutDto(
     val name: String,
     val description: String? = null,
     val estimatedDurationMinutes: Int,
+    val restSeconds: Int = 60,
     val exercises: List<AiWorkoutExerciseDto>,
 )
 
@@ -57,8 +58,8 @@ data class AiWorkoutExerciseDto(
     val exerciseId: String,
     val sets: Int,
     val reps: Int,
-    val restSeconds: Int,
     val notes: String? = null,
+    val setWeightsKg: List<Double?>? = null,
 )
 
 @Serializable
@@ -66,6 +67,7 @@ data class SaveWorkoutRequest(
     val exercises: List<AiWorkoutExerciseDto>,
     val name: String,
     val description: String? = null,
+    val restSeconds: Int = 60,
 )
 
 @Serializable

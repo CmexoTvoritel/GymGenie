@@ -28,6 +28,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material3.Text
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -61,6 +62,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.asc.gymgenie.exercise.ExerciseShortResponse
 import com.asc.gymgenie.feature.workouts.components.CreateWorkoutFab
 import com.asc.gymgenie.feature.workouts.components.ErrorContent
@@ -96,36 +98,20 @@ fun WorkoutsScreen(
     val state by viewModel.state.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
-    // Hoisted to survive Exercises tab leaving composition when the user
-    // switches to the Workouts tab. Owned here so scroll position and
-    // collapsible-header offset are preserved across tab switches.
     val exercisesGridState = rememberLazyGridState()
     var exercisesScrollOffsetPx by remember { mutableFloatStateOf(0f) }
 
-    // Filter bottom sheet visibility is screen-local UI concern; the underlying
-    // filter values live in the shared ViewModel state so they survive
-    // tab switches and process death-equivalent recompositions.
     var showFilterSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(reloadKey) {
         viewModel.loadWorkoutPlans()
     }
 
-    // Stable key — pagerState is never recreated due to tab changes.
-    // This prevents the feedback loop where a 0-dp viewport (TabHost hiding
-    // the composable) causes an incorrect page emission → ViewModel update →
-    // wrong initial page on the next visit.
     val pagerState = rememberPagerState(
         initialPage = 0,
         pageCount = { TabOrder.size },
     )
 
-    // When the tab becomes visible: first snap the pager to the ViewModel's selected
-    // tab (corrects any wrong page from the 0dp TabHost), then start listening for
-    // user swipes. .drop(1) skips the initial snapshotFlow emission (the page we
-    // just snapped to), so neither the 0dp-induced page nor the correction itself
-    // can corrupt ViewModel state. The two concerns are sequential in one coroutine,
-    // eliminating the race condition that existed when they were separate effects.
     LaunchedEffect(isTabActive) {
         if (!isTabActive) return@LaunchedEffect
         val targetPage = TabOrder.indexOf(state.selectedTab).coerceAtLeast(0)
@@ -140,12 +126,8 @@ fun WorkoutsScreen(
             }
     }
 
-    val currentTab = TabOrder.getOrNull(pagerState.currentPage) ?: WorkoutsTab.WORKOUTS
+    val currentTab = state.selectedTab
 
-    // Stable lambdas keyed on the ViewModel — without these, every recomposition
-    // hands fresh function references to ExerciseSearchBar / MuscleGroupFilterChips
-    // and they cannot skip recomposition, defeating the no-unmount goal when
-    // filters or the query change.
     val onSearchQueryChanged: (String) -> Unit = remember(viewModel) { viewModel::onSearchQueryChanged }
     val onSearch: () -> Unit = remember(viewModel) { viewModel::searchExercises }
     val onClearSearch: () -> Unit = remember(viewModel) {
@@ -164,10 +146,6 @@ fun WorkoutsScreen(
         }
     }
 
-    // Count non-default filter dimensions for the active-state indicator on the
-    // filter button. Plain derivation is fine because `state` is already a
-    // snapshot-observed value read by collectAsState; recomputing on every
-    // recomposition is cheap.
     val activeFiltersCount = run {
         var count = 0
         if (state.selectedDifficulties.isNotEmpty()) count++
@@ -183,7 +161,10 @@ fun WorkoutsScreen(
             .background(WarmOffWhite),
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            GymGenieToolbar(title = "Тренировки")
+            GymGenieToolbar(
+                title = "Тренировки",
+                actions = emptyList(),
+            )
 
             Spacer(modifier = Modifier.height(4.dp))
 
@@ -398,12 +379,8 @@ private fun ExercisesTabContent(
 ) {
     val refreshState = rememberPullToRefreshState()
     val density = LocalDensity.current
-    // headerHeightPx is derived from layout measurement (not user scroll),
-    // so resetting it on recomposition is harmless — keep local.
     var headerHeightPx by remember { mutableFloatStateOf(with(density) { ExercisesCollapsibleHeight.toPx() }) }
 
-    // Keep latest references so the remembered NestedScrollConnection always
-    // reads the current hoisted offset and callback, without rebuilding.
     val currentScrollOffsetPx by rememberUpdatedState(scrollOffsetPx)
     val currentOnScrollOffsetChange by rememberUpdatedState(onScrollOffsetChange)
 
@@ -582,9 +559,6 @@ private fun FilterButton(
     onClick: () -> Unit,
 ) {
     val isActive = activeFiltersCount > 0
-    // Solid orange fill is the active indicator. No corner badge: avoids the
-    // clipping artefacts produced by a small chip overlapping the circle's edge
-    // and keeps the affordance readable at the 44dp touch target size.
     val background = if (isActive) AccentOrange else Color.White
     val borderColor = if (isActive) AccentOrange else Color(0xFFEDEDEF)
     val iconTint = if (isActive) Color.White else Color(0xFF4C4C53)

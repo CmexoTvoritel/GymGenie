@@ -258,6 +258,7 @@ class AiViewModel(
             exercises = workout.exercises,
             name = workout.name,
             description = workout.description,
+            restSeconds = workout.restSeconds,
         )
 
         val existingPlanId = _state.value.savedPlanId

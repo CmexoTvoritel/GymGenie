@@ -4,6 +4,7 @@ import com.asc.gymgenie.activity.ActivityApi
 import com.asc.gymgenie.activity.ActivityCheckinRequest
 import com.asc.gymgenie.activity.ActivityHistoryDayResponse
 import com.asc.gymgenie.activity.ActivityTodayResponse
+import com.asc.gymgenie.activity.UpdateActivityScheduleRequest
 import com.asc.gymgenie.common.ApiException
 import com.asc.gymgenie.common.SessionManager
 import kotlinx.coroutines.CoroutineScope
@@ -19,32 +20,20 @@ import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
-/**
- * UI state of the Activities screen.
- *
- * The "Today" and "History" tabs share the same loading/error contract so the
- * UI layer can drive both with a single observed state. [isHistoryLoading] is
- * deliberately separate from the screen-wide [isLoading] flag — the history
- * range refreshes independently from the today list, and we don't want a
- * history reload to collapse the today view back to a spinner.
- */
 data class ActivitiesUiState(
     val isLoading: Boolean = true,
     val todayActivities: List<ActivityTodayResponse> = emptyList(),
     val history: List<ActivityHistoryDayResponse> = emptyList(),
     val isHistoryLoading: Boolean = false,
     val error: String? = null,
+    val selectedDate: String = Clock.System.now()
+        .toLocalDateTime(TimeZone.currentSystemDefault())
+        .date
+        .toString(),
+    val isScheduleUpdating: Boolean = false,
+    val scheduleUpdateError: String? = null,
 )
 
-/**
- * Drives the Activities screen.
- *
- * Mirrors the [HomeViewModel] check-in semantics: optimistic update first,
- * server call second, automatic rollback on failure. Auth failures (401) are
- * routed through [SessionManager.triggerLogout] so the platform layer can
- * drop the user back to the login surface — the screen itself never owns
- * navigation state.
- */
 class ActivitiesViewModel(
     private val activityApi: ActivityApi,
     private val sessionManager: SessionManager,
@@ -53,15 +42,20 @@ class ActivitiesViewModel(
     private val _state = MutableStateFlow(ActivitiesUiState())
     val state: StateFlow<ActivitiesUiState> = _state.asStateFlow()
 
-    /**
-     * Loads today's activities. Safe to invoke multiple times — every call
-     * resets the error banner and reissues the request, which makes it a fine
-     * fit for `LaunchedEffect(refreshSignal)` triggers from the UI.
-     */
     fun load() {
+        loadForDate(_state.value.selectedDate)
+    }
+
+    fun selectDate(date: String) {
+        if (date == _state.value.selectedDate) return
+        _state.update { it.copy(selectedDate = date) }
+        loadForDate(date)
+    }
+
+    private fun loadForDate(date: String) {
         scope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
-            activityApi.getTodayActivities()
+            activityApi.getTodayActivities(date = date)
                 .onSuccess { list ->
                     _state.update { it.copy(isLoading = false, todayActivities = list) }
                 }
@@ -75,14 +69,6 @@ class ActivitiesViewModel(
         }
     }
 
-    /**
-     * Loads the per-day history for the inclusive `[startDate, endDate]`
-     * range. Both arguments are ISO-8601 strings (`YYYY-MM-DD`) — see
-     * [ActivityApi.getHistory] for the contract.
-     *
-     * History failures intentionally do not surface in [ActivitiesUiState.error]:
-     * the today tab must remain usable even if the history endpoint is down.
-     */
     fun loadHistory(startDate: String, endDate: String) {
         scope.launch {
             _state.update { it.copy(isHistoryLoading = true) }
@@ -100,14 +86,6 @@ class ActivitiesViewModel(
         }
     }
 
-    /**
-     * Optimistically writes [value] for [activityId] and persists it via the
-     * check-in endpoint. On failure the local snapshot is rolled back to the
-     * previous value so state stays in sync with the server.
-     *
-     * Value semantics depend on the activity kind — see
-     * [HomeViewModel.checkIn] for the canonical doc.
-     */
     fun checkIn(activityId: String, value: Int) {
         val previousValue = _state.value.todayActivities
             .firstOrNull { it.activityId == activityId }
@@ -118,11 +96,11 @@ class ActivitiesViewModel(
 
         applyLogValue(activityId, value)
 
-        val today = todayIsoDate()
+        val checkinDate = _state.value.selectedDate
         scope.launch {
             activityApi.checkin(
                 activityId = activityId,
-                request = ActivityCheckinRequest(date = today, value = value),
+                request = ActivityCheckinRequest(date = checkinDate, value = value),
             ).onFailure { e ->
                 if (isUnauthorized(e)) {
                     sessionManager.triggerLogout()
@@ -137,6 +115,83 @@ class ActivitiesViewModel(
         _state.update { current ->
             val updated = current.todayActivities.map { activity ->
                 if (activity.activityId == activityId) activity.copy(logValue = value) else activity
+            }
+            current.copy(todayActivities = updated)
+        }
+    }
+
+    /**
+     * Updates the schedule of a planned activity. Applies the change
+     * optimistically to the local list so the UI reflects it immediately,
+     * and rolls back on failure.
+     */
+    fun updateSchedule(
+        activityId: String,
+        scheduleType: String?,
+        scheduleDays: List<String>,
+        oneOffDate: String?,
+    ) {
+        val current = _state.value.todayActivities.firstOrNull {
+            it.activityId == activityId
+        } ?: return
+
+        // Optimistic update
+        applySchedule(activityId, scheduleType, scheduleDays, oneOffDate)
+        _state.update { it.copy(isScheduleUpdating = true, scheduleUpdateError = null) }
+
+        scope.launch {
+            val request = UpdateActivityScheduleRequest(
+                scheduleType = scheduleType,
+                scheduleDays = scheduleDays.ifEmpty { null },
+                oneOffDate = oneOffDate,
+            )
+            activityApi.updateSchedule(activityId, request)
+                .onSuccess {
+                    _state.update { it.copy(isScheduleUpdating = false) }
+                }
+                .onFailure { e ->
+                    if (isUnauthorized(e)) {
+                        sessionManager.triggerLogout()
+                        return@launch
+                    }
+                    // Roll back to previous schedule values
+                    applySchedule(
+                        activityId,
+                        current.scheduleType,
+                        current.scheduleDays,
+                        current.oneOffDate,
+                    )
+                    _state.update {
+                        it.copy(
+                            isScheduleUpdating = false,
+                            scheduleUpdateError = e.message,
+                        )
+                    }
+                }
+        }
+    }
+
+    fun clearScheduleUpdateError() {
+        _state.update { it.copy(scheduleUpdateError = null) }
+    }
+
+    private fun applySchedule(
+        activityId: String,
+        scheduleType: String?,
+        scheduleDays: List<String>,
+        oneOffDate: String?,
+    ) {
+        _state.update { current ->
+            val updated = current.todayActivities.map { activity ->
+                if (activity.activityId == activityId) {
+                    activity.copy(
+                        scheduleType = scheduleType,
+                        scheduleDays = scheduleDays,
+                        oneOffDate = oneOffDate,
+                    )
+                } else {
+                    activity
+                }
             }
             current.copy(todayActivities = updated)
         }

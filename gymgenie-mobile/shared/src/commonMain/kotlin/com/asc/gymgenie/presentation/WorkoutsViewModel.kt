@@ -5,8 +5,10 @@ import com.asc.gymgenie.common.SessionManager
 import com.asc.gymgenie.exercise.ExerciseApi
 import com.asc.gymgenie.exercise.ExerciseShortResponse
 import com.asc.gymgenie.storage.TokenStorage
+import com.asc.gymgenie.workout.ActiveWorkoutSession
 import com.asc.gymgenie.workout.WorkoutApi
 import com.asc.gymgenie.workout.WorkoutPlanShortResponse
+import com.asc.gymgenie.workout.toActiveSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -43,6 +45,9 @@ data class WorkoutsUiState(
     val errorMessage: String? = null,
     val hasMoreExercises: Boolean = true,
     val currentExercisePage: Int = 0,
+    val isLoadingSession: Boolean = false,
+    val pendingSession: ActiveWorkoutSession? = null,
+    val sessionError: String? = null,
 )
 
 class WorkoutsViewModel(
@@ -194,6 +199,41 @@ class WorkoutsViewModel(
             WorkoutsTab.WORKOUTS -> loadWorkoutPlans()
             WorkoutsTab.EXERCISES -> loadExercises(reset = true)
         }
+    }
+
+    fun startWorkout(planId: String, planName: String) {
+        if (_state.value.isLoadingSession) return
+        _state.update { it.copy(isLoadingSession = true, sessionError = null) }
+        scope.launch {
+            workoutApi.getPlanById(planId).fold(
+                onSuccess = { plan ->
+                    _state.update {
+                        it.copy(
+                            isLoadingSession = false,
+                            pendingSession = plan.toActiveSession(),
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    if (shouldLogOut(error)) {
+                        tokenStorage.clearTokens()
+                        sessionManager.triggerLogout()
+                        _state.update { it.copy(isLoadingSession = false) }
+                        return@fold
+                    }
+                    _state.update {
+                        it.copy(
+                            isLoadingSession = false,
+                            sessionError = "Не удалось загрузить тренировку: ${error.message}",
+                        )
+                    }
+                },
+            )
+        }
+    }
+
+    fun clearPendingSession() {
+        _state.update { it.copy(pendingSession = null, sessionError = null) }
     }
 
     fun onCleared() {

@@ -5,7 +5,7 @@ struct GymGenieButton: View {
     var isLoading: Bool = false
     var isEnabled: Bool = true
     var accentColor: Color = Color(red: 0.173, green: 0.757, blue: 0.890) // #2CC1E3
-    var fontSize: CGFloat = 16
+    var fontSize: CGFloat = 18
     var fontWeight: Font.Weight = .semibold
     let action: () -> Void
 
@@ -35,7 +35,7 @@ struct GymGenieButton: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 52)
+            .frame(height: 56)
             .background(
                 RoundedRectangle(cornerRadius: 16)
                     .fill(isEnabled ? accentColor : accentColor.opacity(0.4))

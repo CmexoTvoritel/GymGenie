@@ -1,8 +1,3 @@
-// Required because StackNavigator.push (used by openEditProfile / openPaywall and the
-// new openEditMetrics / openEditExperience / openEditHealth methods) is @DelicateDecomposeApi.
-// We accept the contract: pushes happen only as a result of explicit user actions, not in
-// response to async events, so the "duplicate configuration in stack" risk that motivates
-// the marker does not apply here.
 @file:OptIn(com.arkivanov.decompose.DelicateDecomposeApi::class)
 
 package com.asc.gymgenie.navigation.tabs.profile
@@ -19,6 +14,7 @@ import com.arkivanov.essenty.instancekeeper.getOrCreate
 import com.arkivanov.essenty.lifecycle.doOnDestroy
 import com.asc.gymgenie.feature.profile.EditFormHolder
 import com.asc.gymgenie.presentation.ProfileViewModel
+import com.asc.gymgenie.workout.WorkoutSessionHistoryItem
 
 class DefaultProfileComponent(
     componentContext: ComponentContext,
@@ -31,11 +27,12 @@ class DefaultProfileComponent(
         }
     }
 
-    // Shared form state survives configuration changes and is reused by all edit sub-screens.
     override val editForm: EditFormHolder =
         instanceKeeper.getOrCreate { EditFormHolder() }
 
     private val navigation = StackNavigation<ProfileConfig>()
+
+    private val pendingSessions = mutableMapOf<String, WorkoutSessionHistoryItem>()
 
     override val stack: Value<ChildStack<*, ProfileComponent.Child>> =
         childStack(
@@ -56,6 +53,17 @@ class DefaultProfileComponent(
         ProfileConfig.EditExperience -> ProfileComponent.Child.EditExperience
         ProfileConfig.EditHealth -> ProfileComponent.Child.EditHealth
         ProfileConfig.Paywall -> ProfileComponent.Child.Paywall
+        ProfileConfig.History -> ProfileComponent.Child.History
+        is ProfileConfig.HistorySummary -> {
+            val session = pendingSessions.remove(config.sessionId)
+                ?: WorkoutSessionHistoryItem(
+                    id = config.sessionId,
+                    name = "",
+                    startedAt = 0.0,
+                    status = "COMPLETED",
+                )
+            ProfileComponent.Child.HistorySummary(session)
+        }
     }
 
     override fun openEditProfile() {
@@ -76,6 +84,15 @@ class DefaultProfileComponent(
 
     override fun openPaywall() {
         navigation.push(ProfileConfig.Paywall)
+    }
+
+    override fun openHistory() {
+        navigation.push(ProfileConfig.History)
+    }
+
+    override fun openHistorySummary(session: WorkoutSessionHistoryItem) {
+        pendingSessions[session.id] = session
+        navigation.push(ProfileConfig.HistorySummary(sessionId = session.id))
     }
 
     override fun pop() {

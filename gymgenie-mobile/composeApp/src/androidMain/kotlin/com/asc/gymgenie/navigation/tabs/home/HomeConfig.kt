@@ -19,8 +19,27 @@ sealed class HomeConfig {
     data class ActivityGoalSettings(val category: GoalCategory) : HomeConfig()
 
     @Serializable
-    data object Nutrition : HomeConfig()
+    data class ActivityScheduleSettings(
+        val activityId: String,
+        val activityName: String,
+        val scheduleType: String? = null,
+        val scheduleDays: List<String> = emptyList(),
+        val oneOffDate: String? = null,
+    ) : HomeConfig()
 
     @Serializable
-    data class CreateMealPlan(val initialMealType: String? = null) : HomeConfig()
+    data class MealPlanDetail(val planId: String) : HomeConfig()
+
+    @Serializable
+    data class CreateMealPlan(
+        val initialMealType: String? = null,
+        val initialDate: String? = null,
+        val editPlanId: String? = null,
+    ) : HomeConfig()
+
+    @Serializable
+    data class WorkoutDetail(val planId: String) : HomeConfig()
+
+    @Serializable
+    data object Notifications : HomeConfig()
 }

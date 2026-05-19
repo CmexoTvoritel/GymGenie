@@ -42,5 +42,10 @@ class DishEntity(
 
     var carbsG: Int? = null,
 
-    var fatG: Int? = null
+    var fatG: Int? = null,
+
+    @Column(name = "food_product_id")
+    var foodProductId: UUID? = null,
+
+    var grams: Double? = null
 )

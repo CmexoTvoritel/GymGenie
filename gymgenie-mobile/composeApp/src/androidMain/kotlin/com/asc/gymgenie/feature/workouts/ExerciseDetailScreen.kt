@@ -235,8 +235,8 @@ private fun ContentSheet(exercise: ExerciseDetailResponse) {
             if (exercise.muscleGroup.isNotEmpty()) {
                 add(StatItem(Icons.Outlined.FitnessCenter, muscleGroupRu(exercise.muscleGroup), muscleGroupStatColor(exercise.muscleGroup)))
             }
-            exercise.durationMinutes?.let {
-                add(StatItem(Icons.Outlined.Schedule, "$it мин", AccentOrange))
+            exercise.secondsPer10Reps?.let {
+                add(StatItem(Icons.Outlined.Schedule, "$it сек/10 повт.", AccentOrange))
             }
             if (exercise.difficultyLevel.isNotEmpty()) {
                 val diffColor = when (exercise.difficultyLevel.uppercase()) {

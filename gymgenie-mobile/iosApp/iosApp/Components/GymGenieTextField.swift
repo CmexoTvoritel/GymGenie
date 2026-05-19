@@ -8,6 +8,7 @@ struct GymGenieTextField: View {
     var accentColor: Color = Color(.sRGB, red: 0.4, green: 0.4, blue: 0.4)
 
     @State private var isPasswordVisible: Bool = false
+    @FocusState private var isFocused: Bool
 
     var body: some View {
         HStack(spacing: 12) {
@@ -19,16 +20,18 @@ struct GymGenieTextField: View {
 
             if isSecure && !isPasswordVisible {
                 SecureField(placeholder, text: $text)
+                    .font(.system(size: 16))
                     .textContentType(.password)
-                    .autocapitalization(.none)
-                    .disableAutocorrection(true)
+                    .autocorrectionDisabled(true)
                     .tint(accentColor)
+                    .focused($isFocused)
             } else {
                 TextField(placeholder, text: $text)
-                    .autocapitalization(isSecure ? .none : .none)
-                    .disableAutocorrection(true)
+                    .font(.system(size: 16))
                     .textContentType(isSecure ? .password : .none)
+                    .autocorrectionDisabled(true)
                     .tint(accentColor)
+                    .focused($isFocused)
             }
 
             if isSecure {
@@ -42,13 +45,15 @@ struct GymGenieTextField: View {
         }
         .padding(.horizontal, 16)
         .frame(height: 52)
+        .contentShape(Rectangle())
+        .simultaneousGesture(TapGesture().onEnded { isFocused = true })
         .background(
             RoundedRectangle(cornerRadius: 16)
                 .fill(Color.white)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(Color(.systemGray4), lineWidth: 1)
+                .stroke(Color.gray.opacity(0.4), lineWidth: 1)
         )
     }
 }

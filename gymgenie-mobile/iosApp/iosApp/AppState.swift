@@ -31,19 +31,13 @@ final class AppState: ObservableObject {
         logoutSubscription?.cancel()
     }
 
-    /// Single source of truth for forced and explicit logout on iOS.
-    ///
-    /// Mirrors the Android `App.kt` listener: any emission on
-    /// `SessionManager.logoutEvent` clears the in-memory user state (tokens
-    /// + profile cache) and routes back to the login screen. Per-wrapper
-    /// `isLoggedOut` flags still drive view-local navigation reactions
-    /// inside individual screens, but the canonical state reset happens
-    /// here so it cannot be missed.
     private func startObservingLogout() {
         let sessionManager = KoinHelper.shared.getSessionManager()
         logoutSubscription = sessionManager.observeLogout { [weak self] in
             guard let self else { return }
             Task { @MainActor in
+                let httpClient = KoinHelper.shared.getHttpClient()
+                AuthenticatedHttpClientKt.clearHttpClientBearerTokens(client: httpClient)
                 try? await self.tokenStorage.clearTokens()
                 self.userProfileStore.clear()
                 self.navigate(to: .login)
@@ -67,15 +61,10 @@ final class AppState: ObservableObject {
         navigate(to: .login)
     }
 
-    /// Routes the user after a successful login/register based on the
-    /// authoritative `subscriptionType` returned by the backend. Premium users
-    /// skip the paywall; everyone else lands on it.
     func completeLogin(isPremium: Bool = false) {
         navigate(to: isPremium ? .main : .paywall)
     }
 
-    /// Backend has already been told to activate the subscription by the
-    /// paywall view model — this only navigates to the success screen.
     func completePurchase() {
         navigate(to: .purchaseSuccess)
     }

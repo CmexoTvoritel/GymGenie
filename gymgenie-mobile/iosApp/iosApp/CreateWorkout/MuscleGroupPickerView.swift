@@ -23,44 +23,17 @@ struct MuscleGroupPickerView: View {
     ]
 
     var body: some View {
-        ZStack {
-            warmOffWhite.edgesIgnoringSafeArea(.all)
-
-            VStack(spacing: 0) {
-                header
-                content
-            }
+        VStack(spacing: 0) {
+            GymGenieToolbar(
+                title: "Выбери группу мышц",
+                showBackNavigation: true,
+                onBackTap: onBack
+            )
+            WorkoutFlowStepHeader(currentStep: 1, totalSteps: 3)
+            content
         }
-    }
-
-    // MARK: - Header
-
-    private var header: some View {
-        HStack(spacing: 12) {
-            Button(action: onBack) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(deepInk)
-                    .frame(width: 40, height: 40)
-                    .background(Circle().fill(.white))
-                    .shadow(color: Color.black.opacity(0.06), radius: 2, y: 1)
-            }
-            .buttonStyle(.plain)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Выбери группу мышц")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(deepInk)
-                Text("Для какой группы подберём упражнения")
-                    .font(.system(size: 12))
-                    .foregroundColor(mutedText)
-            }
-
-            Spacer()
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 12)
-        .padding(.bottom, 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(warmOffWhite.ignoresSafeArea())
     }
 
     // MARK: - Content
@@ -85,16 +58,21 @@ struct MuscleGroupPickerView: View {
     }
 
     private var grid: some View {
-        ScrollView(showsIndicators: false) {
-            LazyVGrid(columns: columns, spacing: 12) {
-                ForEach(vm.muscleGroups, id: \.key) { group in
-                    cell(for: group)
+        // SwiftUI's `ScrollView` extends under the home indicator; padding the
+        // last spacer to the safe-area bottom ensures the final row clears the
+        // gesture handle on every device class.
+        GeometryReader { proxy in
+            ScrollView(showsIndicators: false) {
+                LazyVGrid(columns: columns, spacing: 12) {
+                    ForEach(vm.muscleGroups, id: \.key) { group in
+                        cell(for: group)
+                    }
                 }
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 8)
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
 
-            Color.clear.frame(height: 32)
+                Color.clear.frame(height: proxy.safeAreaInsets.bottom + 16)
+            }
         }
     }
 
@@ -106,20 +84,12 @@ struct MuscleGroupPickerView: View {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(softCard)
 
-                VStack(spacing: 8) {
-                    Image(muscleGroupImageName(group.key))
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 52, height: 52)
-                    Text(group.nameRu)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(deepInk)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                        .padding(.horizontal, 8)
-                }
+                Image(muscleGroupImageName(group.key))
+                    .resizable()
+                    .scaledToFit()
+                    .padding(12)
             }
-            .frame(height: 120)
+            .aspectRatio(1, contentMode: .fit)
         }
         .buttonStyle(.plain)
     }

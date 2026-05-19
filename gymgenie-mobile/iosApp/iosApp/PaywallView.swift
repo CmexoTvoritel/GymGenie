@@ -13,13 +13,15 @@ struct PaywallView: View {
             Color.white
                 .ignoresSafeArea()
 
-            // Decorative background image layered on top of white
-            Image("ic_paywall_background")
-                .resizable()
-                .scaledToFill()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipped()
-                .ignoresSafeArea()
+            // Decorative background image constrained to screen bounds
+            GeometryReader { geo in
+                Image("ic_paywall_background")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .clipped()
+            }
+            .ignoresSafeArea()
 
             // Foreground content
             VStack(spacing: 0) {

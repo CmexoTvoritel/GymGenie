@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,16 +17,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
@@ -48,27 +48,37 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.asc.gymgenie.exercise.ExerciseShortResponse
 import com.asc.gymgenie.feature.create_workout.ExerciseConfigScreen
 import com.asc.gymgenie.feature.create_workout.ExercisePickerScreen
 import com.asc.gymgenie.feature.create_workout.MuscleGroupPickerScreen
-import com.asc.gymgenie.ui.components.MuscleGroupColors
+import com.asc.gymgenie.ui.components.GymGenieToolbar
+import com.asc.gymgenie.ui.components.ToolbarAction
 import com.asc.gymgenie.ui.components.formatRecurringDays
 import com.asc.gymgenie.ui.components.muscleGroupCardEmoji
 import com.asc.gymgenie.ui.components.muscleGroupColors
+import com.asc.gymgenie.ui.theme.WarmOffWhite
 import com.asc.gymgenie.presentation.CreateWorkoutLimits
 import com.asc.gymgenie.presentation.CreateWorkoutViewModel
 import com.asc.gymgenie.presentation.PendingExercise
@@ -78,6 +88,7 @@ import com.asc.gymgenie.workout.WorkoutPlanResponse
 import com.asc.gymgenie.workout.WorkoutScheduleType
 import org.koin.core.context.GlobalContext
 import org.koin.core.parameter.parametersOf
+import kotlin.math.roundToInt
 
 private val Coral = Color(0xFFFF5A3C)
 private val CoralDark = Color(0xFFE94A2C)
@@ -138,17 +149,14 @@ fun WorkoutDetailScreen(
         }
     }
 
-    BackHandler(enabled = true) {
-        when {
-            state.isEditing -> viewModel.cancelEditing()
-            else -> onBack()
-        }
+    BackHandler(enabled = !state.isEditing) {
+        onBack()
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(WhiteBg),
+            .background(WarmOffWhite),
     ) {
         when {
             state.isLoading && state.plan == null -> LoadingState()
@@ -232,28 +240,77 @@ private fun Content(
     val plan = state.plan ?: return
 
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showEditDismissDialog by remember { mutableStateOf(false) }
     var showExercisePicker by remember { mutableStateOf(false) }
+    // Index of the pending exercise currently open in the edit overlay.
+    // We snapshot the index because the overlay is a full-screen replacement
+    // composable, and the back-handler / cancel paths only need to clear this
+    // single piece of state. Drag-to-reorder cannot run while the overlay is
+    // up, so the index stays stable for the lifetime of the edit session.
+    var editingExerciseIndex by remember { mutableStateOf<Int?>(null) }
+
+    // Intercept hardware back in edit mode — show a confirmation dialog
+    // when the user has unsaved changes.
+    BackHandler(enabled = state.isEditing) {
+        if (hasUnsavedEditChanges(state)) {
+            showEditDismissDialog = true
+        } else {
+            viewModel.cancelEditing()
+        }
+    }
+
+    if (showEditDismissDialog) {
+        EditDismissConfirmDialog(
+            onConfirm = {
+                showEditDismissDialog = false
+                viewModel.cancelEditing()
+            },
+            onCancel = { showEditDismissDialog = false },
+        )
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(WhiteBg)
+            .background(WarmOffWhite)
             .imePadding(),
     ) {
-        Header(
-            title = if (state.isEditing) "Редактирование" else "Просмотр",
-            planName = plan.name,
-            onBack = {
-                if (state.isEditing) viewModel.cancelEditing() else onBack()
-            },
-            trailing = if (state.isEditing) null else {
-                {
-                    DeleteIconButton(
-                        isDeleting = state.isDeleting,
-                        onClick = { showDeleteDialog = true },
-                    )
+        GymGenieToolbar(
+            title = if (state.isEditing) "Редактирование тренировки" else "Просмотр",
+            showBackNavigation = true,
+            showCloseIcon = state.isEditing,
+            onBackClick = {
+                if (state.isEditing) {
+                    if (hasUnsavedEditChanges(state)) {
+                        showEditDismissDialog = true
+                    } else {
+                        viewModel.cancelEditing()
+                    }
+                } else {
+                    onBack()
                 }
             },
+            actions = if (state.isEditing) emptyList() else listOf(
+                ToolbarAction(
+                    content = {
+                        if (state.isDeleting) {
+                            CircularProgressIndicator(
+                                color = DangerRed,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Filled.Delete,
+                                contentDescription = "Удалить",
+                                tint = DangerRed,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    },
+                    onClick = { if (!state.isDeleting) showDeleteDialog = true },
+                )
+            ),
         )
 
         if (state.isEditing) {
@@ -261,6 +318,12 @@ private fun Content(
                 state = state,
                 viewModel = viewModel,
                 onAddExercise = { showExercisePicker = true },
+                onEditExercise = { index -> editingExerciseIndex = index },
+                onRemoveExercise = { index ->
+                    val editing = editingExerciseIndex
+                    if (editing != null && editing >= index) editingExerciseIndex = null
+                    viewModel.removeExercise(index)
+                },
             )
         } else {
             ViewModeBody(
@@ -290,91 +353,43 @@ private fun Content(
             },
         )
     }
-}
 
-@Composable
-private fun Header(
-    title: String,
-    planName: String,
-    onBack: () -> Unit,
-    trailing: (@Composable () -> Unit)? = null,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .statusBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(38.dp)
-                .clip(CircleShape)
-                .background(WhiteBg)
-                .border(1.5.dp, BorderGray, CircleShape)
-                .clickable { onBack() },
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Назад",
-                tint = InkBlack,
-                modifier = Modifier.size(18.dp),
-            )
-        }
-
-        Spacer(modifier = Modifier.width(12.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                fontSize = 13.sp,
-                color = InkMuted,
-            )
-            Text(
-                text = planName,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Bold,
-                color = InkBlack,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-
-        if (trailing != null) {
-            Spacer(modifier = Modifier.width(8.dp))
-            trailing()
-        }
-    }
-}
-
-@Composable
-private fun DeleteIconButton(
-    isDeleting: Boolean,
-    onClick: () -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            .size(38.dp)
-            .clip(CircleShape)
-            .background(WhiteBg)
-            .border(1.5.dp, BorderGray, CircleShape)
-            .clickable(enabled = !isDeleting) { onClick() },
-        contentAlignment = Alignment.Center,
-    ) {
-        if (isDeleting) {
-            CircularProgressIndicator(
-                color = DangerRed,
-                strokeWidth = 2.dp,
-                modifier = Modifier.size(18.dp),
-            )
+    // Edit overlay reuses [ExerciseConfigScreen] in its edit mode. Mirrors the
+    // create-workout flow's edit branch: prefill from the existing row, hide
+    // the wizard step header, and patch the row by index on confirm. Guarded
+    // by an indices check so a stale callback after a parallel delete cannot
+    // crash; we just close the overlay silently.
+    editingExerciseIndex?.let { idx ->
+        if (!state.isEditing || idx !in state.editExercises.indices) {
+            // Auto-close the overlay when the draft is gone (cancel/save) or
+            // the targeted row disappeared underneath us — never render a
+            // half-broken edit screen.
+            LaunchedEffect(idx, state.isEditing) { editingExerciseIndex = null }
         } else {
-            Icon(
-                imageVector = Icons.Filled.Delete,
-                contentDescription = "Удалить",
-                tint = DangerRed,
-                modifier = Modifier.size(18.dp),
-            )
+            val pending = state.editExercises[idx]
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(WarmOffWhite),
+            ) {
+                ExerciseConfigScreen(
+                    exercise = ExerciseShortResponse(
+                        id = pending.exerciseId,
+                        nameRu = pending.exerciseNameRu,
+                        nameEn = pending.exerciseNameEn,
+                        muscleGroup = pending.muscleGroupKey,
+                        requiresWeight = pending.requiresWeight,
+                    ),
+                    onBack = { editingExerciseIndex = null },
+                    onConfirm = { updated ->
+                        viewModel.updatePendingExerciseAt(idx, updated)
+                        editingExerciseIndex = null
+                    },
+                    prefillFrom = pending,
+                    showStepHeader = false,
+                )
+            }
+            BackHandler(enabled = true) { editingExerciseIndex = null }
         }
     }
 }
@@ -422,63 +437,18 @@ private fun ViewModeBody(
 
 @Composable
 private fun HeroCard(plan: WorkoutPlanResponse) {
-    val muscle = primaryMuscleGroup(plan)
-    val colors = muscleGroupColors(muscle)
-    val isAi = plan.createdBy.equals("AI", ignoreCase = true)
-
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(24.dp))
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(colors.background, WhiteBg),
-                ),
-            )
+            .background(SoftGray)
             .border(1.5.dp, BorderGray, RoundedCornerShape(24.dp))
             .padding(20.dp),
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(WhiteBg)
-                        .border(1.dp, BorderGray, RoundedCornerShape(14.dp)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = muscleGroupCardEmoji(muscle),
-                        fontSize = 22.sp,
-                    )
-                }
-
-                MuscleGroupChip(label = muscleGroupRu(muscle), colors = colors)
-
-                if (isAi) {
-                    Spacer(modifier = Modifier.weight(1f))
-                    Text(
-                        text = "✦ AI",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(Coral)
-                            .padding(horizontal = 9.dp, vertical = 5.dp),
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
             Text(
                 text = plan.name,
-                fontSize = 24.sp,
+                fontSize = 25.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = InkBlack,
             )
@@ -487,9 +457,9 @@ private fun HeroCard(plan: WorkoutPlanResponse) {
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = desc,
-                    fontSize = 14.sp,
-                    color = InkMuted,
-                    lineHeight = 19.sp,
+                    fontSize = 16.sp,
+                    color = Color(0xFF555560),
+                    lineHeight = 21.sp,
                 )
             }
 
@@ -501,26 +471,10 @@ private fun HeroCard(plan: WorkoutPlanResponse) {
 }
 
 @Composable
-private fun MuscleGroupChip(label: String, colors: MuscleGroupColors) {
-    Text(
-        text = label,
-        fontSize = 12.sp,
-        fontWeight = FontWeight.Bold,
-        color = colors.foreground,
-        modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(WhiteBg)
-            .border(1.dp, colors.foreground.copy(alpha = 0.2f), RoundedCornerShape(20.dp))
-            .padding(horizontal = 10.dp, vertical = 5.dp),
-    )
-}
-
-@Composable
 private fun HeroStatsRow(plan: WorkoutPlanResponse) {
-    val rest = restSecondsOf(plan)
     val exerciseCount = exerciseCountOf(plan)
     val totalSets = totalSetsOf(plan)
-    val approxMinutes = estimatedMinutes(totalSets = totalSets, restSeconds = rest)
+    val approxMinutes = estimatedMinutesFromExercises(plan)
 
     Row(
         modifier = Modifier
@@ -575,7 +529,7 @@ private fun StatCell(
                 Spacer(modifier = Modifier.width(2.dp))
                 Text(
                     text = unit,
-                    fontSize = 12.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = InkMuted,
                     modifier = Modifier.padding(bottom = 4.dp),
@@ -585,7 +539,7 @@ private fun StatCell(
         Spacer(modifier = Modifier.height(2.dp))
         Text(
             text = caption,
-            fontSize = 11.sp,
+            fontSize = 13.sp,
             color = InkMuted,
         )
     }
@@ -635,12 +589,12 @@ private fun ScheduleCard(plan: WorkoutPlanResponse) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "Расписание",
-                    fontSize = 13.sp,
+                    fontSize = 15.sp,
                     color = InkMuted,
                 )
                 Text(
                     text = if (isRecurring) "Постоянная" else "Разовая тренировка",
-                    fontSize = 15.sp,
+                    fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
                     color = InkBlack,
                 )
@@ -681,7 +635,7 @@ private fun ScheduleCard(plan: WorkoutPlanResponse) {
         } else {
             Text(
                 text = "Можно выполнить в любой день",
-                fontSize = 13.sp,
+                fontSize = 17.sp,
                 color = InkMuted,
             )
         }
@@ -717,12 +671,12 @@ private fun RestTimeCard(restSeconds: Int) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = "Отдых между подходами",
-                fontSize = 13.sp,
+                fontSize = 15.sp,
                 color = InkMuted,
             )
             Text(
                 text = formatRestDurationLong(restSeconds),
-                fontSize = 15.sp,
+                fontSize = 17.sp,
                 fontWeight = FontWeight.Bold,
                 color = InkBlack,
             )
@@ -734,22 +688,34 @@ private fun RestTimeCard(restSeconds: Int) {
 private fun SectionHeader(text: String) {
     Text(
         text = text,
-        fontSize = 12.sp,
+        fontSize = 15.sp,
         fontWeight = FontWeight.Bold,
         color = InkMuted,
         letterSpacing = 0.7.sp,
     )
 }
 
+/**
+ * Unified row for both view + edit mode.
+ *
+ * `onRemove == null` renders the read-only view variant (numbered chip at the
+ * trailing edge). When `onRemove` is non-null we are in edit mode and surface
+ * a 36dp delete button. If `onEdit` is also provided it appears as a pencil
+ * button immediately to the left of the delete affordance, with the same
+ * footprint and a 12dp gap so the pair reads as a matched row of secondary
+ * actions — identical to the create-workout builder.
+ */
 @Composable
 private fun ExerciseRow(
     index: Int,
     exercise: ExerciseLineItem,
     onRemove: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+    onEdit: (() -> Unit)? = null,
 ) {
     val colors = muscleGroupColors(exercise.muscleGroup)
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(WhiteBg)
@@ -775,7 +741,7 @@ private fun ExerciseRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = exercise.name,
-                fontSize = 14.5.sp,
+                fontSize = 16.5.sp,
                 fontWeight = FontWeight.Bold,
                 color = InkBlack,
                 maxLines = 2,
@@ -783,8 +749,8 @@ private fun ExerciseRow(
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = "${exercise.sets} × ${exercise.reps}",
-                fontSize = 12.5.sp,
+                text = exercise.subtitle,
+                fontSize = 14.5.sp,
                 color = InkMuted,
             )
         }
@@ -792,6 +758,24 @@ private fun ExerciseRow(
         Spacer(modifier = Modifier.width(8.dp))
 
         if (onRemove != null) {
+            if (onEdit != null) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(SoftGray)
+                        .clickable { onEdit() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Edit,
+                        contentDescription = "Редактировать",
+                        tint = InkBlack,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+            }
             Box(
                 modifier = Modifier
                     .size(36.dp)
@@ -808,11 +792,109 @@ private fun ExerciseRow(
                 )
             }
         } else {
-            Text(
-                text = "#$index",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = InkMuted,
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(Coral),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = index.toString(),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DraggableExerciseList(
+    exercises: List<PendingExercise>,
+    onMove: (from: Int, to: Int) -> Unit,
+    onRemove: (Int) -> Unit,
+    onEdit: (Int) -> Unit,
+) {
+    var dragStartIndex by remember { mutableIntStateOf(-1) }
+    var dragOffsetY by remember { mutableFloatStateOf(0f) }
+    var itemHeightPx by remember { mutableFloatStateOf(0f) }
+    val density = LocalDensity.current
+    val gapPx = remember(density) { with(density) { 10.dp.toPx() } }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        exercises.forEachIndexed { index, exercise ->
+            val isDragging = dragStartIndex == index
+
+            val targetIndex = if (dragStartIndex >= 0 && itemHeightPx > 0) {
+                val moves = (dragOffsetY / (itemHeightPx + gapPx)).roundToInt()
+                (dragStartIndex + moves).coerceIn(0, exercises.lastIndex)
+            } else -1
+
+            val visualOffsetPx = when {
+                isDragging -> dragOffsetY
+                dragStartIndex >= 0 && targetIndex >= 0 -> {
+                    val slotSize = itemHeightPx + gapPx
+                    when {
+                        dragStartIndex < targetIndex && index in (dragStartIndex + 1)..targetIndex -> -slotSize
+                        dragStartIndex > targetIndex && index in targetIndex until dragStartIndex -> slotSize
+                        else -> 0f
+                    }
+                }
+                else -> 0f
+            }
+
+            ExerciseRow(
+                index = index + 1,
+                exercise = ExerciseLineItem(
+                    exerciseId = exercise.exerciseId,
+                    name = exercise.exerciseNameRu,
+                    muscleGroup = exercise.muscleGroupKey,
+                    sets = exercise.sets,
+                    reps = exercise.reps,
+                    subtitle = buildEditExerciseSubtitle(exercise),
+                ),
+                onRemove = { onRemove(index) },
+                onEdit = { onEdit(index) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onSizeChanged { size -> if (size.height > 0) itemHeightPx = size.height.toFloat() }
+                    .zIndex(if (isDragging) 1f else 0f)
+                    .offset { IntOffset(0, visualOffsetPx.roundToInt()) }
+                    .graphicsLayer {
+                        alpha = if (isDragging) 0.92f else 1f
+                        shadowElevation = if (isDragging) 16f else 0f
+                    }
+                    .pointerInput(exercise.exerciseId, index) {
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = {
+                                dragStartIndex = index
+                                dragOffsetY = 0f
+                            },
+                            onDrag = { _, delta ->
+                                dragOffsetY += delta.y
+                            },
+                            onDragEnd = {
+                                val from = dragStartIndex
+                                val captured = dragOffsetY
+                                dragStartIndex = -1
+                                dragOffsetY = 0f
+                                if (from >= 0 && itemHeightPx > 0) {
+                                    val moves = (captured / (itemHeightPx + gapPx)).roundToInt()
+                                    val target = (from + moves).coerceIn(0, exercises.lastIndex)
+                                    if (target != from) onMove(from, target)
+                                }
+                            },
+                            onDragCancel = {
+                                dragStartIndex = -1
+                                dragOffsetY = 0f
+                            },
+                        )
+                    },
             )
         }
     }
@@ -875,7 +957,7 @@ private fun ViewModeBottomBar(
             Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = "Редактировать",
-                fontSize = 14.sp,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = InkBlack,
             )
@@ -901,7 +983,7 @@ private fun ViewModeBottomBar(
             Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = "Начать",
-                fontSize = 15.sp,
+                fontSize = 17.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
             )
@@ -916,6 +998,8 @@ private fun EditModeBody(
     state: WorkoutDetailUiState,
     viewModel: WorkoutDetailViewModel,
     onAddExercise: () -> Unit,
+    onEditExercise: (Int) -> Unit,
+    onRemoveExercise: (Int) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
@@ -968,20 +1052,12 @@ private fun EditModeBody(
             if (state.editExercises.isEmpty()) {
                 item { EmptyExercisesPlaceholder() }
             } else {
-                itemsIndexed(
-                    state.editExercises,
-                    key = { i, ex -> "${ex.exerciseId}#$i" },
-                ) { index, exercise ->
-                    ExerciseRow(
-                        index = index + 1,
-                        exercise = ExerciseLineItem(
-                            exerciseId = exercise.exerciseId,
-                            name = exercise.exerciseNameRu,
-                            muscleGroup = exercise.muscleGroupKey,
-                            sets = exercise.sets,
-                            reps = exercise.reps,
-                        ),
-                        onRemove = { viewModel.removeExercise(index) },
+                item {
+                    DraggableExerciseList(
+                        exercises = state.editExercises,
+                        onMove = { from, to -> viewModel.moveExercise(from, to) },
+                        onRemove = onRemoveExercise,
+                        onEdit = onEditExercise,
                     )
                 }
             }
@@ -1021,7 +1097,7 @@ private fun EditTextField(
     Column {
         Text(
             text = label,
-            fontSize = 12.sp,
+            fontSize = 16.sp,
             fontWeight = FontWeight.SemiBold,
             color = InkMuted,
         )
@@ -1033,6 +1109,8 @@ private fun EditTextField(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
             singleLine = singleLine,
+            minLines = if (!singleLine) 3 else 1,
+            textStyle = TextStyle(fontSize = 16.sp, color = InkBlack),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Coral,
                 unfocusedBorderColor = BorderGray,
@@ -1086,7 +1164,7 @@ private fun ScheduleTypePill(
     ) {
         Text(
             text = label,
-            fontSize = 14.sp,
+            fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
             color = textColor,
         )
@@ -1139,12 +1217,12 @@ private fun EditRestStepper(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = "Отдых между подходами",
-                fontSize = 13.sp,
+                fontSize = 15.sp,
                 color = InkMuted,
             )
             Text(
                 text = formatRestDurationLong(restSeconds),
-                fontSize = 15.sp,
+                fontSize = 17.sp,
                 fontWeight = FontWeight.Bold,
                 color = InkBlack,
             )
@@ -1225,7 +1303,7 @@ private fun EditBottomBar(
             Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = "Добавить",
-                fontSize = 14.sp,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = InkBlack,
             )
@@ -1258,7 +1336,7 @@ private fun EditBottomBar(
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = "Сохранить",
-                    fontSize = 15.sp,
+                    fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
                 )
@@ -1385,6 +1463,7 @@ private data class ExerciseLineItem(
     val muscleGroup: String,
     val sets: Int,
     val reps: Int,
+    val subtitle: String = "",
 )
 
 private fun collectExercises(plan: WorkoutPlanResponse): List<ExerciseLineItem> {
@@ -1394,26 +1473,50 @@ private fun collectExercises(plan: WorkoutPlanResponse): List<ExerciseLineItem> 
             day.exercises
                 .sortedBy { it.orderIndex }
                 .map { ex ->
+                    val subtitle = buildString {
+                        append("${ex.sets} × ${ex.reps}")
+                        val weights = ex.setWeightsKg?.filterNotNull()?.takeIf { it.isNotEmpty() }
+                        if (weights != null) {
+                            val unique = weights.distinct()
+                            if (unique.size == 1) {
+                                val w = if (unique[0] % 1.0 == 0.0) unique[0].toInt().toString() else unique[0].toString()
+                                append(" • $w кг")
+                            } else {
+                                val minW = weights.min()
+                                val maxW = weights.max()
+                                val minStr = if (minW % 1.0 == 0.0) minW.toInt().toString() else minW.toString()
+                                val maxStr = if (maxW % 1.0 == 0.0) maxW.toInt().toString() else maxW.toString()
+                                append(" • $minStr-$maxStr кг")
+                            }
+                        }
+                    }
                     ExerciseLineItem(
                         exerciseId = ex.exerciseId,
                         name = ex.exerciseNameRu,
                         muscleGroup = ex.muscleGroup,
                         sets = ex.sets,
                         reps = ex.reps,
+                        subtitle = subtitle,
                     )
                 }
         }
 }
 
-private fun primaryMuscleGroup(plan: WorkoutPlanResponse): String? {
-    return plan.days
-        .flatMap { it.exercises }
-        .map { it.muscleGroup }
-        .filter { it.isNotBlank() }
-        .groupingBy { it.uppercase() }
-        .eachCount()
-        .maxByOrNull { it.value }
-        ?.key
+private fun buildEditExerciseSubtitle(exercise: PendingExercise): String = buildString {
+    append("${exercise.sets} × ${exercise.reps}")
+    if (!exercise.requiresWeight) return@buildString
+    val weights = exercise.setWeightsKg?.filterNotNull()?.takeIf { it.isNotEmpty() } ?: return@buildString
+    val unique = weights.distinct()
+    if (unique.size == 1) {
+        val w = if (unique[0] % 1.0 == 0.0) unique[0].toInt().toString() else unique[0].toString()
+        append(" • $w кг")
+    } else {
+        val minW = weights.min()
+        val maxW = weights.max()
+        val minStr = if (minW % 1.0 == 0.0) minW.toInt().toString() else minW.toString()
+        val maxStr = if (maxW % 1.0 == 0.0) maxW.toInt().toString() else maxW.toString()
+        append(" • $minStr-$maxStr кг")
+    }
 }
 
 private fun restSecondsOf(plan: WorkoutPlanResponse): Int {
@@ -1423,18 +1526,32 @@ private fun restSecondsOf(plan: WorkoutPlanResponse): Int {
 }
 
 private fun exerciseCountOf(plan: WorkoutPlanResponse): Int {
-    return plan.days.sumOf { it.exercises.size }
+    val day = plan.days.minByOrNull { it.orderIndex } ?: return 0
+    return day.exercises.size
 }
 
 private fun totalSetsOf(plan: WorkoutPlanResponse): Int {
-    return plan.days.flatMap { it.exercises }.sumOf { it.sets }
+    val day = plan.days.minByOrNull { it.orderIndex } ?: return 0
+    return day.exercises.sumOf { it.sets }
 }
 
-private fun estimatedMinutes(totalSets: Int, restSeconds: Int): Int {
-    if (totalSets <= 0) return 0
-    val perSetSeconds = 30 + restSeconds.coerceAtLeast(0)
-    val total = totalSets * perSetSeconds
-    return (total / 60).coerceAtLeast(1)
+/**
+ * Per-exercise time estimation using [WorkoutPlanExerciseResponse.secondsPer10Reps].
+ * Falls back to 30 seconds when the field is absent (older plans).
+ */
+private fun estimatedMinutesFromExercises(plan: WorkoutPlanResponse): Int {
+    val day = plan.days.minByOrNull { it.orderIndex } ?: return 0
+    val exercises = day.exercises.sortedBy { it.orderIndex }
+    if (exercises.isEmpty()) return 0
+
+    var totalSeconds = 0.0
+    for (ex in exercises) {
+        val secPer10 = (ex.secondsPer10Reps ?: 30).toDouble()
+        val workSeconds = (secPer10 / 10.0) * ex.reps * ex.sets
+        val restTotal = ex.restSeconds.toDouble() * (ex.sets - 1).coerceAtLeast(0)
+        totalSeconds += workSeconds + restTotal
+    }
+    return (totalSeconds / 60.0).toInt().coerceAtLeast(1)
 }
 
 private fun formatRestDurationLong(seconds: Int): String {
@@ -1442,26 +1559,6 @@ private fun formatRestDurationLong(seconds: Int): String {
     val minutes = seconds / 60
     val remainder = seconds % 60
     return if (remainder == 0) "$minutes мин" else "$minutes мин $remainder сек"
-}
-
-private fun muscleGroupRu(group: String?): String = when (group?.uppercase()) {
-    "CHEST" -> "Грудь"
-    "BACK" -> "Спина"
-    "SHOULDERS", "SHOULDER" -> "Плечи"
-    "BICEPS" -> "Бицепс"
-    "TRICEPS" -> "Трицепс"
-    "FOREARMS" -> "Предплечья"
-    "ABS", "CORE" -> "Пресс"
-    "QUADRICEPS" -> "Квадрицепс"
-    "HAMSTRINGS" -> "Бицепс бедра"
-    "CALVES" -> "Икры"
-    "GLUTES" -> "Ягодицы"
-    "CARDIO" -> "Кардио"
-    "FULL_BODY" -> "Всё тело"
-    "ARMS" -> "Руки"
-    "LEGS" -> "Ноги"
-    null, "" -> "План"
-    else -> group
 }
 
 @Composable
@@ -1481,4 +1578,99 @@ private fun PrimaryButton(label: String, onClick: () -> Unit) {
             fontWeight = FontWeight.Bold,
         )
     }
+}
+
+// -- Edit dismiss confirm --
+
+/**
+ * Returns `true` when the edit-mode draft differs from the loaded plan in
+ * any user-visible field. Used to decide whether backing out of edit mode
+ * should show a confirmation dialog.
+ */
+private fun hasUnsavedEditChanges(state: WorkoutDetailUiState): Boolean {
+    val plan = state.plan ?: return false
+
+    if (state.editName != plan.name) return true
+    if (state.editDescription != (plan.description ?: "")) return true
+
+    val originalScheduleType = try {
+        WorkoutScheduleType.valueOf(plan.scheduleType.uppercase())
+    } catch (_: IllegalArgumentException) {
+        WorkoutScheduleType.ONE_TIME
+    }
+    if (state.editScheduleType != originalScheduleType) return true
+
+    val originalDays = plan.days.map { it.dayOfWeek.uppercase() }.toSet()
+    if (state.editScheduleDays != originalDays) return true
+
+    val originalRest = restSecondsOf(plan)
+    if (state.editRestSeconds != originalRest) return true
+
+    // Compare exercises by the fields the user can actually change.
+    val originalExercises = collectExerciseSummaries(plan)
+    val editSummaries = state.editExercises.map { ex ->
+        ExerciseEditSummary(ex.exerciseId, ex.sets, ex.reps, ex.setWeightsKg)
+    }
+    if (editSummaries != originalExercises) return true
+
+    return false
+}
+
+private data class ExerciseEditSummary(
+    val exerciseId: String,
+    val sets: Int,
+    val reps: Int,
+    val setWeightsKg: List<Double?>?,
+)
+
+private fun collectExerciseSummaries(plan: WorkoutPlanResponse): List<ExerciseEditSummary> {
+    return plan.days
+        .sortedBy { it.orderIndex }
+        .flatMap { day ->
+            day.exercises
+                .sortedBy { it.orderIndex }
+                .map { ex ->
+                    ExerciseEditSummary(
+                        exerciseId = ex.exerciseId,
+                        sets = ex.sets,
+                        reps = ex.reps,
+                        setWeightsKg = ex.setWeightsKg,
+                    )
+                }
+        }
+}
+
+@Composable
+private fun EditDismissConfirmDialog(
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = {
+            Text(
+                text = "Завершить редактирование?",
+                color = InkBlack,
+                fontWeight = FontWeight.Bold,
+            )
+        },
+        text = {
+            Text(
+                text = "Вы уверены, что хотите закончить редактирование тренировки? Несохранённые изменения будут потеряны.",
+                color = InkMuted,
+                fontSize = 16.sp,
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(text = "Да", color = DangerRed, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) {
+                Text(text = "Нет", color = InkBlack, fontSize = 16.sp)
+            }
+        },
+        containerColor = WhiteBg,
+    )
 }

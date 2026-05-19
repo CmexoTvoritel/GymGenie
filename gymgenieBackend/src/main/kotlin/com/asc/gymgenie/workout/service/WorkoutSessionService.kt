@@ -30,11 +30,13 @@ class WorkoutSessionService(
     private val exerciseRepository: ExerciseRepository
 ) {
 
+    @Transactional(readOnly = true)
     fun getById(userId: UUID, sessionId: UUID): WorkoutSessionResponse {
         val session = findSessionByIdAndUser(sessionId, userId)
         return session.toResponse()
     }
 
+    @Transactional(readOnly = true)
     fun getAllByUser(userId: UUID, page: Int, size: Int): PagedResponse<WorkoutSessionShortResponse> {
         val pageable = PageRequest.of(page, size, Sort.by("startedAt").descending())
         val result = sessionRepository.findByUserId(userId, pageable)
@@ -48,6 +50,7 @@ class WorkoutSessionService(
         )
     }
 
+    @Transactional(readOnly = true)
     fun getByDate(userId: UUID, date: LocalDate): List<WorkoutSessionShortResponse> {
         val from = date.atStartOfDay().toInstant(ZoneOffset.UTC)
         val to = date.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC)
@@ -225,13 +228,36 @@ class WorkoutSessionService(
         }
     )
 
-    private fun WorkoutSessionEntity.toShortResponse() = WorkoutSessionShortResponse(
-        id = id!!,
-        name = name,
-        startedAt = startedAt,
-        finishedAt = finishedAt,
-        status = status,
-        totalSets = sets.size,
-        completedSets = sets.count { it.completed }
-    )
+    private fun WorkoutSessionEntity.toShortResponse(): WorkoutSessionShortResponse {
+        val allSets = sets
+        val distinctExerciseIds = allSets.map { it.exercise.id!! }.distinct()
+        val completedExerciseIds = allSets.filter { it.completed }.map { it.exercise.id!! }.distinct()
+        val totalReps = allSets.sumOf { it.reps ?: 0 }
+        val primaryMuscleGroup = allSets
+            .groupBy { it.exercise.muscleGroup.name }
+            .maxByOrNull { it.value.size }
+            ?.key
+            ?: workoutPlanDay?.exercises
+                ?.groupBy { it.exercise.muscleGroup.name }
+                ?.maxByOrNull { it.value.size }
+                ?.key
+        val durationMinutes = finishedAt?.let {
+            ((it.epochSecond - startedAt.epochSecond) / 60).toInt().coerceAtLeast(1)
+        }
+
+        return WorkoutSessionShortResponse(
+            id = id!!,
+            name = name,
+            startedAt = startedAt,
+            finishedAt = finishedAt,
+            status = status,
+            totalSets = workoutPlanDay?.exercises?.sumOf { it.sets } ?: allSets.size,
+            completedSets = allSets.count { it.completed },
+            totalExercises = workoutPlanDay?.exercises?.size ?: distinctExerciseIds.size,
+            completedExercises = completedExerciseIds.size,
+            totalReps = totalReps,
+            primaryMuscleGroup = primaryMuscleGroup,
+            durationMinutes = durationMinutes,
+        )
+    }
 }

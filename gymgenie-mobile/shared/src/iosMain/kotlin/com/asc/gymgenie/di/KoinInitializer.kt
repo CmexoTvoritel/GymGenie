@@ -13,6 +13,9 @@ import com.asc.gymgenie.nutrition.NutritionApi
 import com.asc.gymgenie.storage.TokenStorage
 import com.asc.gymgenie.user.UserApi
 import com.asc.gymgenie.user.UserProfileStore
+import com.asc.gymgenie.presentation.WorkoutHistoryViewModel
+import com.asc.gymgenie.workout.LocalWorkoutRepository
+import com.asc.gymgenie.workout.PendingSessionUploader
 import com.asc.gymgenie.workout.WorkoutApi
 import io.ktor.client.HttpClient
 import org.koin.core.context.startKoin
@@ -41,4 +44,7 @@ object KoinHelper {
     fun getFoodProductApi(): FoodProductApi = KoinPlatform.getKoin().get()
     fun getManualMealPlanApi(): ManualMealPlanApi = KoinPlatform.getKoin().get()
     fun getSessionManager(): SessionManager = KoinPlatform.getKoin().get()
+    fun getPendingSessionUploader(): PendingSessionUploader = KoinPlatform.getKoin().get()
+    fun getWorkoutHistoryViewModel(): WorkoutHistoryViewModel = KoinPlatform.getKoin().get()
+    fun getLocalWorkoutRepository(): LocalWorkoutRepository = KoinPlatform.getKoin().get()
 }
