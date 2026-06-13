@@ -46,12 +46,6 @@ import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
 import com.asc.gymgenie.ui.theme.WarmOffWhite
 
-/**
- * Step 1 of the create-workout flow: picks the target muscle group.
- *
- * The list is server-driven via [CreateWorkoutUiState.muscleGroups]; the screen
- * itself is stateless and only forwards selections upwards.
- */
 @Composable
 fun MuscleGroupPickerScreen(
     state: CreateWorkoutUiState,
@@ -90,9 +84,7 @@ fun MuscleGroupPickerScreen(
             else -> {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
-                    // Top inset is small (the step header already adds breathing room).
-                    // Bottom inset combines the navigation-bar safe area with a 16dp
-                    // floor so the last row never sits flush against the gesture handle.
+
                     contentPadding = PaddingValues(
                         start = 20.dp,
                         end = 20.dp,
@@ -117,32 +109,19 @@ fun MuscleGroupPickerScreen(
 
 @Composable
 private fun MuscleGroupTile(info: MuscleGroupInfo, onClick: () -> Unit) {
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-//            .height(130.dp)
             .shadow(2.dp, RoundedCornerShape(16.dp))
             .clip(RoundedCornerShape(16.dp))
             .background(Color.White)
-            .clickable { onClick() }
-            .padding(12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center,
     ) {
         Image(
             painter = painterResource(id = muscleGroupDrawable(info.key)),
             contentDescription = info.nameRu,
             modifier = Modifier.fillMaxWidth().aspectRatio(ratio = 1f),
-        )
-        Spacer(modifier = Modifier.height(10.dp))
-        Text(
-            text = info.nameRu,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = DeepInk,
-            textAlign = TextAlign.Center,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -168,8 +147,6 @@ private fun ErrorBlock(message: String, onRetry: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(text = "⚠️", fontSize = 36.sp)
-        Spacer(modifier = Modifier.height(12.dp))
         Text(
             text = message,
             fontSize = 14.sp,
@@ -196,8 +173,6 @@ private fun EmptyBlock() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(text = "📦", fontSize = 44.sp)
-        Spacer(modifier = Modifier.height(12.dp))
         Text(
             text = "Группы мышц недоступны",
             fontSize = 15.sp,

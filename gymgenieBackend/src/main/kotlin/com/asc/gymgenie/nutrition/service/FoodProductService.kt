@@ -9,29 +9,12 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.*
 
-/**
- * Read-only service exposing the global food product catalog.
- *
- * The catalog is shared across all users and is not user-scoped, so search/lookup
- * methods do not take a userId — authentication is enforced at the controller level only.
- */
 @Service
 @Transactional(readOnly = true)
 class FoodProductService(
     private val foodProductRepository: FoodProductRepository
 ) {
 
-    /**
-     * Search active food products with optional filters.
-     *
-     * Filtering rules:
-     *  - both null              → return all active products
-     *  - only [category]        → filter by category
-     *  - only [query]           → case-insensitive substring match on `nameRu`
-     *  - both [category] + [query] → combined filter
-     *
-     * Empty/blank [query] is treated as null.
-     */
     fun search(query: String?, category: FoodCategory?): List<FoodProductResponse> {
         val normalizedQuery = query?.trim()?.takeIf { it.isNotEmpty() }
 

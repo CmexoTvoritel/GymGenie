@@ -18,7 +18,7 @@ import kotlin.coroutines.cancellation.CancellationException
 data class AuthUiState(
     val email: String = "",
     val password: String = "",
-    val username: String = "",
+    val name: String = "",
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val loginSuccess: Boolean = false,
@@ -44,8 +44,8 @@ class AuthViewModel(
         _state.update { it.copy(password = password, errorMessage = null) }
     }
 
-    fun onUsernameChanged(username: String) {
-        _state.update { it.copy(username = username, errorMessage = null) }
+    fun onNameChanged(name: String) {
+        _state.update { it.copy(name = name, errorMessage = null) }
     }
 
     fun clearError() {
@@ -99,7 +99,7 @@ class AuthViewModel(
 
     fun register() {
         val current = _state.value
-        if (current.username.isBlank() || current.email.isBlank() || current.password.isBlank()) {
+        if (current.name.isBlank() || current.email.isBlank() || current.password.isBlank()) {
             _state.update { it.copy(errorMessage = "Заполните все поля") }
             return
         }
@@ -111,7 +111,7 @@ class AuthViewModel(
         scope.launch {
             _state.update { it.copy(isLoading = true, errorMessage = null) }
             val result = authApi.register(
-                username = current.username.trim(),
+                firstName = current.name.trim(),
                 email = current.email.trim(),
                 password = current.password,
             )

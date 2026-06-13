@@ -1,5 +1,7 @@
 package com.asc.gymgenie.feature.workout_history
 
+import androidx.annotation.DrawableRes
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,24 +25,27 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.asc.gymgenie.R
 import com.asc.gymgenie.ui.components.GymGenieToolbar
 import com.asc.gymgenie.ui.theme.CoralLight
 import com.asc.gymgenie.ui.theme.OnBackground
 import com.asc.gymgenie.ui.theme.OnSurfaceVariant
+import com.asc.gymgenie.ui.theme.StatAmountBg
+import com.asc.gymgenie.ui.theme.StatCaloriesBg
+import com.asc.gymgenie.ui.theme.StatRepeatBg
+import com.asc.gymgenie.ui.theme.StatTimerBg
 import com.asc.gymgenie.ui.theme.WarmOffWhite
+import com.asc.gymgenie.utils.MonthNamesGenitive
 import com.asc.gymgenie.workout.WorkoutSessionHistoryItem
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
-
-private val MonthNamesGenitive = listOf(
-    "", "января", "февраля", "марта", "апреля", "мая", "июня",
-    "июля", "августа", "сентября", "октября", "ноября", "декабря",
-)
 
 @Composable
 fun HistorySummaryScreen(
@@ -96,15 +101,14 @@ fun HistorySummaryScreen(
         ) {
             Spacer(modifier = Modifier.height(16.dp))
 
-            Box(
-                modifier = Modifier
-                    .size(80.dp)
-                    .clip(CircleShape)
-                    .background(CoralLight),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(if (isCompleted) "🏆" else "⚠️", fontSize = 36.sp)
-            }
+            Image(
+                painter = painterResource(
+                    id = R.drawable.ic_train_finish,
+                ),
+                contentDescription = null,
+                modifier = Modifier.size(175.dp),
+                contentScale = ContentScale.Fit,
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -140,16 +144,28 @@ fun HistorySummaryScreen(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                StatCard("⏱", "$durationMinutes мин", "Общее время", Modifier.weight(1f))
-                StatCard("🔥", "$estimatedCalories ккал", "Сожжено", Modifier.weight(1f))
+                StatCard(R.drawable.ic_timer, "$durationMinutes мин", "Общее время", Modifier.weight(1f), bgColor = StatTimerBg)
+                StatCard(R.drawable.ic_calories, "$estimatedCalories ккал", "Сожжено", Modifier.weight(1f), bgColor = StatCaloriesBg)
             }
             Spacer(modifier = Modifier.height(12.dp))
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                StatCard("🏋️", "${session.totalExercises}", "Упражнений", Modifier.weight(1f))
-                StatCard("✅", "${session.completedSets}", "Подходов", Modifier.weight(1f))
+                StatCard(
+                    R.drawable.ic_amount,
+                    if (isCompleted) "${session.totalExercises}" else "${session.completedExercises} / ${session.totalExercises}",
+                    "Упражнений",
+                    Modifier.weight(1f),
+                    bgColor = StatAmountBg,
+                )
+                StatCard(
+                    R.drawable.ic_repeat,
+                    if (isCompleted) "${session.completedSets}" else "${session.completedSets} / ${session.totalSets}",
+                    "Подходов",
+                    Modifier.weight(1f),
+                    bgColor = StatRepeatBg,
+                )
             }
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -159,10 +175,11 @@ fun HistorySummaryScreen(
 
 @Composable
 private fun StatCard(
-    icon: String,
+    @DrawableRes iconRes: Int,
     value: String,
     label: String,
     modifier: Modifier = Modifier,
+    bgColor: Color = CoralLight,
 ) {
     Card(
         modifier = modifier,
@@ -175,10 +192,15 @@ private fun StatCard(
                 modifier = Modifier
                     .size(36.dp)
                     .clip(CircleShape)
-                    .background(CoralLight),
+                    .background(bgColor),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(icon, fontSize = 18.sp)
+                Image(
+                    painter = painterResource(id = iconRes),
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    contentScale = ContentScale.Fit,
+                )
             }
             Spacer(modifier = Modifier.height(10.dp))
             Text(value, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = OnBackground)

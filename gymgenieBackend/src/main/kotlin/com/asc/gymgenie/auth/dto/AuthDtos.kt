@@ -7,8 +7,8 @@ import java.util.*
 
 data class RegisterRequest(
     @field:NotBlank
-    @field:Size(min = 3, max = 30)
-    val username: String,
+    @field:Size(min = 1, max = 50)
+    val firstName: String,
 
     @field:NotBlank
     @field:Email
@@ -41,7 +41,7 @@ data class TokenResponse(
 
 data class AuthUserResponse(
     val id: UUID,
-    val username: String,
+    val firstName: String,
     val email: String,
     val subscriptionType: String,
 )

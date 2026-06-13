@@ -36,14 +36,6 @@ object CreateWorkoutLimits {
     const val WEIGHT_STEP_KG = 2.5
 }
 
-/**
- * A user-configured exercise waiting to be appended to the workout draft.
- *
- * [requiresWeight] mirrors the backend flag — when `true`, the UI is expected
- * to surface a weight configuration step and produce a non-null
- * [setWeightsKg] list whose size equals [sets]. When `false`, [setWeightsKg]
- * must be `null` so the workout plan stays free of meaningless `0 kg` rows.
- */
 data class PendingExercise(
     val exerciseId: String,
     val exerciseNameRu: String,
@@ -52,15 +44,7 @@ data class PendingExercise(
     val sets: Int,
     val reps: Int,
     val requiresWeight: Boolean = false,
-    /**
-     * Per-set weight in kilograms.
-     *
-     * `null` means "no weight tracking for this exercise" (typically because
-     * [requiresWeight] is `false`). When non-null, the list length **must**
-     * equal [sets]. Individual entries may still be `null` to model "set
-     * recorded without weight" but the size invariant is enforced by the
-     * presenter on normalization.
-     */
+
     val setWeightsKg: List<Double?>? = null,
 )
 
@@ -185,9 +169,6 @@ class CreateWorkoutViewModel(
         }
     }
 
-    // Enforces the size-equals-sets invariant on setWeightsKg and clamps all
-    // numeric fields to their declared limits. Called by both addExercise and
-    // updateExerciseAt so normalization rules stay in one place.
     private fun normalizeExercise(exercise: PendingExercise): PendingExercise {
         val clampedSets = exercise.sets.coerceIn(CreateWorkoutLimits.MIN_SETS, CreateWorkoutLimits.MAX_SETS)
         val clampedReps = exercise.reps.coerceIn(CreateWorkoutLimits.MIN_REPS, CreateWorkoutLimits.MAX_REPS)

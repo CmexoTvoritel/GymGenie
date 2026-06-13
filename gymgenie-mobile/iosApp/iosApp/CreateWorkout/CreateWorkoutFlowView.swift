@@ -1,18 +1,11 @@
 import SwiftUI
 import Shared
 
-/// Steps of the create-workout flow. Enum-based navigation keeps the state
-/// machine explicit and testable — each value captures exactly what the
-/// receiving view needs.
 enum CreateWorkoutStep: Equatable {
     case muscleGroupPicker
     case exercisePicker(muscleGroupKey: String, nameRu: String)
     case exerciseConfig(exercise: Shared.ExerciseShortResponse)
-    /// Reuses the config screen as an edit surface for an already-added row.
-    /// Captures the index so `vm.updateExercise(at:updated:)` can patch the
-    /// correct entry; the `exercise` is rebuilt locally from the stored
-    /// `PendingExercise` so we never refetch over the network just to edit
-    /// sets/weights.
+
     case exerciseEdit(exercise: Shared.ExerciseShortResponse, editingIndex: Int)
     case workoutBuilder
 
@@ -33,20 +26,28 @@ enum CreateWorkoutStep: Equatable {
     }
 }
 
-/// Container for the entire create-workout flow.
-///
-/// Owns the shared `CreateWorkoutViewModelWrapper` and a manual navigation
-/// stack. Avoids `NavigationStack` deliberately so back-navigation semantics
-/// (e.g. "after configuring an exercise, pop back to the builder, NOT the
-/// picker") are explicit and do not fight SwiftUI's automatic handling.
 struct CreateWorkoutFlowView: View {
     let onDismiss: () -> Void
+    let initialExercise: Shared.ExerciseShortResponse?
 
     @StateObject private var vm = CreateWorkoutViewModelWrapper()
-    @State private var stack: [CreateWorkoutStep] = [.muscleGroupPicker]
+    @State private var stack: [CreateWorkoutStep]
     @State private var showDismissAlert = false
 
+    private let startedFromCatalog: Bool
+
     private let warmOffWhite = Color(red: 0.980, green: 0.976, blue: 0.969)
+
+    init(onDismiss: @escaping () -> Void, initialExercise: Shared.ExerciseShortResponse? = nil) {
+        self.onDismiss = onDismiss
+        self.initialExercise = initialExercise
+        self.startedFromCatalog = initialExercise != nil
+        if let exercise = initialExercise {
+            _stack = State(initialValue: [.exerciseConfig(exercise: exercise)])
+        } else {
+            _stack = State(initialValue: [.muscleGroupPicker])
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -60,7 +61,7 @@ struct CreateWorkoutFlowView: View {
         }
         .onChange(of: vm.isSaved) { saved in
             if saved {
-                // Release shared state before dismissing so the next entry starts clean.
+
                 vm.reset()
                 onDismiss()
             }
@@ -81,8 +82,6 @@ struct CreateWorkoutFlowView: View {
         )
         .interactiveDismissDisabled(true)
     }
-
-    // MARK: - Step rendering
 
     @ViewBuilder
     private var currentStep: some View {
@@ -109,17 +108,22 @@ struct CreateWorkoutFlowView: View {
         case let .exerciseConfig(exercise):
             ExerciseConfigView(
                 exercise: exercise,
-                onBack: { pop() },
+                onBack: {
+                    if stack.count <= 1 {
+                        requestDismiss()
+                    } else {
+                        pop()
+                    }
+                },
                 onConfirm: { pending in
                     vm.addExercise(pending)
                     advanceToBuilder()
-                }
+                },
+                showStepHeader: !startedFromCatalog || stack.count > 1
             )
 
         case let .exerciseEdit(exercise, editingIndex):
-            // Snapshot the row by index from the live wrapper. If it was
-            // removed underneath us (stale index), pop instead of rendering
-            // a half-broken edit screen.
+
             if vm.exercises.indices.contains(editingIndex) {
                 ExerciseConfigView(
                     exercise: exercise,
@@ -132,8 +136,7 @@ struct CreateWorkoutFlowView: View {
                     showStepHeader: false
                 )
             } else {
-                // SwiftUI requires the branch to return a view; an empty
-                // placeholder is fine because the onAppear pops immediately.
+
                 Color.clear.onAppear { pop() }
             }
 
@@ -145,9 +148,7 @@ struct CreateWorkoutFlowView: View {
                     push(.muscleGroupPicker)
                 },
                 onEditExercise: { index, pending in
-                    // Rebuild a minimal [ExerciseShortResponse] from the
-                    // [PendingExercise] — only id / names / muscleGroup /
-                    // requiresWeight are read by the edit surface.
+
                     let exerciseShort = Shared.ExerciseShortResponse(
                         id: pending.exerciseId,
                         nameRu: pending.exerciseNameRu,
@@ -167,8 +168,6 @@ struct CreateWorkoutFlowView: View {
         }
     }
 
-    // MARK: - Navigation
-
     private func push(_ step: CreateWorkoutStep) {
         withAnimation(.easeInOut(duration: 0.15)) {
             stack.append(step)
@@ -182,15 +181,11 @@ struct CreateWorkoutFlowView: View {
         }
     }
 
-    /// Returns `true` when the user has entered any meaningful data that would
-    /// be lost if the flow were dismissed without saving.
     private var hasUnsavedData: Bool {
         !vm.workoutName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
         !vm.exercises.isEmpty
     }
 
-    /// Dismisses the flow immediately if nothing to lose, or shows the
-    /// confirmation alert otherwise.
     private func requestDismiss() {
         if hasUnsavedData {
             showDismissAlert = true
@@ -200,9 +195,6 @@ struct CreateWorkoutFlowView: View {
         }
     }
 
-    /// Pressing "back" on the first muscle-group picker exits the whole flow.
-    /// On subsequent visits (after the builder is already in the stack) it
-    /// simply pops back to the builder without losing state.
     private func backFromMuscleGroupPicker() {
         if stack.count == 1 {
             requestDismiss()
@@ -211,15 +203,10 @@ struct CreateWorkoutFlowView: View {
         }
     }
 
-    /// The builder is the "home" of the flow. Backing out of it cancels the
-    /// entire workout draft.
     private func backFromBuilder() {
         requestDismiss()
     }
 
-    /// After confirming an exercise, make sure the builder is the top of the
-    /// stack. If the user already had a builder behind them we pop back to
-    /// it; otherwise we establish it as the destination.
     private func advanceToBuilder() {
         if let existingIndex = stack.firstIndex(of: .workoutBuilder) {
             withAnimation(.easeInOut(duration: 0.15)) {

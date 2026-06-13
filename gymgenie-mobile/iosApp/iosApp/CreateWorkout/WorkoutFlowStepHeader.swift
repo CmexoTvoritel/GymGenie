@@ -1,18 +1,10 @@
 import SwiftUI
 
-/// Step indicator shown under the toolbar on every numbered step of the
-/// "add exercise" sub-flow.
-///
-/// Renders the canonical "Шаг X из Y" label plus a coral progress bar whose
-/// fill mirrors `currentStep / totalSteps`. The component is intentionally
-/// non-scrollable: callers place it between the toolbar and the scrollable
-/// content so the indicator stays pinned regardless of list size.
 struct WorkoutFlowStepHeader: View {
     let currentStep: Int
     var totalSteps: Int = 3
 
-    /// Background track for the progress bar. Light gray per spec.
-    private let trackColor = Color(red: 0.878, green: 0.878, blue: 0.878) // #E0E0E0
+    private let trackColor = Color(red: 0.878, green: 0.878, blue: 0.878)
 
     var body: some View {
         let safeTotal = max(totalSteps, 1)

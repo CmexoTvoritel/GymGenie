@@ -98,3 +98,4 @@ CREATE INDEX idx_dishes_meal_id ON dishes(meal_id);
 -- ============================================================
 ALTER TABLE dishes ADD COLUMN IF NOT EXISTS food_product_id UUID;
 ALTER TABLE dishes ADD COLUMN IF NOT EXISTS grams DOUBLE PRECISION;
+ALTER TABLE dishes ADD COLUMN IF NOT EXISTS food_category VARCHAR(32);

@@ -1,6 +1,7 @@
 package com.asc.gymgenie.feature.workouts
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -59,7 +61,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -73,10 +77,10 @@ import com.asc.gymgenie.exercise.ExerciseShortResponse
 import com.asc.gymgenie.feature.create_workout.ExerciseConfigScreen
 import com.asc.gymgenie.feature.create_workout.ExercisePickerScreen
 import com.asc.gymgenie.feature.create_workout.MuscleGroupPickerScreen
+import com.asc.gymgenie.feature.create_workout.muscleGroupExerciseDrawable
 import com.asc.gymgenie.ui.components.GymGenieToolbar
 import com.asc.gymgenie.ui.components.ToolbarAction
 import com.asc.gymgenie.ui.components.formatRecurringDays
-import com.asc.gymgenie.ui.components.muscleGroupCardEmoji
 import com.asc.gymgenie.ui.components.muscleGroupColors
 import com.asc.gymgenie.ui.theme.WarmOffWhite
 import com.asc.gymgenie.presentation.CreateWorkoutLimits
@@ -85,6 +89,8 @@ import com.asc.gymgenie.presentation.PendingExercise
 import com.asc.gymgenie.presentation.WorkoutDetailUiState
 import com.asc.gymgenie.presentation.WorkoutDetailViewModel
 import com.asc.gymgenie.workout.WorkoutPlanResponse
+import com.asc.gymgenie.utils.WeekdayPairs
+import com.asc.gymgenie.utils.formatRestDurationLong
 import com.asc.gymgenie.workout.WorkoutScheduleType
 import org.koin.core.context.GlobalContext
 import org.koin.core.parameter.parametersOf
@@ -100,25 +106,8 @@ private val SoftGray = Color(0xFFF4F4F6)
 private val DangerRed = Color(0xFFE5484D)
 private val WhiteBg = Color(0xFFFFFFFF)
 
-private val ScheduleDayLabels = listOf(
-    "MONDAY" to "Пн",
-    "TUESDAY" to "Вт",
-    "WEDNESDAY" to "Ср",
-    "THURSDAY" to "Чт",
-    "FRIDAY" to "Пт",
-    "SATURDAY" to "Сб",
-    "SUNDAY" to "Вс",
-)
+private val ScheduleDayLabels = WeekdayPairs
 
-/**
- * View / edit screen for a single workout plan.
- *
- * The composable owns its own [WorkoutDetailViewModel] keyed by [planId] so
- * that re-entering the screen for a different plan starts from a clean slate.
- * The exercise picker (used in edit mode) is rendered as a full-screen overlay
- * driven by an internal stack — this mirrors the create-workout flow without
- * reusing its top-level navigation, since the parent tab structure differs.
- */
 @Composable
 fun WorkoutDetailScreen(
     planId: String,
@@ -209,7 +198,12 @@ private fun ErrorState(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(text = "⚠️", fontSize = 36.sp)
+        Icon(
+            imageVector = Icons.Outlined.Warning,
+            contentDescription = null,
+            modifier = Modifier.size(36.dp),
+            tint = InkMuted,
+        )
         Spacer(modifier = Modifier.height(12.dp))
         Text(
             text = message,
@@ -242,15 +236,9 @@ private fun Content(
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showEditDismissDialog by remember { mutableStateOf(false) }
     var showExercisePicker by remember { mutableStateOf(false) }
-    // Index of the pending exercise currently open in the edit overlay.
-    // We snapshot the index because the overlay is a full-screen replacement
-    // composable, and the back-handler / cancel paths only need to clear this
-    // single piece of state. Drag-to-reorder cannot run while the overlay is
-    // up, so the index stays stable for the lifetime of the edit session.
+
     var editingExerciseIndex by remember { mutableStateOf<Int?>(null) }
 
-    // Intercept hardware back in edit mode — show a confirmation dialog
-    // when the user has unsaved changes.
     BackHandler(enabled = state.isEditing) {
         if (hasUnsavedEditChanges(state)) {
             showEditDismissDialog = true
@@ -354,16 +342,9 @@ private fun Content(
         )
     }
 
-    // Edit overlay reuses [ExerciseConfigScreen] in its edit mode. Mirrors the
-    // create-workout flow's edit branch: prefill from the existing row, hide
-    // the wizard step header, and patch the row by index on confirm. Guarded
-    // by an indices check so a stale callback after a parallel delete cannot
-    // crash; we just close the overlay silently.
     editingExerciseIndex?.let { idx ->
         if (!state.isEditing || idx !in state.editExercises.indices) {
-            // Auto-close the overlay when the draft is gone (cancel/save) or
-            // the targeted row disappeared underneath us — never render a
-            // half-broken edit screen.
+
             LaunchedEffect(idx, state.isEditing) { editingExerciseIndex = null }
         } else {
             val pending = state.editExercises[idx]
@@ -393,8 +374,6 @@ private fun Content(
         }
     }
 }
-
-// -- View mode --
 
 @Composable
 private fun ViewModeBody(
@@ -695,16 +674,6 @@ private fun SectionHeader(text: String) {
     )
 }
 
-/**
- * Unified row for both view + edit mode.
- *
- * `onRemove == null` renders the read-only view variant (numbered chip at the
- * trailing edge). When `onRemove` is non-null we are in edit mode and surface
- * a 36dp delete button. If `onEdit` is also provided it appears as a pencil
- * button immediately to the left of the delete affordance, with the same
- * footprint and a 12dp gap so the pair reads as a matched row of secondary
- * actions — identical to the create-workout builder.
- */
 @Composable
 private fun ExerciseRow(
     index: Int,
@@ -730,9 +699,11 @@ private fun ExerciseRow(
                 .background(colors.background),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = muscleGroupCardEmoji(exercise.muscleGroup),
-                fontSize = 18.sp,
+            Image(
+                painter = painterResource(id = muscleGroupExerciseDrawable(exercise.muscleGroup)),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
             )
         }
 
@@ -990,8 +961,6 @@ private fun ViewModeBottomBar(
         }
     }
 }
-
-// -- Edit mode --
 
 @Composable
 private fun EditModeBody(
@@ -1345,8 +1314,6 @@ private fun EditBottomBar(
     }
 }
 
-// -- Delete confirm --
-
 @Composable
 private fun DeleteConfirmDialog(
     onConfirm: () -> Unit,
@@ -1376,14 +1343,6 @@ private fun DeleteConfirmDialog(
     )
 }
 
-// -- Exercise picker overlay --
-
-/**
- * Reuses the create-workout flow (muscle group → exercise → sets/reps) as a
- * scoped picker. The overlay drives a private [CreateWorkoutViewModel] purely
- * to carry the muscle-groups list — adding an exercise is intercepted by the
- * caller's [onConfirmed], so the local view model never enters a save path.
- */
 @Composable
 private fun ExercisePickerOverlay(
     onDismiss: () -> Unit,
@@ -1454,8 +1413,6 @@ private sealed interface PickerStep {
         val exercise: ExerciseShortResponse,
     ) : PickerStep
 }
-
-// -- Helpers --
 
 private data class ExerciseLineItem(
     val exerciseId: String,
@@ -1535,10 +1492,6 @@ private fun totalSetsOf(plan: WorkoutPlanResponse): Int {
     return day.exercises.sumOf { it.sets }
 }
 
-/**
- * Per-exercise time estimation using [WorkoutPlanExerciseResponse.secondsPer10Reps].
- * Falls back to 30 seconds when the field is absent (older plans).
- */
 private fun estimatedMinutesFromExercises(plan: WorkoutPlanResponse): Int {
     val day = plan.days.minByOrNull { it.orderIndex } ?: return 0
     val exercises = day.exercises.sortedBy { it.orderIndex }
@@ -1552,13 +1505,6 @@ private fun estimatedMinutesFromExercises(plan: WorkoutPlanResponse): Int {
         totalSeconds += workSeconds + restTotal
     }
     return (totalSeconds / 60.0).toInt().coerceAtLeast(1)
-}
-
-private fun formatRestDurationLong(seconds: Int): String {
-    if (seconds < 60) return "$seconds сек"
-    val minutes = seconds / 60
-    val remainder = seconds % 60
-    return if (remainder == 0) "$minutes мин" else "$minutes мин $remainder сек"
 }
 
 @Composable
@@ -1580,13 +1526,6 @@ private fun PrimaryButton(label: String, onClick: () -> Unit) {
     }
 }
 
-// -- Edit dismiss confirm --
-
-/**
- * Returns `true` when the edit-mode draft differs from the loaded plan in
- * any user-visible field. Used to decide whether backing out of edit mode
- * should show a confirmation dialog.
- */
 private fun hasUnsavedEditChanges(state: WorkoutDetailUiState): Boolean {
     val plan = state.plan ?: return false
 
@@ -1606,7 +1545,6 @@ private fun hasUnsavedEditChanges(state: WorkoutDetailUiState): Boolean {
     val originalRest = restSecondsOf(plan)
     if (state.editRestSeconds != originalRest) return true
 
-    // Compare exercises by the fields the user can actually change.
     val originalExercises = collectExerciseSummaries(plan)
     val editSummaries = state.editExercises.map { ex ->
         ExerciseEditSummary(ex.exerciseId, ex.sets, ex.reps, ex.setWeightsKg)

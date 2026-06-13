@@ -81,7 +81,6 @@ fun OnboardingScreen(
             OnboardingPageContent(page = pages[pageIndex])
         }
 
-        // Page dots indicator
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -103,7 +102,6 @@ fun OnboardingScreen(
             }
         }
 
-        // Buttons
         Column(
             modifier = Modifier
                 .fillMaxWidth()

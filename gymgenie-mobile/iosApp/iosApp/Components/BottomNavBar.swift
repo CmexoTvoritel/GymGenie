@@ -27,10 +27,9 @@ struct BottomNavBar: View {
         let indicatorX = Self.edgePadding + Self.itemWidth * CGFloat(selectedIndex)
 
         ZStack {
-            // 1 — Frosted backdrop
+
             glassBackdrop
 
-            // 2 — Coral indicator pill (slides smoothly, no bounce)
             Capsule()
                 .fill(Palette.coral)
                 .frame(width: Self.itemWidth, height: Self.itemHeight)
@@ -41,7 +40,6 @@ struct BottomNavBar: View {
                 .animation(.easeInOut(duration: 0.25), value: selectedIndex)
                 .allowsHitTesting(false)
 
-            // 4 — Tab items (each knows only if it's selected)
             HStack(spacing: 0) {
                 ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                     BottomNavItemView(
@@ -69,8 +67,6 @@ struct BottomNavBar: View {
 
 }
 
-// MARK: - Item view
-
 private struct BottomNavItemView: View {
     let item: BottomNavBar.Item
     let itemWidth: CGFloat
@@ -96,8 +92,6 @@ private struct BottomNavItemView: View {
         .buttonStyle(NoFeedbackButtonStyle())
     }
 }
-
-// MARK: - Helpers
 
 private struct NoFeedbackButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {

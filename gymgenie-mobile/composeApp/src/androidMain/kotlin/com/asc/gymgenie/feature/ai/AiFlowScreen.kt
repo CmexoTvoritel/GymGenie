@@ -2,8 +2,6 @@ package com.asc.gymgenie.feature.ai
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -46,7 +44,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -79,6 +79,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.width
 import com.asc.gymgenie.R
 import com.asc.gymgenie.ai.AiChatMessage
 import com.asc.gymgenie.ai.AiFlowStep
@@ -89,6 +90,7 @@ import com.asc.gymgenie.ui.components.GymGenieToolbar
 import com.asc.gymgenie.ui.theme.Coral
 import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.WarmOffWhite
+import com.asc.gymgenie.user.UserProfileStore
 import kotlin.math.roundToInt
 import org.koin.core.context.GlobalContext
 
@@ -104,12 +106,49 @@ private val GreenText = Color(0xFF16A34A)
 fun AiFlowScreen(onBottomBarVisibilityChanged: (Boolean) -> Unit = {}) {
     val koin = remember { GlobalContext.get() }
     val viewModel = remember { koin.get<AiViewModel>() }
+    val userProfileStore = remember { koin.get<UserProfileStore>() }
     DisposableEffect(Unit) { onDispose { viewModel.onCleared() } }
 
     val state by viewModel.state.collectAsState()
 
+    val profileSnapshot by userProfileStore.profile.collectAsState()
+    LaunchedEffect(profileSnapshot) {
+        viewModel.refreshProfileFromStore()
+    }
+
+    var showChatExitDialog by remember { mutableStateOf(false) }
+
+    val needsChatExitConfirmation = state.step == AiFlowStep.CHAT
+            && !state.isSaved
+            && (state.messages.isNotEmpty() || state.isTyping)
+
     BackHandler(enabled = state.step != AiFlowStep.CHOOSE) {
-        viewModel.goBack()
+        if (state.step == AiFlowStep.CHAT) {
+            if (needsChatExitConfirmation) showChatExitDialog = true else viewModel.reset()
+        } else {
+            viewModel.goBack()
+        }
+    }
+
+    if (showChatExitDialog) {
+        AlertDialog(
+            onDismissRequest = { showChatExitDialog = false },
+            title = { Text("Выйти из чата?") },
+            text = { Text("Весь прогресс будет потерян. Убедитесь, что план сохранён.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showChatExitDialog = false
+                    viewModel.reset()
+                }) {
+                    Text("Выйти", color = Color(0xFFDC2626))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showChatExitDialog = false }) {
+                    Text("Остаться")
+                }
+            },
+        )
     }
 
     LaunchedEffect(state.step) {
@@ -161,7 +200,9 @@ fun AiFlowScreen(onBottomBarVisibilityChanged: (Boolean) -> Unit = {}) {
                 isSaving = state.isSaving,
                 isSaved = state.isSaved,
                 errorMessage = state.errorMessage,
-                onBack = { viewModel.goBack() },
+                onBack = {
+                    if (needsChatExitConfirmation) showChatExitDialog = true else viewModel.reset()
+                },
                 onSend = { viewModel.sendMessage(it) },
                 onSave = { viewModel.saveWorkout() },
             )
@@ -174,10 +215,7 @@ private fun ChooseScreen(
     onNext: () -> Unit,
     onBottomBarVisibilityChanged: (Boolean) -> Unit,
 ) {
-    // Local presentation flag for the AI meal flow. The meal flow is
-    // entirely self-contained (`AiMealFlowScreen`) and renders its own
-    // header with a close button, so we just gate it on a boolean and
-    // overlay it on top of the chooser.
+
     var showMealFlow by remember { mutableStateOf(false) }
 
     BackHandler(enabled = showMealFlow) {
@@ -212,7 +250,7 @@ private fun ChooseScreen(
             )
             Spacer(Modifier.height(32.dp))
             GenerateTypeCard(
-                emoji = "🏋️",
+                iconRes = R.drawable.ic_ai_workout,
                 title = "План тренировки",
                 subtitle = "Персональная программа на основе ваших данных",
                 enabled = true,
@@ -220,7 +258,7 @@ private fun ChooseScreen(
             )
             Spacer(Modifier.height(14.dp))
             GenerateTypeCard(
-                emoji = "🥗",
+                iconRes = R.drawable.ic_ai_meal,
                 title = "План питания",
                 subtitle = "Персональный рацион на основе ваших целей",
                 enabled = true,
@@ -231,8 +269,8 @@ private fun ChooseScreen(
 
     AnimatedVisibility(
         visible = showMealFlow,
-        enter = slideInVertically(initialOffsetY = { it }),
-        exit = slideOutVertically(targetOffsetY = { it }),
+        enter = slideInHorizontally(initialOffsetX = { it }),
+        exit = slideOutHorizontally(targetOffsetX = { it }),
     ) {
         AiMealFlowScreen(
             onDismiss = { showMealFlow = false },
@@ -242,7 +280,7 @@ private fun ChooseScreen(
 
 @Composable
 private fun GenerateTypeCard(
-    emoji: String,
+    @androidx.annotation.DrawableRes iconRes: Int,
     title: String,
     subtitle: String,
     enabled: Boolean,
@@ -268,12 +306,21 @@ private fun GenerateTypeCard(
             .alpha(if (enabled) 1f else 0.45f)
             .padding(24.dp),
     ) {
-        Column {
-            Text(emoji, fontSize = 30.sp)
-            Spacer(Modifier.height(8.dp))
-            Text(title, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = DeepInk)
-            Spacer(Modifier.height(4.dp))
-            Text(subtitle, fontSize = 15.sp, color = MutedGray)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = DeepInk)
+                Spacer(Modifier.height(4.dp))
+                Text(subtitle, fontSize = 15.sp, color = MutedGray)
+            }
+            Spacer(Modifier.width(16.dp))
+            Image(
+                painter = painterResource(iconRes),
+                contentDescription = null,
+                modifier = Modifier.size(72.dp),
+                contentScale = ContentScale.Fit,
+            )
         }
     }
 }
@@ -530,10 +577,7 @@ private fun HealthScreen(
             .background(OffWhite)
             .navigationBarsPadding()
             .imePadding()
-            // Tap on any non-interactive area (paddings, labels, screen
-            // background) clears focus from the limitations text field. The
-            // chips, BasicTextField, header back button, and primary CTA
-            // dismiss the keyboard from their own click handlers.
+
             .pointerInput(Unit) {
                 detectTapGestures {
                     focusManager.clearFocus()
@@ -670,9 +714,7 @@ private fun ChatScreen(
             modifier = Modifier
                 .weight(1f)
                 .padding(horizontal = 20.dp)
-                // Tapping a chat bubble or any empty space in the messages
-                // list clears focus from the input field. The input field
-                // itself and the send button consume their own taps.
+
                 .pointerInput(Unit) {
                     detectTapGestures {
                         focusManager.clearFocus()
@@ -804,8 +846,7 @@ private fun ChatScreen(
                     .clip(CircleShape)
                     .background(if (input.isNotBlank()) Coral else BorderGray)
                     .clickable(enabled = input.isNotBlank() && !isTyping) {
-                        // Drop focus on send so the keyboard collapses; the
-                        // user can tap the field again to compose a follow-up.
+
                         focusManager.clearFocus()
                         keyboardController?.hide()
                         onSend(input)
@@ -813,7 +854,12 @@ private fun ChatScreen(
                     },
                 contentAlignment = Alignment.Center,
             ) {
-                Text("↑", fontSize = 18.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                Image(
+                    painter = painterResource(R.drawable.ic_send),
+                    contentDescription = "Отправить",
+                    modifier = Modifier.size(20.dp),
+                    colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color.White),
+                )
             }
         }
     }
@@ -896,9 +942,7 @@ private fun ChipGroup(options: List<String>, selected: String, onSelect: (String
                         shape = RoundedCornerShape(24.dp),
                     )
                     .clickable {
-                        // Picking a chip should clear focus from any sibling
-                        // text input (e.g. the health limitations field on
-                        // the health step).
+
                         focusManager.clearFocus()
                         keyboardController?.hide()
                         onSelect(opt)
@@ -932,9 +976,7 @@ private fun PrimaryButton(
             .clip(RoundedCornerShape(28.dp))
             .background(color.copy(alpha = if (enabled) 1f else 0.4f))
             .clickable(enabled = enabled) {
-                // The CTA always advances/saves — clear focus first so the
-                // keyboard doesn't sit on top of the next state (next step
-                // or "saved" success card).
+
                 focusManager.clearFocus()
                 keyboardController?.hide()
                 onClick()

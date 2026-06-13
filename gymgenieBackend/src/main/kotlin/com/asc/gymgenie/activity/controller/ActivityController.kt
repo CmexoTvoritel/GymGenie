@@ -46,12 +46,6 @@ class ActivityController(
         return ResponseEntity.ok(activityService.checkin(userId, activityId, request))
     }
 
-    /**
-     * Adds an activity to the user's plan with optional scheduling.
-     *
-     * The request body is optional for backward compatibility: if omitted or
-     * all fields are null, the activity defaults to "every day".
-     */
     @PostMapping("/{activityId}/plan")
     fun addToPlan(
         authentication: Authentication,
@@ -63,10 +57,6 @@ class ActivityController(
         return ResponseEntity.noContent().build()
     }
 
-    /**
-     * Updates the schedule of an already-planned activity without removing
-     * and re-adding it.
-     */
     @PutMapping("/{activityId}/plan/schedule")
     fun updateSchedule(
         authentication: Authentication,

@@ -16,10 +16,6 @@ class ConversationSessionStore {
     fun isEmpty(userId: UUID): Boolean =
         sessions[userId].isNullOrEmpty()
 
-    /**
-     * Atomically initializes session with system + first user message only if the session is empty.
-     * Returns true if initialized, false if session already had messages (race condition).
-     */
     @Synchronized
     fun initializeIfEmpty(userId: UUID, vararg messages: GigaChatMessage): Boolean {
         if (!sessions[userId].isNullOrEmpty()) return false
@@ -33,7 +29,7 @@ class ConversationSessionStore {
         val history = sessions.getOrPut(userId) { mutableListOf() }
         history.addAll(messages)
         if (history.size > MAX_HISTORY) {
-            // Always preserve the system message at index 0
+
             val excess = history.size - MAX_HISTORY
             repeat(excess) { history.removeAt(1) }
         }
@@ -44,6 +40,6 @@ class ConversationSessionStore {
     }
 
     companion object {
-        private const val MAX_HISTORY = 21 // system + 10 user/assistant pairs
+        private const val MAX_HISTORY = 21
     }
 }

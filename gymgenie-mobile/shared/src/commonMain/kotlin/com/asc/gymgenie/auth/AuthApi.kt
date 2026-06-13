@@ -59,11 +59,11 @@ class AuthApi(
         }
     }
 
-    suspend fun register(username: String, email: String, password: String): Result<TokenResponse> {
+    suspend fun register(firstName: String, email: String, password: String): Result<TokenResponse> {
         return try {
             val response = client.post("$baseUrl/api/v1/auth/register") {
                 contentType(ContentType.Application.Json)
-                setBody(RegisterRequest(username = username, email = email, password = password))
+                setBody(RegisterRequest(firstName = firstName, email = email, password = password))
             }
             if (response.status.isSuccess()) {
                 Result.success(response.body<TokenResponse>())

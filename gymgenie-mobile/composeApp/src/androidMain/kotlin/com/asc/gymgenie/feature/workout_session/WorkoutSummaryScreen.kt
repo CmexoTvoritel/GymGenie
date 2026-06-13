@@ -1,5 +1,7 @@
 package com.asc.gymgenie.feature.workout_session
 
+import androidx.annotation.DrawableRes
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -28,16 +31,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.asc.gymgenie.R
+import com.asc.gymgenie.feature.create_workout.muscleGroupExerciseDrawable
 import com.asc.gymgenie.ui.components.GymGenieToolbar
 import com.asc.gymgenie.ui.theme.Coral
 import com.asc.gymgenie.ui.theme.WarmOffWhite
 import com.asc.gymgenie.ui.theme.CoralLight
 import com.asc.gymgenie.ui.theme.OnBackground
 import com.asc.gymgenie.ui.theme.OnSurfaceVariant
+import com.asc.gymgenie.ui.theme.StatTimerBg
+import com.asc.gymgenie.ui.theme.StatCaloriesBg
+import com.asc.gymgenie.ui.theme.StatAmountBg
+import com.asc.gymgenie.ui.theme.StatRepeatBg
 import com.asc.gymgenie.workout.ActiveExercise
 import com.asc.gymgenie.workout.CompletedSet
 import java.text.SimpleDateFormat
@@ -79,22 +90,20 @@ fun WorkoutSummaryScreen(
                     .weight(1f)
                     .fillMaxWidth()
                     .padding(bottom = 100.dp),
+                contentPadding = PaddingValues(bottom = 48.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 item {
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
 
-                    Box(
-                        modifier = Modifier
-                            .size(80.dp)
-                            .clip(CircleShape)
-                            .background(CoralLight),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text("🏆", fontSize = 36.sp)
-                    }
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_train_finish),
+                        contentDescription = null,
+                        modifier = Modifier.size(175.dp),
+                        contentScale = ContentScale.Fit,
+                    )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     Text("Отличная работа!", fontWeight = FontWeight.Bold, fontSize = 24.sp, color = OnBackground)
                     Spacer(modifier = Modifier.height(6.dp))
@@ -122,16 +131,16 @@ fun WorkoutSummaryScreen(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        StatCard("⏱", "$durationMinutes мин", "Общее время", Modifier.weight(1f))
-                        StatCard("🔥", "$estimatedCalories ккал", "Сожжено", Modifier.weight(1f))
+                        StatCard(R.drawable.ic_timer, "$durationMinutes мин", "Общее время", Modifier.weight(1f), bgColor = StatTimerBg)
+                        StatCard(R.drawable.ic_calories, "$estimatedCalories ккал", "Сожжено", Modifier.weight(1f), bgColor = StatCaloriesBg)
                     }
                     Spacer(modifier = Modifier.height(12.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        StatCard("⚖️", "$totalVolumeKg кг", "Общий объём", Modifier.weight(1f))
-                        StatCard("🏋️", "$exerciseCount", "Упражнений", Modifier.weight(1f))
+                        StatCard(R.drawable.ic_amount, "$totalVolumeKg кг", "Общий объём", Modifier.weight(1f), bgColor = StatAmountBg)
+                        StatCard(R.drawable.ic_repeat, "$exerciseCount", "Упражнений", Modifier.weight(1f), bgColor = StatRepeatBg)
                     }
 
                     Spacer(modifier = Modifier.height(28.dp))
@@ -164,6 +173,7 @@ fun WorkoutSummaryScreen(
                         val maxWeight = nonSkippedSets.maxOfOrNull { it.weightActual } ?: 0.0
                         ExerciseSummaryRow(
                             name = exercise.exerciseName,
+                            muscleGroup = exercise.muscleGroupLabel,
                             setsCount = totalSetsCount,
                             repsCount = totalReps,
                             maxWeightKg = maxWeight,
@@ -192,10 +202,11 @@ fun WorkoutSummaryScreen(
 
 @Composable
 private fun StatCard(
-    icon: String,
+    @DrawableRes iconRes: Int,
     value: String,
     label: String,
     modifier: Modifier = Modifier,
+    bgColor: Color = CoralLight,
 ) {
     Card(
         modifier = modifier,
@@ -208,10 +219,15 @@ private fun StatCard(
                 modifier = Modifier
                     .size(36.dp)
                     .clip(CircleShape)
-                    .background(CoralLight),
+                    .background(bgColor),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(icon, fontSize = 18.sp)
+                Image(
+                    painter = painterResource(id = iconRes),
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    contentScale = ContentScale.Fit,
+                )
             }
             Spacer(modifier = Modifier.height(10.dp))
             Text(value, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = OnBackground)
@@ -223,6 +239,7 @@ private fun StatCard(
 @Composable
 private fun ExerciseSummaryRow(
     name: String,
+    muscleGroup: String,
     setsCount: Int,
     repsCount: Int,
     maxWeightKg: Double,
@@ -237,15 +254,14 @@ private fun ExerciseSummaryRow(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
+            Image(
+                painter = painterResource(id = muscleGroupExerciseDrawable(muscleGroup)),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .size(36.dp)
-                    .clip(CircleShape)
-                    .background(CoralLight),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("🏋️", fontSize = 16.sp)
-            }
+                    .clip(RoundedCornerShape(8.dp)),
+            )
             Spacer(modifier = Modifier.size(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(name, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = OnBackground)

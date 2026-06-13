@@ -14,29 +14,11 @@ import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 
-/**
- * Backend client for the AI chat / workout-generation feature.
- *
- * Mirrors the same contract pattern used by [com.asc.gymgenie.workout.WorkoutApi]:
- * authentication is delegated to the injected [HttpClient] (the bearer plugin
- * configured in `createAuthenticatedClient` handles 401 + refresh), so this
- * class focuses purely on transport concerns.
- *
- * Wiring `Result<T>` back to the presenter keeps error semantics explicit at
- * the call-site: HTTP errors surface as [ApiException] (with the raw body so
- * the UI can show backend-provided messages where useful), and connectivity
- * problems surface as [NetworkException].
- */
 class AiApi(
     private val client: HttpClient,
     private val baseUrl: String = AppConfig.BASE_URL,
 ) {
 
-    /**
-     * Sends a free-form user message to the AI coach. The backend keeps a
-     * server-side session keyed by the authenticated user, so the client only
-     * needs to ship the latest message plus the static health context.
-     */
     suspend fun chat(request: AiChatRequest): Result<AiChatResponse> {
         return try {
             val response = client.post("$baseUrl/api/v1/ai/chat") {
@@ -53,10 +35,6 @@ class AiApi(
         }
     }
 
-    /**
-     * Persists a previously-returned workout plan as a real user-owned plan,
-     * so the user can later run it from the Workouts tab.
-     */
     suspend fun saveWorkout(request: SaveWorkoutRequest): Result<SaveWorkoutResponse> {
         return try {
             val response = client.post("$baseUrl/api/v1/ai/chat/save") {
@@ -73,12 +51,6 @@ class AiApi(
         }
     }
 
-    /**
-     * Overwrites a previously-saved workout plan with the freshly-refined
-     * version returned by the AI. Used when the user iterates on the same
-     * generated plan and wants the persisted entry to reflect the new contents
-     * instead of stacking up another copy.
-     */
     suspend fun replaceWorkout(planId: String, request: SaveWorkoutRequest): Result<SaveWorkoutResponse> {
         return try {
             val response = client.put("$baseUrl/api/v1/ai/chat/save/$planId") {
@@ -95,11 +67,6 @@ class AiApi(
         }
     }
 
-    /**
-     * Drops the server-side chat session. Called when the user explicitly
-     * resets the flow (back-to-start or finishes the feature) so the AI does
-     * not carry stale context across unrelated workout requests.
-     */
     suspend fun clearSession(): Result<Unit> {
         return try {
             val response = client.delete("$baseUrl/api/v1/ai/chat/session")

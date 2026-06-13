@@ -1,5 +1,6 @@
 package com.asc.gymgenie.feature.activities.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -19,9 +20,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.asc.gymgenie.R
 import com.asc.gymgenie.activity.ActivityCatalogResponse
 import com.asc.gymgenie.activity.ActivityKind
 import com.asc.gymgenie.activity.ActivityRing
@@ -56,11 +59,16 @@ fun CatalogActivityCard(
                 .background(ringColor.copy(alpha = 0.15f)),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = activity.name.take(1).uppercase(),
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = ringColor,
+            Image(
+                painter = painterResource(
+                    when (activity.ring) {
+                        ActivityRing.MOVE.name -> R.drawable.ic_activity_run
+                        ActivityRing.MIND.name -> R.drawable.ic_activity_mind
+                        else -> R.drawable.ic_activity_schedule
+                    }
+                ),
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
             )
         }
         Spacer(modifier = Modifier.width(12.dp))

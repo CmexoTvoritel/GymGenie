@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.asc.gymgenie.nutrition.todayLocalDate
 import com.asc.gymgenie.ui.theme.DeepInk
+import com.asc.gymgenie.utils.monthNameGenitive
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.Month
@@ -45,7 +46,7 @@ fun ActivityDatePicker(
         today -> "Сегодня"
         today.minus(1, DateTimeUnit.DAY) -> "Вчера"
         today.plus(1, DateTimeUnit.DAY) -> "Завтра"
-        else -> "${selectedDate.dayOfMonth} ${monthName(selectedDate.month)}"
+        else -> "${selectedDate.dayOfMonth} ${monthNameGenitive(selectedDate.month)}"
     }
 
     Row(
@@ -112,18 +113,3 @@ private fun DateArrowButton(forward: Boolean, onClick: () -> Unit) {
     }
 }
 
-private fun monthName(month: Month): String = when (month) {
-    Month.JANUARY -> "января"
-    Month.FEBRUARY -> "февраля"
-    Month.MARCH -> "марта"
-    Month.APRIL -> "апреля"
-    Month.MAY -> "мая"
-    Month.JUNE -> "июня"
-    Month.JULY -> "июля"
-    Month.AUGUST -> "августа"
-    Month.SEPTEMBER -> "сентября"
-    Month.OCTOBER -> "октября"
-    Month.NOVEMBER -> "ноября"
-    Month.DECEMBER -> "декабря"
-    else -> month.name
-}

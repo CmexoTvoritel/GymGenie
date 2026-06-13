@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -88,24 +91,41 @@ private val smallCourses = listOf(
 fun CoursesBlock(
     onSeeAll: () -> Unit = {},
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        FeaturedCourseCard(course = featuredCourse)
-
-        Row(
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            smallCourses.forEach { course ->
-                Box(modifier = Modifier.weight(1f)) {
-                    SmallCourseCard(course = course)
+            FeaturedCourseCard(course = featuredCourse)
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                smallCourses.forEach { course ->
+                    Box(modifier = Modifier.weight(1f)) {
+                        SmallCourseCard(course = course)
+                    }
                 }
             }
+
+            SeeAllCoursesButton(onClick = onSeeAll)
         }
 
-        SeeAllCoursesButton(onClick = onSeeAll)
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .clip(RoundedCornerShape(20.dp))
+                .background(Color.White.copy(alpha = 0.75f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = "В разработке",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = DeepInk,
+            )
+        }
     }
 }
 
@@ -210,10 +230,11 @@ private fun RatingPill(rating: String) {
             .padding(horizontal = 9.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = "⭐",
-            fontSize = 11.sp,
-            color = StarYellow,
+        Icon(
+            imageVector = Icons.Filled.Star,
+            contentDescription = null,
+            modifier = Modifier.size(11.dp),
+            tint = StarYellow,
         )
         Spacer(modifier = Modifier.width(3.dp))
         Text(
@@ -310,7 +331,12 @@ private fun SmallCourseCard(course: SmallCourse) {
                 Spacer(modifier = Modifier.weight(1f))
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = "⭐", fontSize = 10.sp, color = StarYellow)
+                    Icon(
+                        imageVector = Icons.Filled.Star,
+                        contentDescription = null,
+                        modifier = Modifier.size(10.dp),
+                        tint = StarYellow,
+                    )
                     Spacer(modifier = Modifier.width(3.dp))
                     Text(
                         text = course.rating,

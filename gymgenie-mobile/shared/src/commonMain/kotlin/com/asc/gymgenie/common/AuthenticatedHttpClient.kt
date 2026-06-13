@@ -9,6 +9,7 @@ import io.ktor.client.plugins.auth.authProvider
 import io.ktor.client.plugins.auth.providers.BearerAuthProvider
 import io.ktor.client.plugins.auth.providers.BearerTokens
 import io.ktor.client.plugins.auth.providers.bearer
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.http.Url
 import io.ktor.serialization.kotlinx.json.json
@@ -28,6 +29,12 @@ fun createAuthenticatedClient(
     sessionManager: SessionManager,
 ): HttpClient {
     return HttpClient {
+        install(HttpTimeout) {
+            requestTimeoutMillis = 120_000
+            connectTimeoutMillis = 15_000
+            socketTimeoutMillis = 120_000
+        }
+
         install(ContentNegotiation) {
             json(Json {
                 ignoreUnknownKeys = true

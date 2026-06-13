@@ -8,8 +8,6 @@ import jakarta.validation.constraints.Size
 import java.time.Instant
 import java.util.*
 
-// ===== Responses =====
-
 data class WorkoutSessionResponse(
     val id: UUID,
     val name: String,
@@ -52,8 +50,6 @@ data class WorkoutSessionSetResponse(
     val durationSeconds: Int?
 )
 
-// ===== Requests =====
-
 data class StartWorkoutSessionRequest(
     @field:NotBlank
     @field:Size(max = 100)
@@ -88,10 +84,6 @@ data class FinishWorkoutSessionRequest(
     val notes: String? = null
 )
 
-/**
- * Offline-first batch submit. The mobile client tracks the workout locally and
- * pushes the full session (with all sets) in a single request when finished.
- */
 data class SubmitWorkoutSessionRequest(
     @field:NotBlank
     @field:Size(max = 100)
@@ -109,6 +101,10 @@ data class SubmitWorkoutSessionRequest(
 
     @field:Size(max = 1000)
     val notes: String? = null,
+
+    val totalPlannedSets: Int? = null,
+
+    val totalPlannedExercises: Int? = null,
 
     @field:Valid
     val sets: List<SubmitSessionSetItem> = emptyList()

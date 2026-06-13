@@ -69,10 +69,6 @@ fun ActivityRingsCard(activities: List<ActivityTodayResponse>) {
 
 private data class RingTotals(val move: Float?, val mind: Float?, val life: Float?)
 
-private operator fun RingTotals.component1() = move
-private operator fun RingTotals.component2() = mind
-private operator fun RingTotals.component3() = life
-
 private fun computeRingProgress(activities: List<ActivityTodayResponse>): RingTotals {
     fun average(target: ActivityRing): Float? {
         val group = activities.filter {

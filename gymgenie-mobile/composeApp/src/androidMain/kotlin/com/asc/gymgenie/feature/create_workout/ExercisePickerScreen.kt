@@ -22,7 +22,11 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -44,7 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.asc.gymgenie.exercise.ExerciseShortResponse
 import com.asc.gymgenie.feature.workouts.components.ExerciseCard
-import com.asc.gymgenie.presentation.ExerciseDetailViewModel
+import com.asc.gymgenie.feature.workout_session.components.ExerciseDetailSheetContent
 import com.asc.gymgenie.presentation.WorkoutsViewModel
 import com.asc.gymgenie.ui.components.GymGenieToolbar
 import com.asc.gymgenie.ui.theme.AccentOrange
@@ -53,16 +57,6 @@ import com.asc.gymgenie.ui.theme.MutedText
 import com.asc.gymgenie.ui.theme.WarmOffWhite
 import org.koin.core.context.GlobalContext
 
-/**
- * Step 2 of the create-workout flow: picks the exercise.
- *
- * The screen reuses the shared [WorkoutsViewModel] strictly as a paged
- * data source — all UI state (search, filters) are disabled because this step
- * is scoped to a single pre-selected muscle group.
- *
- * Tapping the card navigates forward; tapping the small info button opens a
- * [ModalBottomSheet] with the exercise detail, without leaving this step.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExercisePickerScreen(
@@ -81,7 +75,7 @@ fun ExercisePickerScreen(
 
     val state by listViewModel.state.collectAsState()
 
-    var detailExerciseId by remember { mutableStateOf<String?>(null) }
+    var detailExercise by remember { mutableStateOf<ExerciseShortResponse?>(null) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     Column(
@@ -121,22 +115,43 @@ fun ExercisePickerScreen(
                     isLoadingMore = state.isLoadingMore,
                     hasMore = state.hasMoreExercises,
                     onExerciseSelected = onExerciseSelected,
-                    onOpenDetail = { detailExerciseId = it.id },
+                    onOpenDetail = { detailExercise = it },
                     onLoadMore = listViewModel::loadMoreExercises,
                 )
             }
         }
     }
 
-    if (detailExerciseId != null) {
+    if (detailExercise != null) {
         ModalBottomSheet(
             sheetState = sheetState,
-            onDismissRequest = { detailExerciseId = null },
+            onDismissRequest = { detailExercise = null },
             containerColor = WarmOffWhite,
         ) {
-            ExerciseDetailBottomSheetContent(
-                exerciseId = detailExerciseId!!,
+            ExerciseDetailSheetContent(
+                exerciseId = detailExercise!!.id,
             )
+
+            Button(
+                onClick = {
+                    val exercise = detailExercise
+                    detailExercise = null
+                    if (exercise != null) onExerciseSelected(exercise)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 24.dp)
+                    .height(54.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = AccentOrange),
+            ) {
+                Text(
+                    "Добавить в тренировку",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
         }
     }
 }
@@ -167,8 +182,7 @@ private fun ExercisesGrid(
     LazyVerticalGrid(
         state = gridState,
         columns = GridCells.Fixed(2),
-        // Bottom inset adds the gesture/navigation safe area on top of a 16dp
-        // floor so the last row is always reachable, independent of the device.
+
         contentPadding = PaddingValues(
             start = 20.dp,
             end = 20.dp,
@@ -179,9 +193,7 @@ private fun ExercisesGrid(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items(exercises, key = { it.id }) { exercise ->
-            // ExerciseCard now hosts the info badge inside the image area and
-            // owns the long-press gesture, so the picker no longer needs to
-            // overlay a separate Box for the badge.
+
             ExerciseCard(
                 exercise = exercise,
                 onClick = { onExerciseSelected(exercise) },
@@ -209,117 +221,6 @@ private fun ExercisesGrid(
 }
 
 @Composable
-private fun ExerciseDetailBottomSheetContent(
-    exerciseId: String,
-) {
-    val koin = remember { GlobalContext.get() }
-    val viewModel = remember(exerciseId) { koin.get<ExerciseDetailViewModel>() }
-    DisposableEffect(exerciseId) { onDispose { viewModel.onCleared() } }
-
-    LaunchedEffect(exerciseId) { viewModel.load(exerciseId) }
-
-    val state by viewModel.state.collectAsState()
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 8.dp)
-            .padding(bottom = 24.dp),
-    ) {
-        when {
-            state.isLoading && state.exercise == null -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator(color = AccentOrange)
-                }
-            }
-
-            state.errorMessage != null && state.exercise == null -> {
-                Text(
-                    text = state.errorMessage ?: "Ошибка загрузки",
-                    color = MutedText,
-                    fontSize = 14.sp,
-                    modifier = Modifier.padding(vertical = 32.dp),
-                    textAlign = TextAlign.Center,
-                )
-            }
-
-            state.exercise != null -> {
-                val exercise = state.exercise!!
-                Text(
-                    text = exercise.nameRu,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = DeepInk,
-                )
-                if (exercise.nameEn.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = exercise.nameEn,
-                        fontSize = 14.sp,
-                        color = MutedText,
-                    )
-                }
-
-                exercise.description?.takeIf { it.isNotBlank() }?.let {
-                    Spacer(modifier = Modifier.height(14.dp))
-                    SectionTitle("Описание")
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = it,
-                        fontSize = 14.sp,
-                        color = DeepInk,
-                        lineHeight = 20.sp,
-                    )
-                }
-
-                if (exercise.equipment.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(14.dp))
-                    SectionTitle("Оборудование")
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = exercise.equipment.joinToString(", "),
-                        fontSize = 14.sp,
-                        color = DeepInk,
-                    )
-                }
-
-                if (exercise.instructions.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(14.dp))
-                    SectionTitle("Техника выполнения")
-                    Spacer(modifier = Modifier.height(8.dp))
-                    exercise.instructions.forEachIndexed { index, step ->
-                        Text(
-                            text = "${index + 1}. $step",
-                            fontSize = 14.sp,
-                            color = DeepInk,
-                            lineHeight = 20.sp,
-                        )
-                        if (index < exercise.instructions.lastIndex) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SectionTitle(title: String) {
-    Text(
-        text = title,
-        fontSize = 15.sp,
-        fontWeight = FontWeight.Bold,
-        color = DeepInk,
-    )
-}
-
-@Composable
 private fun ErrorBlock(message: String, onRetry: () -> Unit) {
     Column(
         modifier = Modifier
@@ -328,7 +229,12 @@ private fun ErrorBlock(message: String, onRetry: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(text = "⚠️", fontSize = 36.sp)
+        Icon(
+            imageVector = Icons.Outlined.Warning,
+            contentDescription = null,
+            modifier = Modifier.size(36.dp),
+            tint = AccentOrange,
+        )
         Spacer(modifier = Modifier.height(12.dp))
         Text(
             text = message,
@@ -356,7 +262,12 @@ private fun EmptyBlock() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(text = "📦", fontSize = 44.sp)
+        Icon(
+            imageVector = Icons.Outlined.Inbox,
+            contentDescription = null,
+            modifier = Modifier.size(44.dp),
+            tint = MutedText,
+        )
         Spacer(modifier = Modifier.height(12.dp))
         Text(
             text = "Упражнений пока нет",

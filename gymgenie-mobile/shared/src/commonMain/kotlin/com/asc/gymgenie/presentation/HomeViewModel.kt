@@ -41,7 +41,7 @@ data class HomeUiState(
     val isContentLoaded: Boolean = false,
     val isRefreshing: Boolean = false,
     val errorMessage: String? = null,
-    val username: String = "",
+    val name: String = "",
     val subscriptionType: String = "FREE",
     val streakDays: Int = 0,
     val activeWorkoutPlans: List<WorkoutPlanShortResponse> = emptyList(),
@@ -75,6 +75,7 @@ class HomeViewModel(
     }
 
     private var loadJob: Job? = null
+    private var mealPlanJob: Job? = null
 
     fun load() {
         if (_state.value.isContentLoaded) return
@@ -147,10 +148,20 @@ class HomeViewModel(
         }
     }
 
-    fun refreshMealPlans() {
-        if (_state.value.isLoadingMealPlans) return
-        _state.update { it.copy(errorMessage = null) }
+    fun refreshTodayActivities() {
         scope.launch {
+            if (tokenStorage.getAccessToken() == null) {
+                sessionManager.triggerLogout()
+                return@launch
+            }
+            fetchTodayActivities()
+        }
+    }
+
+    fun refreshMealPlans() {
+        mealPlanJob?.cancel()
+        _state.update { it.copy(errorMessage = null) }
+        mealPlanJob = scope.launch {
             if (tokenStorage.getAccessToken() == null) {
                 sessionManager.triggerLogout()
                 return@launch
@@ -161,8 +172,9 @@ class HomeViewModel(
 
     fun selectMealDate(date: LocalDate) {
         if (date == _state.value.selectedMealDate) return
+        mealPlanJob?.cancel()
         _state.update { it.copy(selectedMealDate = date, todayMealPlans = emptyList()) }
-        scope.launch {
+        mealPlanJob = scope.launch {
             if (tokenStorage.getAccessToken() == null) {
                 sessionManager.triggerLogout()
                 return@launch
@@ -179,6 +191,7 @@ class HomeViewModel(
         scope.cancel()
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
         loadJob = null
+        mealPlanJob = null
         _state.value = HomeUiState()
     }
 
@@ -258,6 +271,32 @@ class HomeViewModel(
         }
     }
 
+    fun removeFromPlan(activityId: String) {
+        val removed = _state.value.todayActivities.firstOrNull {
+            it.activityId == activityId
+        } ?: return
+
+        _state.update { current ->
+            current.copy(todayActivities = current.todayActivities.filter { it.activityId != activityId })
+        }
+
+        scope.launch {
+            activityApi.removeFromPlan(activityId).onFailure { error ->
+                if (shouldLogOut(error)) {
+                    tokenStorage.clearTokens()
+                    sessionManager.triggerLogout()
+                    return@launch
+                }
+                _state.update { current ->
+                    current.copy(
+                        todayActivities = current.todayActivities + removed,
+                        activityError = "Не удалось удалить активность",
+                    )
+                }
+            }
+        }
+    }
+
     fun clearActivityError() {
         _state.update { it.copy(activityError = null) }
     }
@@ -271,7 +310,7 @@ class HomeViewModel(
                 _state.update {
                     it.copy(
                         userProfile = profile,
-                        username = profile.username,
+                        name = profile.firstName ?: "",
                         subscriptionType = profile.subscriptionType,
                     )
                 }

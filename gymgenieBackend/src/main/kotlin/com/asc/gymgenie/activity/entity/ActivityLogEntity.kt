@@ -8,13 +8,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.util.*
 
-/**
- * A single check-in by a user for a given activity on a given calendar day.
- *
- * The unique constraint on (user_id, activity_id, log_date) enforces "one log per activity per day"
- * and is what makes the [com.asc.gymgenie.activity.service.ActivityService] check-in flow an upsert
- * rather than a free-form insert.
- */
 @Entity
 @Table(
     name = "activity_logs",
@@ -45,7 +38,6 @@ class ActivityLogEntity(
     @Column(name = "log_date", nullable = false)
     var logDate: LocalDate,
 
-    /** 1 for BINARY check-ins, raw count for COUNTER/PRESET. */
     @Column(nullable = false)
     var value: Int,
 

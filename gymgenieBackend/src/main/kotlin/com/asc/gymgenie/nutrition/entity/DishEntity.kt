@@ -3,14 +3,6 @@ package com.asc.gymgenie.nutrition.entity
 import jakarta.persistence.*
 import java.util.*
 
-/**
- * A concrete dish/food item composing a [MealEntity].
- *
- * Macro fields are nullable Ints by design: GigaChat is allowed to skip them
- * when it cannot reliably estimate a value, and we prefer a `null` macro
- * over a fabricated one. Persistence does not derive macros from any
- * catalog — the AI freely produces dish names and parameters.
- */
 @Entity
 @Table(name = "dishes")
 class DishEntity(
@@ -29,10 +21,6 @@ class DishEntity(
     @Column(length = 500)
     var description: String? = null,
 
-    /**
-     * Free-form portion description (e.g. "150г", "1 стакан", "2 куска").
-     * Stored as text because the AI does not commit to a single unit system.
-     */
     @Column(length = 50)
     var portionDescription: String? = null,
 
@@ -47,5 +35,9 @@ class DishEntity(
     @Column(name = "food_product_id")
     var foodProductId: UUID? = null,
 
-    var grams: Double? = null
+    var grams: Double? = null,
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "food_category", length = 32)
+    var foodCategory: FoodCategory? = null
 )

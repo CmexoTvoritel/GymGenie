@@ -35,79 +35,6 @@ import com.asc.gymgenie.ui.theme.Coral
 import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
 
-/**
- * Back row used at the top of every step of the create-workout flow.
- *
- * Kept as a small building block instead of a full top app bar because the
- * existing design language uses a subtle title/back combination rather than
- * a solid Material app bar.
- */
-@Composable
-internal fun CreateWorkoutTopBar(
-    title: String,
-    subtitle: String? = null,
-    onBack: () -> Unit,
-    showCloseIcon: Boolean = false,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .statusBarsPadding()
-            .padding(horizontal = 12.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .shadow(2.dp, CircleShape)
-                .clip(CircleShape)
-                .background(Color.White)
-                .clickable { onBack() },
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = if (showCloseIcon) Icons.Filled.Close
-                    else Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = if (showCloseIcon) "Закрыть" else "Назад",
-                tint = DeepInk,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-
-        Spacer(modifier = Modifier.width(12.dp))
-
-        androidx.compose.foundation.layout.Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = DeepInk,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (!subtitle.isNullOrBlank()) {
-                Text(
-                    text = subtitle,
-                    fontSize = 12.sp,
-                    color = MutedText,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
-}
-
-/**
- * Step indicator shown under the toolbar on every numbered step of the
- * "add exercise" sub-flow.
- *
- * Renders the canonical "Шаг X из Y" label plus a coral progress bar whose
- * fill mirrors `currentStep / totalSteps`. The component is intentionally
- * non-scrollable: callers place it between the toolbar and the scrollable
- * content so the indicator stays pinned regardless of list size.
- */
 @Composable
 internal fun WorkoutFlowStepHeader(
     currentStep: Int,
@@ -151,11 +78,6 @@ internal fun WorkoutFlowStepHeader(
 
 private val StepHeaderTrackColor = Color(0xFFE0E0E0)
 
-/**
- * Small stepper button used in the exercise config and rest time steppers.
- *
- * Disabled state uses a muted gray so "already at limit" is visually obvious.
- */
 @Composable
 internal fun StepperCircleButton(
     symbol: String,

@@ -45,26 +45,17 @@ import com.asc.gymgenie.ui.theme.AccentOrange
 import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
 import com.asc.gymgenie.ui.theme.WarmOffWhite
+import com.asc.gymgenie.utils.WeekdayLabelsRu
 import kotlinx.serialization.Serializable
 
-/**
- * Configuration for a single activity goal.
- *
- * Kept as a UI-only model local to this feature because the screen is purely
- * local-state (no backend persistence yet).
- */
 @Serializable
 data class GoalCategory(
-    val emoji: String,
     val title: String,
     val unit: String,
     val defaultValue: Int,
     val step: Int,
 ) {
-    /**
-     * Upper bound for the goal counter. Derived from the unit so the UI cannot
-     * produce silly values (e.g. 100000 steps or 500 glasses of water).
-     */
+
     val maxValue: Int
         get() = when (unit) {
             "шагов" -> 50_000
@@ -75,7 +66,7 @@ data class GoalCategory(
         }
 }
 
-private val daysOfWeek = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
+private val daysOfWeek = WeekdayLabelsRu
 private val reminderIntervals = listOf(1, 2, 3, 4)
 
 @Composable
@@ -106,7 +97,7 @@ fun ActivityGoalSettingsScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            HeroSection(emoji = category.emoji, title = category.title)
+            HeroSection(title = category.title)
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -231,20 +222,13 @@ private fun TopBar(onBack: () -> Unit) {
 }
 
 @Composable
-private fun HeroSection(emoji: String, title: String) {
+private fun HeroSection(title: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(
-            text = emoji,
-            fontSize = 72.sp,
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
         Text(
             text = title,
             color = DeepInk,

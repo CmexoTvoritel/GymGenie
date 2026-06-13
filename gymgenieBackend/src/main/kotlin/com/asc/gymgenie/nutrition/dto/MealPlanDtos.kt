@@ -15,8 +15,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.util.*
 
-// ===== List/short =====
-
 data class MealPlanShortResponse(
     val id: UUID,
     val name: String,
@@ -28,8 +26,6 @@ data class MealPlanShortResponse(
     val createdAt: Instant
 )
 
-// ===== Detail =====
-
 data class MealPlanDetailResponse(
     val id: UUID,
     val name: String,
@@ -38,7 +34,7 @@ data class MealPlanDetailResponse(
     val totalCalories: Int?,
     val createdBy: NutritionCreatedBy,
     val scheduleType: WorkoutScheduleType?,
-    /** Upper-case weekday names (e.g. ["MONDAY", "WEDNESDAY"]); empty unless [scheduleType] is RECURRING. */
+
     val scheduleDays: List<String>,
     val oneOffDate: String?,
     val meals: List<MealResponse>,
@@ -63,17 +59,10 @@ data class DishResponse(
     val carbsG: Int?,
     val fatG: Int?,
     val foodProductId: UUID? = null,
-    val grams: Double? = null
+    val grams: Double? = null,
+    val foodCategory: String? = null
 )
 
-// ===== Manual creation =====
-
-/**
- * Manual meal-plan creation request. The client picks catalog products
- * (each with a portion in grams) and the server expands them into a single
- * [com.asc.gymgenie.nutrition.entity.MealEntity] of type [mealType] with one
- * [com.asc.gymgenie.nutrition.entity.DishEntity] per item.
- */
 data class CreateManualMealPlanRequest(
 
     @field:NotBlank
@@ -91,10 +80,8 @@ data class CreateManualMealPlanRequest(
     @field:NotNull
     val scheduleType: WorkoutScheduleType,
 
-    /** Upper-case weekday names (e.g. ["MONDAY"]); required when [scheduleType] is RECURRING. */
     val scheduleDays: List<String> = emptyList(),
 
-    /** Required when [scheduleType] is ONE_TIME. */
     val oneOffDate: LocalDate? = null,
 
     @field:NotEmpty
@@ -118,16 +105,9 @@ data class ManualMealItemDto(
     val portionDescription: String? = null,
 )
 
-// ===== Booked-days view =====
-
-/**
- * Calendar slots already occupied by the user's existing plans for a given
- * meal type. Used by the mobile manual-creation flow to disable already-booked
- * days/dates in the date picker.
- */
 data class BookedDaysResponse(
-    /** Distinct upper-case weekday names from RECURRING plans (e.g. ["MONDAY", "WEDNESDAY"]). */
+
     val recurringDays: List<String>,
-    /** Distinct ISO-8601 date strings (yyyy-MM-dd) from ONE_TIME plans. */
+
     val oneOffDates: List<String>
 )

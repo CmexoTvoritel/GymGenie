@@ -33,6 +33,7 @@ import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material.icons.outlined.LocalFireDepartment
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -56,9 +57,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.asc.gymgenie.exercise.ExerciseDetailResponse
-import com.asc.gymgenie.feature.workouts.components.muscleGroupEmoji
+import com.asc.gymgenie.feature.create_workout.muscleGroupExerciseDrawable
 import com.asc.gymgenie.presentation.ExerciseDetailViewModel
+import com.asc.gymgenie.utils.muscleGroupNameRu
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import com.asc.gymgenie.ui.theme.AccentOrange
 import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
@@ -127,7 +133,12 @@ private fun ErrorState(message: String, onRetry: () -> Unit, onBack: () -> Unit)
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(text = "⚠️", fontSize = 36.sp)
+        Icon(
+            imageVector = Icons.Outlined.Warning,
+            contentDescription = null,
+            modifier = Modifier.size(36.dp),
+            tint = com.asc.gymgenie.ui.theme.AccentOrange,
+        )
         Spacer(modifier = Modifier.height(12.dp))
         Text(
             text = message,
@@ -174,7 +185,6 @@ private fun ExerciseDetailContent(
             }
         }
 
-        // Floating back button — always on top of scroll
         Box(
             modifier = Modifier
                 .align(Alignment.TopStart)
@@ -195,7 +205,6 @@ private fun ExerciseDetailContent(
             )
         }
 
-        // Sticky bottom "Add to workout" button.
         BottomAddButton(
             onClick = onAddToWorkout,
             modifier = Modifier.align(Alignment.BottomCenter),
@@ -212,9 +221,11 @@ private fun HeroSection(exercise: ExerciseDetailResponse) {
             .background(SoftCard),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = muscleGroupEmoji(exercise.muscleGroup),
-            fontSize = 72.sp,
+        Image(
+            painter = painterResource(id = muscleGroupExerciseDrawable(exercise.muscleGroup)),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop,
         )
     }
 }
@@ -233,7 +244,7 @@ private fun ContentSheet(exercise: ExerciseDetailResponse) {
 
         val statItems = buildList {
             if (exercise.muscleGroup.isNotEmpty()) {
-                add(StatItem(Icons.Outlined.FitnessCenter, muscleGroupRu(exercise.muscleGroup), muscleGroupStatColor(exercise.muscleGroup)))
+                add(StatItem(Icons.Outlined.FitnessCenter, muscleGroupNameRu(exercise.muscleGroup), muscleGroupStatColor(exercise.muscleGroup)))
             }
             exercise.secondsPer10Reps?.let {
                 add(StatItem(Icons.Outlined.Schedule, "$it сек/10 повт.", AccentOrange))
@@ -333,7 +344,7 @@ private fun ContentSheet(exercise: ExerciseDetailResponse) {
             ) {
                 exercise.secondaryMuscleGroups.forEach { group ->
                     Text(
-                        text = secondaryMuscleGroupRu(group),
+                        text = muscleGroupNameRu(group),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = DeepInk,
@@ -359,7 +370,6 @@ private fun HeaderRow(exercise: ExerciseDetailResponse) {
         modifier = Modifier.fillMaxWidth(),
     )
 }
-
 
 private data class StatItem(val icon: ImageVector, val text: String, val color: Color)
 
@@ -473,36 +483,6 @@ private fun BottomAddButton(
     }
 }
 
-// -- Helpers --
-
-internal fun muscleGroupRu(group: String): String = when (group.uppercase()) {
-    "CHEST" -> "Грудь"
-    "BACK" -> "Спина"
-    "SHOULDERS" -> "Плечи"
-    "BICEPS" -> "Бицепс"
-    "TRICEPS" -> "Трицепс"
-    "FOREARMS" -> "Предплечья"
-    "ABS" -> "Пресс"
-    "QUADRICEPS" -> "Квадрицепс"
-    "HAMSTRINGS" -> "Бицепс бедра"
-    "CALVES" -> "Икры"
-    "GLUTES" -> "Ягодицы"
-    "CARDIO" -> "Кардио"
-    "FULL_BODY" -> "Всё тело"
-    else -> group
-}
-
-internal fun secondaryMuscleGroupRu(group: String): String = muscleGroupRu(group)
-
-internal fun categoryRu(category: String): String = when (category.uppercase()) {
-    "STRENGTH" -> "Сила"
-    "CARDIO" -> "Кардио"
-    "FLEXIBILITY" -> "Гибкость"
-    "BALANCE" -> "Баланс"
-    "PLYOMETRIC" -> "Плиометрика"
-    "FUNCTIONAL" -> "Функционал"
-    else -> category
-}
 
 internal fun difficultyLabel(level: String): String = when (level.uppercase()) {
     "BEGINNER" -> "Легко"

@@ -10,6 +10,7 @@ import com.arkivanov.decompose.extensions.compose.stack.Children
 import com.arkivanov.decompose.extensions.compose.stack.animation.slide
 import com.arkivanov.decompose.extensions.compose.stack.animation.stackAnimation
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
+import com.asc.gymgenie.exercise.ExerciseShortResponse
 import com.asc.gymgenie.feature.create_workout.CreateWorkoutFlowScreen
 import com.asc.gymgenie.feature.workouts.ExerciseDetailScreen
 import com.asc.gymgenie.feature.workouts.WorkoutDetailScreen
@@ -45,6 +46,17 @@ fun WorkoutsContent(
                 is WorkoutsComponent.Child.ExerciseDetail -> ExerciseDetailScreen(
                     exerciseId = instance.exerciseId,
                     onBack = component::pop,
+                    onAddToWorkout = { detailResponse ->
+                        val exerciseShort = ExerciseShortResponse(
+                            id = detailResponse.id,
+                            nameRu = detailResponse.nameRu,
+                            nameEn = detailResponse.nameEn,
+                            muscleGroup = detailResponse.muscleGroup,
+                            requiresWeight = detailResponse.requiresWeight,
+                        )
+                        component.pop()
+                        component.openCreateWorkoutWithExercise(exerciseShort)
+                    },
                 )
 
                 is WorkoutsComponent.Child.WorkoutDetail -> WorkoutDetailScreen(
@@ -60,6 +72,7 @@ fun WorkoutsContent(
                         component.pop()
                     },
                     onSaved = component::onWorkoutCreated,
+                    initialExercise = instance.initialExercise,
                 )
 
             }

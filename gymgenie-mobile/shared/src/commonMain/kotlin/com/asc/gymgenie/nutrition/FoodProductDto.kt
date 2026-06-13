@@ -2,13 +2,6 @@ package com.asc.gymgenie.nutrition
 
 import kotlinx.serialization.Serializable
 
-/**
- * Wire format for `GET /api/v1/products` and `GET /api/v1/products/{id}`.
- *
- * Kept internal to the nutrition module so transport-layer concerns
- * (kotlinx.serialization annotations, optional-with-default fields) never
- * leak into the [FoodProduct] domain model that presenters consume.
- */
 @Serializable
 internal data class FoodProductResponse(
     val id: String,

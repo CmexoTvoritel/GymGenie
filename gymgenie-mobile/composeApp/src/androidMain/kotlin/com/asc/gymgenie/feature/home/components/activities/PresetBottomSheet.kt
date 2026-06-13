@@ -1,5 +1,6 @@
 package com.asc.gymgenie.feature.home.components.activities
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,9 +29,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.asc.gymgenie.R
+import com.asc.gymgenie.activity.ActivityRing
 import com.asc.gymgenie.activity.ActivityTodayResponse
 import com.asc.gymgenie.ui.theme.ActivityCardBorder
 import com.asc.gymgenie.ui.theme.DeepInk
@@ -126,11 +130,16 @@ private fun Header(activity: ActivityTodayResponse, ringColor: Color) {
                 .background(ringColor.copy(alpha = 0.10f)),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = activity.name.take(1).uppercase(),
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = ringColor,
+            Image(
+                painter = painterResource(
+                    when (activity.ring) {
+                        ActivityRing.MOVE.name -> R.drawable.ic_activity_run
+                        ActivityRing.MIND.name -> R.drawable.ic_activity_mind
+                        else -> R.drawable.ic_activity_schedule
+                    }
+                ),
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
             )
         }
 
@@ -139,14 +148,15 @@ private fun Header(activity: ActivityTodayResponse, ringColor: Color) {
         Column {
             Text(
                 text = activity.name,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.ExtraBold,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Medium,
                 color = DeepInk,
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = "Сколько сегодня?",
-                fontSize = 13.sp,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Normal,
                 color = MutedText,
             )
         }
@@ -170,10 +180,10 @@ private fun ValueLabel(value: Int, unit: String) {
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = unit,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MutedText,
-                    modifier = Modifier.padding(bottom = 5.dp),
+                    fontSize = 34.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = DeepInk,
+                    modifier = Modifier.padding(bottom = 1.dp),
                 )
             }
         }
@@ -238,7 +248,7 @@ private fun QuickPickChip(
     ) {
         Text(
             text = label,
-            fontSize = 14.sp,
+            fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
             color = textColor,
             maxLines = 1,
@@ -259,7 +269,7 @@ private fun SaveButton(ringColor: Color, onClick: () -> Unit) {
     ) {
         Text(
             text = "Сохранить",
-            fontSize = 14.sp,
+            fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
             color = Color.White,
         )
@@ -279,7 +289,7 @@ private fun CancelButton(onClick: () -> Unit) {
     ) {
         Text(
             text = "Отмена",
-            fontSize = 14.sp,
+            fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
             color = DeepInk,
         )

@@ -12,13 +12,6 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.util.*
 
-/**
- * Read-only HTTP API for the global food product catalog.
- *
- * Endpoints require an authenticated user (enforced by SecurityConfig — anyRequest().authenticated()),
- * but the data itself is not user-scoped. The [Authentication] parameter is kept for consistency
- * with other authenticated endpoints and to make the auth requirement explicit.
- */
 @RestController
 @RequestMapping("/api/v1/products")
 class FoodProductController(

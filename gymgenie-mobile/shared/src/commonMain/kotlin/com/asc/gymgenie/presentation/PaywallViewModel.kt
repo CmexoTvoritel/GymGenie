@@ -23,19 +23,6 @@ data class PaywallUiState(
     val purchaseSuccess: Boolean = false,
 )
 
-/**
- * Drives the paywall screen.
- *
- * On [purchase] the view model calls [UserApi.activateSubscription] so the
- * backend becomes the single authority for premium state, and pushes the
- * resulting profile into [UserProfileStore] so already-mounted screens pick
- * up the new [com.asc.gymgenie.user.UserProfileResponse.subscriptionType]
- * without a refetch.
- *
- * Note: real billing integration (StoreKit / BillingClient) will sit in front
- * of this call — we currently flip success unconditionally because the user
- * has, by contract of this method, already paid.
- */
 class PaywallViewModel(
     private val userApi: UserApi,
     private val userProfileStore: UserProfileStore,
@@ -52,14 +39,11 @@ class PaywallViewModel(
         if (_state.value.isPurchasing) return
         _state.update { it.copy(isPurchasing = true) }
         scope.launch {
-            // TODO:GymGenie - Front this with real billing (StoreKit/BillingClient)
-            // before calling the backend.
+
             userApi.activateSubscription().onSuccess { updatedProfile ->
                 userProfileStore.update(updatedProfile)
             }
-            // Always mark success — by contract the user has already paid;
-            // a transient backend failure shouldn't block the success screen.
-            // The next profile load will reconcile state with the server.
+
             _state.update { it.copy(isPurchasing = false, purchaseSuccess = true) }
         }
     }

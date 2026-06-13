@@ -47,7 +47,7 @@ class GigaChatAuthService(
             ?: error("Empty response from GigaChat auth endpoint")
 
         cachedToken = response.accessToken
-        // GigaChat returns expires_at as Unix timestamp in milliseconds
+
         tokenExpiresAt = response.expiresAt
         log.debug("GigaChat token refreshed, expires at {}", tokenExpiresAt)
         return response.accessToken

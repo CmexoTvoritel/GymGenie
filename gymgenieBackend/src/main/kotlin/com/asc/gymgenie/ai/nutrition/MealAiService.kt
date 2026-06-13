@@ -11,25 +11,18 @@ import com.asc.gymgenie.nutrition.repository.FoodProductRepository
 import com.asc.gymgenie.nutrition.repository.MealPlanRepository
 import com.asc.gymgenie.nutrition.repository.MealRepository
 import com.asc.gymgenie.user.repository.UserRepository
+import com.asc.gymgenie.workout.entity.WorkoutScheduleType
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import tools.jackson.databind.ObjectMapper
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.Period
+import java.time.format.DateTimeFormatter
 import java.util.UUID
 import kotlin.math.roundToInt
 
-/**
- * AI-driven meal-plan generator. Mirrors [com.asc.gymgenie.ai.service.WorkoutAiService]
- * end-to-end with two deliberate divergences:
- *  - The generated plan is single-day (no `WorkoutPlanDay` analogue): plan -> meals -> dishes.
- *  - A separate [MealConversationSessionStore] keeps meal and workout dialogs isolated.
- *
- * Like the workout flow, dishes are validated against the food product catalog:
- * each dish must reference a real [FoodProductEntity] via `foodProductId`. Hallucinated
- * product IDs are stripped; macros are recalculated from catalog per-100g values.
- */
 @Service
 class MealAiService(
     private val userRepository: UserRepository,
@@ -44,9 +37,27 @@ class MealAiService(
 
     private val log = LoggerFactory.getLogger(javaClass)
 
-    // ================================================================
-    // Chat
-    // ================================================================
+    @Volatile
+    private var cachedCatalog: Pair<Long, String>? = null
+    private val catalogCacheTtlMs = 5 * 60 * 1000L
+
+    private fun getCatalogText(): String {
+        val now = System.currentTimeMillis()
+        cachedCatalog?.let { (timestamp, text) ->
+            if (now - timestamp < catalogCacheTtlMs) return text
+        }
+        val text = buildCatalogText()
+        cachedCatalog = now to text
+        return text
+    }
+
+    private fun buildCatalogText(): String = buildString {
+        val products = foodProductRepository.findByIsActiveTrue()
+        appendLine("foodProductId|nameRu|category|cal|protein|fat|carbs (per 100g)")
+        products.forEach { fp ->
+            appendLine("${fp.id}|${fp.nameRu}|${fp.category.name}|${fp.caloriesPer100g}|${fp.proteinPer100g}|${fp.fatPer100g}|${fp.carbsPer100g}")
+        }
+    }.trimEnd()
 
     @Transactional
     fun chat(userId: UUID, request: AiMealChatRequest): AiMealChatResponse {
@@ -54,26 +65,12 @@ class MealAiService(
             .orElseThrow { NotFoundException("User not found") }
 
         if (sessionStore.isEmpty(userId)) {
-            // First message of a session: persist any newly supplied profile fields
-            // and seed the GigaChat conversation with the system prompt + a context
-            // message (profile + goal + restrictions + the user's first prompt).
+
             var profileUpdated = false
             request.ageYears?.let { user.ageYears = it; profileUpdated = true }
             request.heightCm?.let { user.heightCm = it; profileUpdated = true }
             request.weightKg?.let { user.weightKg = it; profileUpdated = true }
             if (profileUpdated) userRepository.save(user)
-
-            // Load the food product catalog so GigaChat can reference real products.
-            // Only send foodProductId, nameRu, and category — macros are recalculated
-            // server-side from per-100g values. Keeping the payload small avoids
-            // exceeding GigaChat's 8192-token context window.
-            val foodProducts = foodProductRepository.findByIsActiveTrue().map { fp ->
-                mapOf<String, Any?>(
-                    "foodProductId" to fp.id.toString(),
-                    "nameRu" to fp.nameRu,
-                    "category" to fp.category.name
-                )
-            }
 
             val contextMessage = buildContextMessage(
                 weightKg = request.weightKg ?: user.weightKg,
@@ -85,8 +82,8 @@ class MealAiService(
                 goal = request.goal,
                 dietaryRestrictions = request.dietaryRestrictions,
                 allergies = request.allergies,
-                userMessage = request.message,
-                foodProducts = foodProducts
+                mealType = request.mealType,
+                userMessage = request.message
             )
 
             val initialized = sessionStore.initializeIfEmpty(
@@ -95,8 +92,7 @@ class MealAiService(
                 GigaChatMessage("user", contextMessage)
             )
             if (!initialized) {
-                // Lost the race against a concurrent first call — treat as
-                // a regular follow-up and append only the user message.
+
                 sessionStore.addMessages(userId, GigaChatMessage("user", request.message))
             }
         } else {
@@ -109,94 +105,19 @@ class MealAiService(
 
         sessionStore.addMessages(userId, GigaChatMessage("assistant", rawResponse))
 
-        val stripped = rawResponse.trim()
-            .removePrefix("```json")
-            .removePrefix("```")
-            .removeSuffix("```")
-            .trim()
+        val stripped = extractJsonFromResponse(rawResponse)
         val cleanedJson = repairGigaChatJson(escapeControlCharsInStrings(stripped))
 
         val parsed = parseAiResponse(cleanedJson)
 
-        // Validate the plan against the food product catalog (same approach as
-        // WorkoutAiService validates exercise IDs): recalculate macros from catalog
-        // per-100g values, strip hallucinated product IDs, and reject if ALL products
-        // are hallucinated.
         if (parsed.type == AiMealResponseType.MEAL_PLAN && parsed.mealPlan != null) {
-            var plan = parsed.mealPlan
+            val plan = parsed.mealPlan
             if (plan.meals.isEmpty()) {
                 sessionStore.addMessages(
                     userId,
                     GigaChatMessage(
                         "user",
                         "Ошибка: ответ должен содержать хотя бы один приём пищи. Сгенерируй план заново."
-                    )
-                )
-                throw BadRequestException("AI returned an invalid response, please try again")
-            }
-
-            // Validate food product IDs across all dishes
-            val allDishes = plan.meals.flatMap { it.dishes }
-            val requestedProductIds = allDishes.mapNotNull { it.foodProductId }.toSet()
-
-            if (requestedProductIds.isEmpty()) {
-                // AI ignored the catalog entirely — all dishes are free-text
-                sessionStore.addMessages(
-                    userId,
-                    GigaChatMessage(
-                        "user",
-                        "Ошибка: ни одно блюдо не содержит foodProductId из каталога. " +
-                            "Пожалуйста, составь план питания строго используя только foodProductId " +
-                            "из предоставленного каталога продуктов."
-                    )
-                )
-                throw BadRequestException("AI returned an invalid response, please try again")
-            }
-
-            val existingProducts = foodProductRepository.findAllById(requestedProductIds)
-            val existingProductMap = existingProducts.associateBy { it.id!! }
-            val existingProductIds = existingProductMap.keys
-
-            val reconciledMeals = plan.meals.map { meal ->
-                val reconciledDishes = meal.dishes.map { dish ->
-                    if (dish.foodProductId != null && dish.foodProductId in existingProductIds) {
-                        val product = existingProductMap[dish.foodProductId]!!
-                        val grams = dish.grams ?: 100.0
-                        dish.copy(
-                            name = product.nameRu,
-                            calories = scalePer100g(product.caloriesPer100g, grams),
-                            proteinG = scalePer100g(product.proteinPer100g, grams),
-                            carbsG = scalePer100g(product.carbsPer100g, grams),
-                            fatG = scalePer100g(product.fatPer100g, grams),
-                            portionDescription = "${grams.toInt()}г",
-                            grams = grams
-                        )
-                    } else if (dish.foodProductId != null) {
-                        log.warn(
-                            "Removing hallucinated food product from AI response (foodProductId={}, userId={})",
-                            dish.foodProductId, userId
-                        )
-                        dish.copy(foodProductId = null, grams = null)
-                    } else {
-                        dish
-                    }
-                }
-                val mealCalories = reconciledDishes.mapNotNull { it.calories }.sum().takeIf { it > 0 }
-                meal.copy(dishes = reconciledDishes, estimatedCalories = mealCalories ?: meal.estimatedCalories)
-            }
-
-            val totalCalories = reconciledMeals.flatMap { it.dishes }.mapNotNull { it.calories }.sum().takeIf { it > 0 }
-            plan = plan.copy(meals = reconciledMeals, totalCalories = totalCalories ?: plan.totalCalories)
-
-            val validProductCount = reconciledMeals.flatMap { it.dishes }.count { it.foodProductId != null }
-            if (validProductCount == 0) {
-                sessionStore.addMessages(
-                    userId,
-                    GigaChatMessage(
-                        "user",
-                        "Ошибка: все продукты из твоего ответа не найдены в каталоге. " +
-                            "Пожалуйста, составь план питания строго используя только foodProductId " +
-                            "из предоставленного каталога."
                     )
                 )
                 throw BadRequestException("AI returned an invalid response, please try again")
@@ -218,14 +139,92 @@ class MealAiService(
         sessionStore.clearSession(userId)
     }
 
-    // ================================================================
-    // Persistence
-    // ================================================================
+    @Transactional(readOnly = true)
+    fun getBookedDays(userId: UUID, mealType: String? = null): AiMealBookedDaysResponse {
+        val plans = findScheduledPlans(userId, mealType)
+
+        val recurringDays = plans
+            .filter { it.scheduleType == WorkoutScheduleType.RECURRING }
+            .flatMap { it.scheduleDays }
+            .distinct()
+            .sortedBy { day -> try { DayOfWeek.valueOf(day).value } catch (_: Exception) { 99 } }
+
+        val oneOffDates = plans
+            .filter { it.scheduleType == WorkoutScheduleType.ONE_TIME }
+            .mapNotNull { it.oneOffDate }
+            .distinct()
+            .sorted()
+            .map { it.format(DateTimeFormatter.ISO_LOCAL_DATE) }
+
+        return AiMealBookedDaysResponse(recurringDays = recurringDays, oneOffDates = oneOffDates)
+    }
+
+    @Transactional(readOnly = true)
+    fun checkConflicts(
+        userId: UUID,
+        scheduleType: String,
+        oneOffDate: String?,
+        scheduleDays: List<String>,
+        mealType: String? = null
+    ): AiMealConflictCheckResponse {
+        val plans = findScheduledPlans(userId, mealType)
+
+        val conflicts = when (scheduleType.uppercase()) {
+            "ONE_TIME" -> {
+                val date = oneOffDate?.let { LocalDate.parse(it) }
+                    ?: return AiMealConflictCheckResponse(false)
+                plans.filter { it.scheduleType == WorkoutScheduleType.ONE_TIME && it.oneOffDate == date }
+                    .map { AiMealConflictPlan(it.id!!, it.name) }
+            }
+            "RECURRING" -> {
+                val requestedDays = scheduleDays.map { it.uppercase() }.toSet()
+                plans.filter { it.scheduleType == WorkoutScheduleType.RECURRING && it.scheduleDays.any { d -> d in requestedDays } }
+                    .map { AiMealConflictPlan(it.id!!, it.name) }
+            }
+            else -> emptyList()
+        }
+
+        return AiMealConflictCheckResponse(
+            hasConflicts = conflicts.isNotEmpty(),
+            conflicts = conflicts
+        )
+    }
+
+    private fun findScheduledPlans(userId: UUID, mealType: String?): List<MealPlanEntity> {
+        val normalized = mealType?.trim()?.uppercase()
+        return if (normalized != null && isValidMealType(normalized)) {
+            mealPlanRepository.findScheduledByUserIdAndPrimaryMealType(userId, normalized)
+        } else {
+            mealPlanRepository.findScheduledByUserId(userId)
+        }
+    }
+
+    private fun isValidMealType(value: String): Boolean =
+        value == "BREAKFAST" || value == "LUNCH" || value == "DINNER"
 
     @Transactional
     fun saveMealPlan(userId: UUID, request: SaveMealPlanRequest): UUID {
         val user = userRepository.findById(userId)
             .orElseThrow { NotFoundException("User not found") }
+
+        if (request.replaceConflictPlanIds.isNotEmpty()) {
+            request.replaceConflictPlanIds.forEach { conflictId ->
+                mealPlanRepository.findByUserIdAndId(userId, conflictId)?.let {
+                    mealPlanRepository.delete(it)
+                }
+            }
+            mealPlanRepository.flush()
+        }
+
+        val parsedScheduleType = request.scheduleType?.let { parseScheduleType(it) }
+        val parsedOneOffDate = if (parsedScheduleType == WorkoutScheduleType.ONE_TIME) {
+            request.oneOffDate?.let { LocalDate.parse(it) }
+        } else null
+        val normalizedDays = if (parsedScheduleType == WorkoutScheduleType.RECURRING) {
+            normalizeDays(request.scheduleDays)
+        } else mutableSetOf()
+
+        val primaryMealType = derivePrimaryMealType(request)
 
         val plan = mealPlanRepository.save(
             MealPlanEntity(
@@ -234,7 +233,11 @@ class MealAiService(
                 description = request.description?.take(500),
                 goal = request.goal,
                 totalCalories = request.totalCalories,
-                createdBy = NutritionCreatedBy.AI
+                createdBy = NutritionCreatedBy.AI,
+                scheduleType = parsedScheduleType,
+                oneOffDate = parsedOneOffDate,
+                scheduleDays = normalizedDays,
+                primaryMealType = primaryMealType
             )
         )
 
@@ -248,19 +251,34 @@ class MealAiService(
         val plan = mealPlanRepository.findByUserIdAndId(userId, planId)
             ?: throw NotFoundException("Meal plan not found")
 
-        // Update plan-level metadata before swapping out the children. Doing the
-        // metadata update first keeps `goal`/`totalCalories` consistent even if
-        // the meal recreate step throws.
+        if (request.replaceConflictPlanIds.isNotEmpty()) {
+            request.replaceConflictPlanIds
+                .filter { it != planId }
+                .forEach { conflictId ->
+                    mealPlanRepository.findByUserIdAndId(userId, conflictId)?.let {
+                        mealPlanRepository.delete(it)
+                    }
+                }
+            mealPlanRepository.flush()
+        }
+
         plan.name = request.name.take(100)
         plan.description = request.description?.take(500)
         plan.goal = request.goal ?: plan.goal
         plan.totalCalories = request.totalCalories ?: plan.totalCalories
+        plan.primaryMealType = derivePrimaryMealType(request) ?: plan.primaryMealType
+
+        val parsedScheduleType = request.scheduleType?.let { parseScheduleType(it) }
+        plan.scheduleType = parsedScheduleType
+        plan.oneOffDate = if (parsedScheduleType == WorkoutScheduleType.ONE_TIME) {
+            request.oneOffDate?.let { LocalDate.parse(it) }
+        } else null
+        plan.scheduleDays = if (parsedScheduleType == WorkoutScheduleType.RECURRING) {
+            normalizeDays(request.scheduleDays)
+        } else mutableSetOf()
+
         mealPlanRepository.save(plan)
 
-        // Remove existing meals via repository (orphanRemoval + CascadeType.ALL on
-        // MealPlanEntity.meals also wipes their dishes). We delete through the
-        // child repository rather than `plan.meals.clear()` to avoid surprising
-        // detach behaviour and to mirror what `WorkoutPlanService` does for days.
         val existingMeals = mealRepository.findAllByMealPlan(plan)
         if (existingMeals.isNotEmpty()) {
             mealRepository.deleteAll(existingMeals)
@@ -277,15 +295,21 @@ class MealAiService(
             throw BadRequestException("Meal plan must contain at least one meal")
         }
 
-        // Validate all referenced food product IDs up front (mirrors WorkoutAiService.saveWorkout)
         val allFoodProductIds = meals.flatMap { it.dishes }.mapNotNull { it.foodProductId }.toSet()
-        if (allFoodProductIds.isNotEmpty()) {
-            val existingIds = foodProductRepository.findAllById(allFoodProductIds).mapNotNull { it.id }.toSet()
+        val productMap: Map<UUID, FoodProductEntity> = if (allFoodProductIds.isNotEmpty()) {
+            val products = foodProductRepository.findAllById(allFoodProductIds)
+            val existingIds = products.mapNotNull { it.id }.toSet()
             val missing = allFoodProductIds - existingIds
             if (missing.isNotEmpty()) {
                 throw BadRequestException("Unknown food product IDs: $missing")
             }
+            products.associateBy { it.id!! }
+        } else {
+            emptyMap()
         }
+
+        var planTotalCalories = 0
+        var hasAnyCalories = false
 
         meals.forEach { mealReq ->
             val mealType = parseMealType(mealReq.mealType)
@@ -300,28 +324,84 @@ class MealAiService(
                 )
             )
 
+            var mealCaloriesSum = 0
+            var hasMealCalories = false
+
             mealReq.dishes.forEach { dishReq ->
+                val product = dishReq.foodProductId?.let { productMap[it] }
+
+                val resolvedName: String
+                val resolvedPortionDescription: String?
+                val resolvedCalories: Int?
+                val resolvedProtein: Int?
+                val resolvedCarbs: Int?
+                val resolvedFat: Int?
+
+                if (product != null) {
+                    val grams = dishReq.grams ?: 100.0
+                    resolvedName = product.nameRu
+                    resolvedPortionDescription = "${grams.toInt()}г"
+                    resolvedCalories = scalePer100g(product.caloriesPer100g, grams)
+                    resolvedProtein = scalePer100g(product.proteinPer100g, grams)
+                    resolvedCarbs = scalePer100g(product.carbsPer100g, grams)
+                    resolvedFat = scalePer100g(product.fatPer100g, grams)
+                } else {
+                    resolvedName = dishReq.name.take(150)
+                    resolvedPortionDescription = dishReq.portionDescription?.take(50)
+                    resolvedCalories = dishReq.calories
+                    resolvedProtein = dishReq.proteinG
+                    resolvedCarbs = dishReq.carbsG
+                    resolvedFat = dishReq.fatG
+                }
+
+                resolvedCalories?.let { mealCaloriesSum += it; hasMealCalories = true }
+
                 dishRepository.save(
                     DishEntity(
                         meal = meal,
-                        name = dishReq.name.take(150),
+                        name = resolvedName,
                         description = dishReq.description?.take(500),
-                        portionDescription = dishReq.portionDescription?.take(50),
-                        calories = dishReq.calories,
-                        proteinG = dishReq.proteinG,
-                        carbsG = dishReq.carbsG,
-                        fatG = dishReq.fatG,
+                        portionDescription = resolvedPortionDescription,
+                        calories = resolvedCalories,
+                        proteinG = resolvedProtein,
+                        carbsG = resolvedCarbs,
+                        fatG = resolvedFat,
                         foodProductId = dishReq.foodProductId,
-                        grams = dishReq.grams
+                        grams = dishReq.grams,
+                        foodCategory = product?.category
                     )
                 )
             }
+
+            if (hasMealCalories) {
+                meal.estimatedCalories = mealCaloriesSum
+                mealRepository.save(meal)
+                planTotalCalories += mealCaloriesSum
+                hasAnyCalories = true
+            }
+        }
+
+        if (hasAnyCalories) {
+            plan.totalCalories = planTotalCalories
         }
     }
 
-    // ================================================================
-    // GigaChat response parsing
-    // ================================================================
+    private fun derivePrimaryMealType(request: SaveMealPlanRequest): String? {
+        val explicit = request.mealType?.trim()?.uppercase()
+        if (explicit != null && isValidMealType(explicit)) return explicit
+
+        val fromMeals = request.meals.firstOrNull()?.mealType?.trim()?.uppercase()
+        return if (fromMeals != null && isValidMealType(fromMeals)) fromMeals else null
+    }
+
+    private fun parseScheduleType(raw: String): WorkoutScheduleType? =
+        try { WorkoutScheduleType.valueOf(raw.uppercase()) } catch (_: Exception) { null }
+
+    private fun normalizeDays(days: List<String>): MutableSet<String> =
+        days.map { it.trim().uppercase() }
+            .filter { day -> try { DayOfWeek.valueOf(day); true } catch (_: Exception) { false } }
+            .distinct()
+            .toMutableSet()
 
     private fun parseAiResponse(json: String): AiMealChatResponse {
         return try {
@@ -339,8 +419,7 @@ class MealAiService(
                     val planNode = node.get("mealPlan") ?: node.get("meal_plan")
                         ?: throw BadRequestException("AI response missing 'mealPlan' field")
                     val plan = objectMapper.treeToValue(planNode, AiMealPlanDto::class.java)
-                    // The friendly user-facing `message` is filled in by a
-                    // follow-up GigaChat call; leave empty here.
+
                     AiMealChatResponse(AiMealResponseType.MEAL_PLAN, "", plan)
                 }
 
@@ -349,7 +428,7 @@ class MealAiService(
         } catch (e: BadRequestException) {
             throw e
         } catch (e: Exception) {
-            log.error("Failed to parse AI meal response: {}", json, e)
+            log.error("Failed to parse AI meal response (length={}): {}", json.length, json.take(1000), e)
             throw BadRequestException("AI returned an invalid response, please try again")
         }
     }
@@ -359,12 +438,6 @@ class MealAiService(
         return MealType.entries.firstOrNull { it.name == normalized }
     }
 
-    /**
-     * Same string-aware control-char escaper as the workout flow. GigaChat
-     * occasionally inlines literal `\n`/`\r`/`\t` inside a JSON string,
-     * which is invalid JSON and breaks Jackson. We rewrite those chars to
-     * their proper escapes only when the cursor is inside a string literal.
-     */
     private fun escapeControlCharsInStrings(json: String): String {
         val out = StringBuilder(json.length + 16)
         var inString = false
@@ -407,11 +480,26 @@ class MealAiService(
         return out.toString()
     }
 
-    /**
-     * GigaChat sometimes drops the closing `}` of the last array element, e.g.
-     *   `"fatG":8],}}}`  or  `"calories":350]} }}`
-     * Insert one `}` before `]` and keep the remaining trailing `}`s after.
-     */
+    private fun extractJsonFromResponse(raw: String): String {
+        var text = raw.trim()
+            .removePrefix("```json")
+            .removePrefix("```")
+            .removeSuffix("```")
+            .trim()
+
+        val firstBrace = text.indexOf('{')
+        val lastBrace = text.lastIndexOf('}')
+        if (firstBrace >= 0 && lastBrace > firstBrace) {
+            val extracted = text.substring(firstBrace, lastBrace + 1)
+            log.debug("Extracted JSON from position {} to {} (total length {})", firstBrace, lastBrace, text.length)
+            return extracted
+        }
+
+        log.warn("Could not find JSON object boundaries in GigaChat response (length={}): {}",
+            text.length, text.take(500))
+        return text
+    }
+
     private fun repairGigaChatJson(json: String): String =
         json.replace(Regex("""(null|true|false|-?\d+(?:\.\d+)?|"[^"]*")\s*\]([\s,}]+)$""")) { m ->
             val value = m.groupValues[1]
@@ -419,25 +507,12 @@ class MealAiService(
             if (braces.length >= 1) "$value}]${braces.drop(1)}" else "$value}]"
         }
 
-    // ================================================================
-    // Friendly message generation (history-free)
-    // ================================================================
-
-    /**
-     * Scales a per-100g nutritional value to the given gram weight, returning
-     * a rounded non-negative integer or `null` on non-finite input.
-     */
     private fun scalePer100g(per100g: Double, grams: Double): Int? {
         val raw = per100g * grams / 100.0
         if (raw.isNaN() || raw.isInfinite()) return null
         return raw.roundToInt().coerceAtLeast(0)
     }
 
-    /**
-     * Builds a deterministic, human-readable summary of the parsed plan.
-     * Used both as input to the friendly-message GigaChat call and as the
-     * fallback message body if that call fails.
-     */
     private fun buildPlanSummary(plan: AiMealPlanDto): String = buildString {
         plan.meals.forEachIndexed { index, meal ->
             val mealLabel = mealLabel(meal.mealType)
@@ -463,42 +538,9 @@ class MealAiService(
         null -> rawType
     }
 
-    /**
-     * Produces a friendly, motivating message describing the generated plan.
-     *
-     * Intentionally NOT added to the conversation session history — like the
-     * workout flow, this is an internal formatting step and including it
-     * would pollute future turns with rendered prose.
-     */
     private fun generateFriendlyMessage(planName: String, planSummary: String): String {
-        val prompt = """
-Ты дружелюбный диетолог в фитнес-приложении. Напиши короткое мотивирующее сообщение
-для пользователя о плане питания, который ты составил.
-
-Название плана: $planName
-
-Состав плана (точно следуй порядку и параметрам, ничего не добавляй и не убирай):
-$planSummary
-
-Требования к сообщению:
-- Начни с короткого приветствия
-- Кратко упомяни название плана
-- Перечисли все приёмы пищи в том же порядке с теми же блюдами и параметрами
-- Заверши одной мотивирующей фразой
-- Только текст, без JSON, без markdown, без заголовков
-        """.trimIndent()
-
-        return try {
-            gigaChatClient.chat(listOf(GigaChatMessage("user", prompt)))
-        } catch (e: Exception) {
-            log.warn("Failed to generate friendly meal message, using fallback", e)
-            "Привет! Я составил для тебя план питания «$planName»:\n$planSummary\nПриятного аппетита!"
-        }
+        return "Привет! Я составил для тебя план питания «$planName»:\n\n$planSummary\n\nПриятного аппетита!"
     }
-
-    // ================================================================
-    // Context message
-    // ================================================================
 
     private fun buildContextMessage(
         weightKg: Double?,
@@ -508,8 +550,8 @@ $planSummary
         goal: MealGoal?,
         dietaryRestrictions: String?,
         allergies: String?,
-        userMessage: String,
-        foodProducts: List<Map<String, Any?>>
+        mealType: String?,
+        userMessage: String
     ): String = buildString {
         appendLine("=== Данные пользователя ===")
         append("Вес: ${weightKg?.let { "$it кг" } ?: "не указан"}")
@@ -519,12 +561,13 @@ $planSummary
         appendLine("Цель: ${goalLabel(goal)}")
         appendLine("Диетические ограничения: ${dietaryRestrictions?.takeIf { it.isNotBlank() } ?: "нет"}")
         appendLine("Аллергии: ${allergies?.takeIf { it.isNotBlank() } ?: "нет"}")
+        appendLine("Тип приёма пищи: ${mealTypeLabel(mealType)}")
         appendLine()
         appendLine("=== Запрос ===")
         appendLine(userMessage)
         appendLine()
-        appendLine("=== Доступные продукты (только из этого каталога) ===")
-        append(objectMapper.writeValueAsString(foodProducts))
+        appendLine("=== Доступные продукты (только из этого каталога, формат: pipe-delimited) ===")
+        append(getCatalogText())
     }
 
     private fun goalLabel(goal: MealGoal?): String = when (goal) {
@@ -534,45 +577,83 @@ $planSummary
         null -> "не указана"
     }
 
+    private fun mealTypeLabel(mealType: String?): String = when (mealType?.trim()?.uppercase()) {
+        "BREAKFAST" -> "Завтрак"
+        "LUNCH" -> "Обед"
+        "DINNER" -> "Ужин"
+        else -> "не указан"
+    }
+
     companion object {
         private val SYSTEM_PROMPT = """
 Ты персональный AI-диетолог в фитнес-приложении GymGenie.
 
+КРИТИЧНО: Твой ответ — это ТОЛЬКО чистый JSON. Ни одного символа до { и после }. Никаких рассуждений, пояснений, markdown, ```json блоков. Только JSON-объект.
+
 ПРАВИЛА:
-- Отвечай ТОЛЬКО валидным JSON без markdown блоков, без ```json, только чистый JSON
-- Составляй планы питания ТОЛЬКО из продуктов в предоставленном каталоге — используй их точные foodProductId
+- Отвечай ТОЛЬКО валидным JSON — ничего кроме JSON-объекта в ответе
+- Составляй план питания ТОЛЬКО из продуктов в предоставленном каталоге — используй их точные foodProductId
 - Учитывай физические параметры (вес, рост, возраст, пол), цель (LOSE_WEIGHT / MAINTAIN / GAIN_MUSCLE), диетические ограничения и аллергии пользователя
 - Задавай уточняющий вопрос только если информации реально недостаточно, иначе сразу составляй план
 - Отвечай на русском языке (все названия блюд, описания и сообщения — на русском)
-- Если пользователь просит изменить план — верни type:"meal_plan" с ПОЛНЫМ обновлённым планом (все приёмы пищи, включая неизменённые)
+- Если пользователь просит изменить план — верни type:"meal_plan" с ПОЛНЫМ обновлённым планом (один приём пищи со всеми продуктами)
 - Не выдумывай продукты которые противоречат указанным аллергиям или ограничениям
+- Генерируй план для ОДНОГО приёма пищи — того типа (mealType), который указан в данных пользователя
+
+ПРАВИЛА СОСТАВЛЕНИЯ ПРИЁМА ПИЩИ:
+1. Рассчитай дневную норму калорий по формуле Миффлина-Сан Жеора:
+   - Мужчины: BMR = 10 × вес(кг) + 6.25 × рост(см) − 5 × возраст − 161 + 166
+   - Женщины: BMR = 10 × вес(кг) + 6.25 × рост(см) − 5 × возраст − 161
+   - Умножь BMR на коэффициент активности 1.55 (умеренная активность)
+   - LOSE_WEIGHT: дефицит 15-20% от TDEE
+   - MAINTAIN: TDEE без изменений
+   - GAIN_MUSCLE: профицит 10-15% от TDEE
+2. Рассчитай калории для ОДНОГО приёма пищи: завтрак ~25-30% от TDEE, обед ~35-40% от TDEE, ужин ~25-30% от TDEE
+3. Баланс БЖУ:
+   - Белок: 1.6-2.2г на кг массы тела в день (для LOSE_WEIGHT ближе к 2.2г, для GAIN_MUSCLE 1.8-2г) — раздели пропорционально на этот приём
+   - Жиры: 0.8-1.2г на кг массы тела в день (минимум 0.8г) — раздели пропорционально
+   - Углеводы: остаток калорий после белков и жиров
+4. Приём пищи ОБЯЗАТЕЛЬНО должен содержать 4-6 разных продуктов для разнообразия
+5. Приём пищи ДОЛЖЕН включать источник белка (мясо, рыба, яйца, творог, бобовые)
+6. Подбирай РЕАЛИСТИЧНЫЕ порции: обед для мужчины 80-95кг это НЕ 100г курицы — это 200-300г мяса + 150-200г гарнира + овощи + соус/масло
+7. НИКОГДА не делай приём пищи из 1-2 продуктов — это не реалистичный план
+8. Используй данные per-100g из каталога для расчёта точной граммовки: если нужно 40г белка в обед, а в курице 23г белка на 100г, то нужно ~170г курицы
+9. Суммарные калории всех блюд в приёме ДОЛЖНЫ попадать в рассчитанный коридор для этого типа приёма (±10%)
+
+КАТАЛОГ ПРОДУКТОВ (формат: pipe-delimited таблица):
+- Каталог передан в формате: foodProductId|nameRu|category|cal|protein|fat|carbs (per 100g)
+- Каждая строка — один продукт с полями через |
 
 КРИТИЧЕСКИЕ ПРАВИЛА ДЛЯ ПРОДУКТОВ:
 1. Каждое блюдо (dish) ДОЛЖНО соответствовать ровно одному продукту из предоставленного каталога
-2. Поле foodProductId в каждом блюде ДОЛЖНО быть скопировано дословно из поля foodProductId каталога. Это обычная операция copy-paste, а не генерация нового значения
+2. Поле foodProductId в каждом блюде ДОЛЖНО быть скопировано дословно из первого столбца каталога. Это обычная операция copy-paste, а не генерация нового значения
 3. ЗАПРЕЩЕНО использовать продукты, которых нет в каталоге. Не выдумывай UUID, не модифицируй существующие, не комбинируй части разных id
-4. Поле grams — масса порции продукта в граммах (число от 1 до 2000)
-5. Поле name блюда = nameRu продукта из каталога (скопируй дословно)
-6. НЕ рассчитывай calories, proteinG, carbsG, fatG — сервер пересчитает макросы автоматически из каталога. Можешь указать приблизительные значения или null
-7. Если нужного продукта нет в каталоге — подбери ближайший по категории и названию из тех, что ЕСТЬ в каталоге
-8. Составные блюда разбивай на отдельные продукты: "курица с рисом" = два dish (один с Куриной грудкой, другой с Рисом)
-9. Перед тем как отправить ответ, мысленно сверь КАЖДЫЙ foodProductId с каталогом. Если хотя бы один id не находит точного совпадения — замени на ближайший существующий
-10. Нарушение этих правил делает план непригодным для использования: пользователь не сможет его сохранить, и весь ответ будет отброшен
+4. Для каждого продукта в каталоге указаны cal, protein, fat, carbs (per 100g) — используй эти значения, чтобы рассчитать нужное количество граммов каждого продукта так, чтобы суммарный приём соответствовал калорийной цели и балансу БЖУ
+5. Поле grams — ВСЕГДА масса порции продукта в ГРАММАХ (число от 1 до 2000). Даже если продукт считается поштучно (яйца, бананы и т.д.), ты ОБЯЗАН указать примерный вес в граммах (1 яйцо ≈ 60г, 1 желток ≈ 18г, 1 белок ≈ 33г, 1 банан ≈ 120г). НИКОГДА не пиши количество штук в поле grams — только граммы. Подбирай граммовку осознанно на основе нутриентов per-100g, а не наугад
+6. Поле name блюда = nameRu продукта из каталога (скопируй дословно из второго столбца)
+7. НЕ рассчитывай calories, proteinG, carbsG, fatG в ответе — сервер пересчитает макросы автоматически из каталога. Можешь указать приблизительные значения или null. Но ты ДОЛЖЕН использовать данные per-100g из каталога при выборе граммовки, чтобы итоговый приём попадал в целевую калорийность
+8. Если нужного продукта нет в каталоге — подбери ближайший по категории и названию из тех, что ЕСТЬ в каталоге
+9. Составные блюда разбивай на отдельные продукты: "курица с рисом" = два dish (один с Куриной грудкой, другой с Рисом)
+10. Перед тем как отправить ответ, мысленно сверь КАЖДЫЙ foodProductId с каталогом. Если хотя бы один id не находит точного совпадения — замени на ближайший существующий
+11. Нарушение этих правил делает план непригодным для использования: пользователь не сможет его сохранить, и весь ответ будет отброшен
 
 СТРУКТУРА ПЛАНА:
-- План состоит из приёмов пищи (meals): минимум один из BREAKFAST, LUNCH, DINNER
+- План состоит из ОДНОГО приёма пищи — того типа, который указал пользователь
+- Массив meals ДОЛЖЕН содержать ровно один элемент с mealType, который указал пользователь
 - Допустимые значения mealType строго: "BREAKFAST", "LUNCH", "DINNER" (заглавными)
-- Каждый приём пищи содержит блюда (dishes), каждое блюдо = один продукт из каталога с указанием граммовки
-- portionDescription = строка вида "150г" (масса порции)
+- Приём пищи содержит блюда (dishes), каждое блюдо = один продукт из каталога с указанием граммовки
+- portionDescription = строка вида "150г" (масса порции в граммах, НИКОГДА не "1шт" — всегда граммы)
 - totalCalories и estimatedCalories можно указать null — сервер пересчитает из каталога
 
-ФОРМАТ ОТВЕТА — строго один из двух вариантов:
+ФОРМАТ ОТВЕТА — строго один из двух вариантов (НИЧЕГО кроме JSON — ни слова до или после):
 
-Вариант 1 (уточнение, когда нужна доп. информация):
+Вариант 1 (уточнение):
 {"type":"clarification","message":"вопрос пользователю"}
 
-Вариант 2 (готовый план питания):
-{"type":"meal_plan","mealPlan":{"name":"название плана","description":"краткое описание","totalCalories":null,"meals":[{"mealType":"BREAKFAST","name":"Завтрак","estimatedCalories":null,"dishes":[{"foodProductId":"<id из каталога>","name":"Овсяные хлопья","grams":80,"portionDescription":"80г","calories":null,"proteinG":null,"carbsG":null,"fatG":null}]}]}}
+Вариант 2 (готовый план, ОБЯЗАТЕЛЬНО 4-6 dishes, ровно ОДИН meal):
+{"type":"meal_plan","mealPlan":{"name":"название","description":"описание","totalCalories":null,"meals":[{"mealType":"BREAKFAST","name":"Завтрак","estimatedCalories":null,"dishes":[{"foodProductId":"<id>","name":"Овсяные хлопья","grams":80,"portionDescription":"80г","calories":null,"proteinG":null,"carbsG":null,"fatG":null},{"foodProductId":"<id>","name":"Яичный белок","grams":100,"portionDescription":"100г","calories":null,"proteinG":null,"carbsG":null,"fatG":null},{"foodProductId":"<id>","name":"Банан","grams":120,"portionDescription":"120г","calories":null,"proteinG":null,"carbsG":null,"fatG":null},{"foodProductId":"<id>","name":"Творог 5%","grams":150,"portionDescription":"150г","calories":null,"proteinG":null,"carbsG":null,"fatG":null}]}]}}
+
+НАПОМИНАНИЕ: приём пищи ОБЯЗАН содержать 4-6 разных продуктов. План из 1-3 продуктов — НЕВАЛИДЕН и будет отброшен. Массив meals ДОЛЖЕН содержать ровно ОДИН элемент.
         """.trimIndent()
     }
 }

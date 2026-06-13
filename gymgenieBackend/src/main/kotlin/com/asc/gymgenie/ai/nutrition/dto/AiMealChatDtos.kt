@@ -7,8 +7,6 @@ import jakarta.validation.constraints.NotEmpty
 import jakarta.validation.constraints.Size
 import java.util.UUID
 
-// ===== Chat request/response =====
-
 data class AiMealChatRequest(
     @field:NotBlank
     val message: String,
@@ -19,13 +17,13 @@ data class AiMealChatRequest(
 
     val goal: MealGoal? = null,
 
-    /** Free-form dietary restrictions (e.g. вегетарианство, без свинины). */
     @field:Size(max = 500)
     val dietaryRestrictions: String? = null,
 
-    /** Free-form list of allergies. */
     @field:Size(max = 500)
-    val allergies: String? = null
+    val allergies: String? = null,
+
+    val mealType: String? = null
 )
 
 data class AiMealChatResponse(
@@ -38,13 +36,6 @@ enum class AiMealResponseType {
     CLARIFICATION, MEAL_PLAN
 }
 
-// ===== Lenient parsed DTOs (used both for GigaChat parsing and the save path) =====
-//
-// All macro/calorie fields are nullable on purpose. GigaChat occasionally omits or
-// nulls out individual fields and we prefer to persist `null` over fabricating a
-// value just to satisfy a non-null contract. This mirrors the lenient
-// `AiWorkoutExerciseParsedDto` approach in the workout flow.
-
 data class AiMealPlanDto(
     val name: String,
     val description: String? = null,
@@ -53,8 +44,7 @@ data class AiMealPlanDto(
 )
 
 data class AiMealDto(
-    /** String form because GigaChat may reply with a Russian label or unknown value;
-     *  the service maps it to [com.asc.gymgenie.nutrition.entity.MealType] safely. */
+
     val mealType: String,
     val name: String,
     val estimatedCalories: Int? = null,
@@ -73,8 +63,6 @@ data class AiDishDto(
     val grams: Double? = null
 )
 
-// ===== Save / replace =====
-
 data class SaveMealPlanRequest(
     @field:NotBlank
     @field:Size(max = 100)
@@ -87,13 +75,21 @@ data class SaveMealPlanRequest(
 
     val totalCalories: Int? = null,
 
+    val mealType: String? = null,
+
+    val scheduleType: String? = null,
+    val scheduleDays: List<String> = emptyList(),
+    val oneOffDate: String? = null,
+
+    val replaceConflictPlanIds: List<UUID> = emptyList(),
+
     @field:Valid
     @field:NotEmpty
     val meals: List<SaveMealRequest> = emptyList()
 )
 
 data class SaveMealRequest(
-    /** String form for parity with [AiMealDto]; the service validates and converts to enum. */
+
     @field:NotBlank
     val mealType: String,
 
@@ -128,4 +124,19 @@ data class SaveDishRequest(
 
 data class SaveMealPlanResponse(
     val mealPlanId: UUID
+)
+
+data class AiMealBookedDaysResponse(
+    val recurringDays: List<String> = emptyList(),
+    val oneOffDates: List<String> = emptyList()
+)
+
+data class AiMealConflictCheckResponse(
+    val hasConflicts: Boolean,
+    val conflicts: List<AiMealConflictPlan> = emptyList()
+)
+
+data class AiMealConflictPlan(
+    val planId: UUID,
+    val planName: String
 )

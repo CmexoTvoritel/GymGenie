@@ -1,12 +1,6 @@
 import SwiftUI
 import Shared
 
-/// Step 3 — configure sets / reps (and optionally per-set weight) for the
-/// chosen exercise before it is added to the pending workout.
-///
-/// The view does not mutate the shared ViewModel directly. It assembles a
-/// `PendingExercise` and hands it to `onConfirm`, letting the parent decide
-/// whether to push, replace, or merge.
 struct ExerciseConfigView: View {
     let exercise: Shared.ExerciseShortResponse
     let onBack: () -> Void
@@ -23,12 +17,6 @@ struct ExerciseConfigView: View {
 
     @State private var detailExerciseId: String? = nil
 
-    /// Custom init bridges optional `prefillFrom` into `@State` defaults.
-    /// When [prefillFrom] is nil the view behaves identically to the "add
-    /// new exercise" surface — defaults come from `CreateWorkoutLimits` and
-    /// the wizard step header is shown. When non-nil the steppers seed from
-    /// the existing row and the consumer typically passes
-    /// `showStepHeader: false` for a clean edit screen.
     init(
         exercise: Shared.ExerciseShortResponse,
         onBack: @escaping () -> Void,
@@ -49,14 +37,6 @@ struct ExerciseConfigView: View {
         let initialSets = prefillFrom.map { Int($0.sets) } ?? defaultSets
         let initialReps = prefillFrom.map { Int($0.reps) } ?? defaultReps
 
-        // Decode the prefilled weight list once: collect non-nil values, pick
-        // a fallback, and pad/trim to `initialSets`. The same fallback feeds
-        // both the uniform stepper and the per-set list so the user sees a
-        // consistent number when toggling modes.
-        //
-        // Kotlin `List<Double?>?` arrives as `NSArray` of `KotlinDouble`,
-        // surfaced in Swift as `[Any]`; cast each entry through `KotlinDouble`
-        // before reading `doubleValue`.
         let prefilledWeights: [Double] = (prefillFrom?.setWeightsKg ?? []).compactMap {
             ($0 as? KotlinDouble)?.doubleValue
         }
@@ -104,9 +84,6 @@ struct ExerciseConfigView: View {
     private var maxWeight: Double { Shared.CreateWorkoutLimits.shared.MAX_WEIGHT_KG }
     private var weightStep: Double { Shared.CreateWorkoutLimits.shared.WEIGHT_STEP_KG }
 
-    /// Two-way toggle that drives the weight configuration UI on this screen.
-    /// `uniform` shares a single stepper across every set; `perSet` reveals
-    /// one stepper per set so the user can pyramid up/down.
     private enum WeightMode { case uniform, perSet }
 
     var body: some View {
@@ -138,9 +115,7 @@ struct ExerciseConfigView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(warmOffWhite.ignoresSafeArea())
         .onChange(of: sets) { newCount in
-            // Keep `perSetWeightsKg` in lock-step with `sets`: extend with the
-            // last picked value (so the user does not have to re-enter the
-            // dominant weight), or trim when the user decreases the set count.
+
             if perSetWeightsKg.count != newCount {
                 if newCount > perSetWeightsKg.count {
                     let seed = perSetWeightsKg.last ?? uniformWeightKg
@@ -162,31 +137,33 @@ struct ExerciseConfigView: View {
                 ExerciseDetailView(
                     exerciseId: id,
                     onBack: { detailExerciseId = nil },
-                    onAddToWorkout: { _ in detailExerciseId = nil }
+                    onAddToWorkout: { _ in detailExerciseId = nil },
+                    showAddButton: false
                 )
             }
         }
     }
 
-    // MARK: - Exercise summary
-
     private var exerciseSummary: some View {
         HStack(spacing: 14) {
             ZStack {
-                RoundedRectangle(cornerRadius: 14).fill(softCard)
+                RoundedRectangle(cornerRadius: 14, style: .continuous).fill(softCard)
                     .frame(width: 64, height: 64)
-                Text(muscleGroupEmoji(exercise.muscleGroup))
-                    .font(.system(size: 30))
+                Image(muscleGroupExerciseImageName(exercise.muscleGroup))
+                    .resizable()
+                    .aspectRatio(1, contentMode: .fit)
+                    .frame(width: 64, height: 64)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(exercise.nameRu)
-                    .font(.system(size: 18, weight: .bold)) // bumped +2pt per spec
+                    .font(.system(size: 18, weight: .bold))
                     .foregroundColor(deepInk)
                     .lineLimit(2)
                 if !exercise.muscleGroup.isEmpty {
-                    Text(muscleGroupDisplayNameRu(exercise.muscleGroup))
-                        .font(.system(size: 14)) // bumped +2pt per spec
+                    Text(muscleGroupNameRu(exercise.muscleGroup))
+                        .font(.system(size: 14))
                         .foregroundColor(mutedText)
                         .lineLimit(1)
                 }
@@ -194,10 +171,6 @@ struct ExerciseConfigView: View {
 
             Spacer(minLength: 8)
 
-            // Info entry point — opens the read-only detail sheet. 8pt
-            // leading-padding requirement is satisfied by the `Spacer`'s
-            // `minLength`, which guarantees the icon never collides with
-            // the text column.
             Button {
                 detailExerciseId = exercise.id
             } label: {
@@ -241,8 +214,6 @@ struct ExerciseConfigView: View {
         .padding(.vertical, 4)
         .background(RoundedRectangle(cornerRadius: 16).fill(softCard))
     }
-
-    // MARK: - Weight section
 
     private var weightCard: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -357,7 +328,7 @@ struct ExerciseConfigView: View {
     ) -> some View {
         HStack {
             Text(title)
-                .font(.system(size: 17, weight: .semibold)) // bumped +2pt per spec
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundColor(deepInk)
 
             Spacer()
@@ -397,8 +368,6 @@ struct ExerciseConfigView: View {
         .disabled(disabled)
     }
 
-    // MARK: - Bottom CTA
-
     private var bottomBar: some View {
         VStack(spacing: 0) {
             LinearGradient(
@@ -423,20 +392,12 @@ struct ExerciseConfigView: View {
         }
     }
 
-    // MARK: - Confirm
-
     private func confirm() {
-        // Build the weight payload according to the contract on
-        // `Shared.PendingExercise.setWeightsKg`: non-null with length == sets
-        // when the exercise is weight-tracked, nil otherwise.
+
         let weightsForPayload: [Double]? = exercise.requiresWeight
             ? buildWeightsForPayload()
             : nil
 
-        // Kotlin `List<Double?>?` is exposed to Swift as `[KotlinDouble]?`.
-        // We never want to emit nil entries from this screen (all sets are
-        // committed with an explicit weight), so we box each Double as a
-        // `KotlinDouble` and wrap them in a non-nil array when applicable.
         let bridgedWeights: [KotlinDouble]? = weightsForPayload?.map { KotlinDouble(double: $0) }
 
         let pending = Shared.PendingExercise(
@@ -468,15 +429,10 @@ struct ExerciseConfigView: View {
         }
     }
 
-    // MARK: - Helpers
-
     private func clampedWeight(_ value: Double) -> Double {
         max(minWeight, min(maxWeight, value))
     }
 
-    /// Mirrors the Android display: integer for whole values, single decimal
-    /// otherwise. Avoids locale-dependent formatters so the number renders
-    /// identically on both platforms.
     private func formatWeightKg(_ value: Double) -> String {
         let rounded = (value * 10).rounded() / 10
         if rounded.truncatingRemainder(dividingBy: 1) == 0 {
@@ -485,22 +441,4 @@ struct ExerciseConfigView: View {
         return String(format: "%.1f кг", rounded)
     }
 
-    private func muscleGroupDisplayNameRu(_ group: String) -> String {
-        switch group.uppercased() {
-        case "CHEST": return "Грудь"
-        case "BACK": return "Спина"
-        case "SHOULDERS": return "Плечи"
-        case "BICEPS": return "Бицепс"
-        case "TRICEPS": return "Трицепс"
-        case "FOREARMS": return "Предплечья"
-        case "ABS": return "Пресс"
-        case "QUADRICEPS": return "Квадрицепс"
-        case "HAMSTRINGS": return "Бицепс бедра"
-        case "GLUTES": return "Ягодицы"
-        case "CALVES": return "Икры"
-        case "FULL_BODY": return "Всё тело"
-        case "CARDIO": return "Кардио"
-        default: return group
-        }
-    }
 }

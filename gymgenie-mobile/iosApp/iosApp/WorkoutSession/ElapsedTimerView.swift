@@ -13,7 +13,7 @@ struct ElapsedTimerView: View {
             HStack(spacing: 8) {
                 timerBox(String(format: "%02d", elapsed / 60))
                 Text(":")
-                    .font(.system(size: 42, weight: .bold))
+                    .font(.system(size: 38, weight: .bold))
                     .foregroundColor(Palette.coral)
                 timerBox(String(format: "%02d", elapsed % 60))
             }
@@ -56,10 +56,10 @@ struct ElapsedTimerView: View {
 
     private func timerBox(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 52, weight: .bold, design: .monospaced))
+            .font(.system(size: 48, weight: .bold, design: .monospaced))
             .foregroundColor(Palette.deepInk)
             .frame(maxWidth: .infinity)
-            .frame(height: 88)
+            .frame(height: 76)
             .background(
                 RoundedRectangle(cornerRadius: 16)
                     .fill(Palette.coralLight)

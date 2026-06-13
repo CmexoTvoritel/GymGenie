@@ -40,7 +40,7 @@ class WorkoutAiService(
             .orElseThrow { NotFoundException("User not found") }
 
         if (sessionStore.isEmpty(userId)) {
-            // Save profile data from request to the user's record (only if provided)
+
             var profileUpdated = false
             request.ageYears?.let { user.ageYears = it; profileUpdated = true }
             request.heightCm?.let { user.heightCm = it; profileUpdated = true }
@@ -50,10 +50,6 @@ class WorkoutAiService(
             request.healthIssues?.let { user.healthIssues = it; profileUpdated = true }
             if (profileUpdated) userRepository.save(user)
 
-            // First message: load exercise catalog + user profile into context, then atomically initialize session.
-            // requiresWeight + defaultWeightPct are exposed so GigaChat can decide whether to emit setWeightsKg
-            // and pick a plausible starting weight per exercise.
-            // defaultWeightPct is a fraction of body weight (e.g. 0.6 = 60% of user body weight).
             val exercises = exerciseRepository.findAll().map { ex ->
                 mapOf<String, Any?>(
                     "exerciseId" to ex.id.toString(),
@@ -76,7 +72,7 @@ class WorkoutAiService(
                 userMessage = request.message,
                 exercises = exercises
             )
-            // initializeIfEmpty is atomic; if a concurrent request beat us, fall through to addMessages below
+
             val initialized = sessionStore.initializeIfEmpty(
                 userId,
                 GigaChatMessage("system", SYSTEM_PROMPT),
@@ -104,10 +100,6 @@ class WorkoutAiService(
 
         val response = parseAiResponse(cleanedJson)
 
-        // Defensive filter: GigaChat occasionally hallucinates exercise UUIDs that are
-        // not present in the catalog. Strip those before the response reaches the
-        // client so the user is not blocked by a downstream save-time validation
-        // failure. The save/replace paths still validate as a second line of defence.
         if (response.type == AiResponseType.WORKOUT && response.workout != null) {
             val workout = response.workout
             val requestedIds = workout.exercises.map { it.exerciseId }.toSet()
@@ -143,24 +135,12 @@ class WorkoutAiService(
                 )
             }
 
-            // Reconcile per-set weights against the declared sets count for each surviving exercise.
-            // GigaChat occasionally returns a setWeightsKg array whose length drifts from `sets`
-            // (off-by-one, mismatched pyramid plan, etc.). We silently pad/trim instead of rejecting
-            // the exercise so we don't discard otherwise good weight guidance. The catalog tells us
-            // whether weights are expected at all — for requiresWeight=false exercises we drop the
-            // field entirely even if the model emitted one by mistake.
             val exerciseEntityMap = existingExercises.associateBy { it.id!! }
             val normalized = valid.map { ex ->
                 val catalogEntry = exerciseEntityMap[ex.exerciseId]
                 reconcileAiExerciseSetWeights(ex, catalogEntry?.requiresWeight ?: false)
             }
 
-            // Step 2: build a deterministic textual description of the validated
-            // exercises using real catalog names, then ask GigaChat (as a fresh
-            // standalone call — NOT part of session history) to wrap it into a
-            // friendly user-facing message. This split eliminates the divergence
-            // we used to see when the model wrote the message and picked the
-            // exercises in the same call.
             val workoutRest = workout.restSeconds
                 ?: normalized.firstOrNull()?.restSeconds
                 ?: 60
@@ -263,17 +243,13 @@ class WorkoutAiService(
             throw BadRequestException("Unknown exercise IDs: $missing")
         }
 
-        // Update plan metadata
         plan.name = request.name.take(100)
         plan.description = request.description?.take(500)
         workoutPlanRepository.save(plan)
 
-        // Remove existing days via entity-level delete so JPA lifecycle callbacks
-        // fire and CascadeType.ALL/orphanRemoval on Day.exercises deletes exercises too.
         val existingDays = workoutPlanDayRepository.findAllByWorkoutPlan(plan)
         workoutPlanDayRepository.deleteAll(existingDays)
 
-        // Create fresh day + exercises
         val day = workoutPlanDayRepository.save(
             WorkoutPlanDayEntity(
                 workoutPlan = plan,
@@ -303,15 +279,6 @@ class WorkoutAiService(
         return plan.id!!
     }
 
-    /**
-     * Normalizes the per-set weights submitted on an AI-sourced exercise and validates the basic
-     * invariants we persist (size matches `sets`, no negative or non-finite values). Returns `null`
-     * when the client did not send weights — the entity column stays unpopulated in that case.
-     *
-     * Range/step constraints (multiples of 2.5 kg, 0–500 kg) are guidance for the AI model rather
-     * than hard server-side rules: we don't want to reject a user-edited plan just because a
-     * trainer entered 27 kg or 600 kg deliberately. We only block clearly broken payloads.
-     */
     private fun normalizeAndValidateSetWeights(ex: AiWorkoutExerciseDto): List<Double?>? {
         val weights = ex.setWeightsKg?.takeIf { it.isNotEmpty() } ?: return null
         if (weights.size != ex.sets) {
@@ -334,23 +301,6 @@ class WorkoutAiService(
         return objectMapper.writeValueAsString(weights)
     }
 
-    /**
-     * Aligns GigaChat's `setWeightsKg` array with the declared `sets` count and the catalog's
-     * `requiresWeight` flag for one exercise. The model is occasionally inconsistent:
-     *  - it may emit a setWeightsKg of size != sets (off-by-one, mismatched pyramid)
-     *  - it may emit weights for an exercise whose catalog entry doesn't require weight
-     *  - it may emit a list of all nulls
-     *
-     * Strategy:
-     *  - requiresWeight=false → drop the weights regardless of what the model produced.
-     *  - non-finite/negative entries collapse to null so we never persist garbage.
-     *  - list shorter than sets → pad with nulls (let the user fill in remaining sets).
-     *  - list longer than sets → trim to sets.
-     *  - all-null list → drop entirely (no useful guidance from the model).
-     *
-     * This is silent reconciliation by design: weight is an enhancement, not a contract,
-     * so we don't reject the exercise on shape mismatches.
-     */
     private fun reconcileAiExerciseSetWeights(
         ex: AiWorkoutExerciseParsedDto,
         requiresWeight: Boolean
@@ -377,10 +327,6 @@ class WorkoutAiService(
         return if (cleaned == raw) ex else ex.copy(setWeightsKg = cleaned)
     }
 
-    /**
-     * Formats a kilogram value for human-facing prose. Drops the trailing `.0` for whole numbers
-     * (so "60" instead of "60.0") but keeps decimals when the user picked a non-integer weight.
-     */
     private fun formatWeightForMessage(value: Double): String {
         return if (value % 1.0 == 0.0) value.toLong().toString() else value.toString()
     }
@@ -389,22 +335,6 @@ class WorkoutAiService(
         sessionStore.clearSession(userId)
     }
 
-    // GigaChat sometimes emits raw control characters (e.g. literal '\n', '\r', '\t')
-    // inside JSON string values, which is invalid JSON and breaks Jackson with
-    // StreamReadException: Illegal unquoted character ((CTRL-CHAR, code 10)).
-    //
-    // This helper walks the raw JSON char-by-char, tracks whether the cursor is
-    // currently inside a JSON string literal (between unescaped double quotes),
-    // and replaces any unescaped control character (code < 32) found inside a
-    // string with its proper JSON escape sequence. Characters outside string
-    // literals are left untouched (real structural whitespace must remain).
-    //
-    // Correctness notes:
-    //  - An escape backslash inside a string defers handling of the next char,
-    //    so sequences like \" or \n are passed through verbatim and do not
-    //    toggle the inString state.
-    //  - Only chars with code < 32 are rewritten; printable chars (incl. non-ASCII)
-    //    are emitted as-is to preserve Unicode (e.g. Cyrillic) content.
     private fun escapeControlCharsInStrings(json: String): String {
         val out = StringBuilder(json.length + 16)
         var inString = false
@@ -412,8 +342,7 @@ class WorkoutAiService(
         for (ch in json) {
             if (inString) {
                 if (escaped) {
-                    // Previous char was an unescaped backslash inside a string.
-                    // Pass this char through as part of the escape sequence.
+
                     out.append(ch)
                     escaped = false
                     continue
@@ -449,9 +378,6 @@ class WorkoutAiService(
         return out.toString()
     }
 
-    // GigaChat omits the closing } of the last array element, e.g.:
-    //   "notes":null],}}}   or   "notes":null]} }}
-    // Fix: count all } after the ], put one before ], keep the rest after.
     private fun repairGigaChatJson(json: String): String =
         json.replace(Regex("""(null|true|false|-?\d+(?:\.\d+)?|"[^"]*")\s*\]([\s,}]+)$""")) { m ->
             val value = m.groupValues[1]
@@ -459,42 +385,8 @@ class WorkoutAiService(
             if (braces.length >= 1) "$value}]${braces.drop(1)}" else "$value}]"
         }
 
-    /**
-     * Produces the user-facing message for a generated workout via a standalone
-     * GigaChat call.
-     *
-     * This call is intentionally NOT added to the conversation session history:
-     * it is an internal formatting step, not part of the user's dialog. Keeping
-     * it out of history avoids polluting future turns with rendered prose and
-     * prevents the model from confusing this output with the structured
-     * workout/clarification contract.
-     *
-     * If the call fails for any reason we fall back to a deterministic
-     * template-built message so the user always receives a coherent response.
-     */
     private fun generateFriendlyMessage(workoutName: String, exerciseDescriptions: String): String {
-        val prompt = """
-Ты дружелюбный фитнес-тренер. Напиши короткое мотивирующее сообщение для пользователя о тренировке которую ты составил.
-
-Название тренировки: $workoutName
-
-Упражнения (перечисли все в том же порядке, точно с теми же параметрами):
-$exerciseDescriptions
-
-Требования к сообщению:
-- Начни с приветствия (например "Привет!")
-- Упомяни название тренировки
-- Перечисли ВСЕ упражнения с их параметрами точно как указано выше — не меняй порядок, не добавляй лишних, не убирай
-- Заверши мотивирующей фразой
-- Только текст, без JSON, без markdown, без заголовков
-        """.trimIndent()
-
-        return try {
-            gigaChatClient.chat(listOf(GigaChatMessage("user", prompt)))
-        } catch (e: Exception) {
-            log.warn("Failed to generate friendly message, using fallback", e)
-            "Привет! Я составил для тебя тренировку «$workoutName»:\n$exerciseDescriptions\nУдачной тренировки!"
-        }
+        return "Привет! Я составил для тебя тренировку «$workoutName»:\n\n$exerciseDescriptions\n\nУдачной тренировки!"
     }
 
     private fun parseAiResponse(json: String): AiChatResponse {
@@ -512,9 +404,7 @@ $exerciseDescriptions
                     val workoutNode = node.get("workout")
                         ?: throw BadRequestException("AI response missing 'workout' field")
                     val workout = objectMapper.treeToValue(workoutNode, AiWorkoutDto::class.java)
-                    // Workout responses no longer carry a 'message' field — it is
-                    // produced by a separate GigaChat call after exercise
-                    // validation. Leave it empty here; the caller fills it in.
+
                     AiChatResponse(AiResponseType.WORKOUT, "", workout)
                 }
                 else -> throw BadRequestException("Unexpected AI response type: $type")

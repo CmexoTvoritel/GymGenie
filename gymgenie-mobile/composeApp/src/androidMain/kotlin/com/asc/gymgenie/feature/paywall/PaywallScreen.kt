@@ -87,12 +87,10 @@ fun PaywallScreen(
         ) {
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Top bar
             TopBar(onSkip = onSkip)
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Title
             Text(
                 text = "Получи доступ ко всем функциям",
                 style = MaterialTheme.typography.headlineLarge,
@@ -103,16 +101,14 @@ fun PaywallScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // Features (horizontally centered)
             FeaturesList()
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // Plans
             PlanCard(
                 isSelected = state.selectedPlan == PlanType.MONTHLY,
                 title = "1 Месяц",
-                price = "799 ₽ / МО",
+                price = "499 ₽ / МО",
                 onClick = { viewModel.selectPlan(PlanType.MONTHLY) },
             )
 
@@ -121,10 +117,10 @@ fun PaywallScreen(
             PlanCard(
                 isSelected = state.selectedPlan == PlanType.YEARLY,
                 title = "1 Год",
-                price = "4 990 ₽",
-                originalPrice = "7 590 ₽",
-                badge = "ПОПУЛЯРНО",
-                subtitle = "416 ₽ / МО",
+                price = "4 790 ₽",
+                originalPrice = "5 999 ₽",
+                badge = "-20%",
+                subtitle = "399 ₽ / МО",
                 onClick = { viewModel.selectPlan(PlanType.YEARLY) },
             )
 
@@ -182,7 +178,7 @@ private fun TopBar(onSkip: () -> Unit) {
             style = MaterialTheme.typography.titleMedium,
             color = Color.Gray,
             modifier = Modifier.clickable {
-                // TODO:GymGenie - Replace with real restore logic
+
             },
         )
     }

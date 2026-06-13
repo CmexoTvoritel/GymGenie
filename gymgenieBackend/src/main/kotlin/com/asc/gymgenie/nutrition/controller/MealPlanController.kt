@@ -14,12 +14,6 @@ import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
 import java.util.UUID
 
-/**
- * HTTP API for saved meal plans. Read/delete endpoints serve plans regardless of
- * source. Plan creation is split by author:
- *  - AI-generated plans flow through `/api/v1/ai/meal/save` ([com.asc.gymgenie.ai.nutrition.AiMealController]).
- *  - Manual plans are created here via [createManual].
- */
 @RestController
 @RequestMapping("/api/v1/meal-plans")
 class MealPlanController(

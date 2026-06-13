@@ -84,21 +84,21 @@ class ActivityCatalogSeeder(
 
     companion object {
         private val SEED: List<SeedRow> = listOf(
-            // MOVE
+
             SeedRow("walk",       "Прогулка",            ActivityRing.MOVE, ActivityKind.PRESET,  listOf(15, 30, 45, 60), "мин",   30),
             SeedRow("morning",    "Утренняя зарядка",    ActivityRing.MOVE, ActivityKind.BINARY),
             SeedRow("stretch",    "Растяжка",            ActivityRing.MOVE, ActivityKind.BINARY),
             SeedRow("run",        "Бег",                 ActivityRing.MOVE, ActivityKind.PRESET,  listOf(15, 20, 30, 45), "мин",   20),
             SeedRow("bike",       "Велосипед",           ActivityRing.MOVE, ActivityKind.BINARY),
             SeedRow("swim",       "Плавание",            ActivityRing.MOVE, ActivityKind.BINARY),
-            // MIND
+
             SeedRow("meditate",   "Медитация",           ActivityRing.MIND, ActivityKind.PRESET,  listOf(5, 10, 15, 20),  "мин",   10),
             SeedRow("breath",     "Дыхательная практика",ActivityRing.MIND, ActivityKind.BINARY),
             SeedRow("read",       "Чтение",              ActivityRing.MIND, ActivityKind.PRESET,  listOf(15, 30, 45, 60), "мин",   30),
             SeedRow("journal",    "Дневник",             ActivityRing.MIND, ActivityKind.BINARY),
             SeedRow("nophone",    "Без телефона",        ActivityRing.MIND, ActivityKind.BINARY),
             SeedRow("sleep",      "Сон 8 часов",         ActivityRing.MIND, ActivityKind.BINARY),
-            // LIFE
+
             SeedRow("water",      "Вода",                ActivityRing.LIFE, ActivityKind.COUNTER, null, "стак.", 8),
             SeedRow("vitamins",   "Витамины",            ActivityRing.LIFE, ActivityKind.BINARY),
             SeedRow("shower",     "Контрастный душ",     ActivityRing.LIFE, ActivityKind.BINARY),

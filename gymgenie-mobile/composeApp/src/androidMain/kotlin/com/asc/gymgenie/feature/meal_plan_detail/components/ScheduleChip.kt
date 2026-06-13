@@ -1,5 +1,7 @@
 package com.asc.gymgenie.feature.meal_plan_detail.components
 
+import androidx.annotation.DrawableRes
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -17,25 +19,31 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.asc.gymgenie.R
 import com.asc.gymgenie.nutrition.AiMealType
 import com.asc.gymgenie.nutrition.MealPlanDetail
 import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
+import com.asc.gymgenie.utils.monthNameGenitiveFromInt
+import com.asc.gymgenie.utils.weekdayNameRu
+import com.asc.gymgenie.utils.weekdayShortRu
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.toLocalDateTime
 
 private val BorderColor = Color(0xFFEDEDEF)
 
-private data class SchedulePalette(val bg: Color, val emoji: String)
+private data class SchedulePalette(val bg: Color, @DrawableRes val iconRes: Int)
 
 private fun paletteForMealType(wireValue: String): SchedulePalette = when (wireValue.uppercase()) {
-    "BREAKFAST" -> SchedulePalette(Color(0xFFFFF6D6), "☀️")
-    "LUNCH" -> SchedulePalette(Color(0xFFFFEEDD), "🥗")
-    "DINNER" -> SchedulePalette(Color(0xFFE6E9FF), "🌙")
-    else -> SchedulePalette(Color(0xFFF4F4F6), "🍽️")
+    "BREAKFAST" -> SchedulePalette(Color(0xFFFFF6D6), R.drawable.ic_breakfast)
+    "LUNCH" -> SchedulePalette(Color(0xFFFFEEDD), R.drawable.ic_lunch)
+    "DINNER" -> SchedulePalette(Color(0xFFE6E9FF), R.drawable.ic_dinner)
+    else -> SchedulePalette(Color(0xFFF4F4F6), R.drawable.ic_lunch)
 }
 
 @Composable
@@ -67,7 +75,12 @@ fun ScheduleChip(
                 .background(palette.bg),
             contentAlignment = Alignment.Center,
         ) {
-            Text(text = palette.emoji, fontSize = 18.sp)
+            Image(
+                painter = painterResource(id = palette.iconRes),
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+                contentScale = ContentScale.Fit,
+            )
         }
 
         Spacer(modifier = Modifier.width(12.dp))
@@ -98,7 +111,7 @@ private fun buildDateLabel(plan: MealPlanDetail): String {
         val parsed = runCatching { LocalDate.parse(dateStr) }.getOrNull()
         if (parsed != null) {
             val day = parsed.dayOfMonth
-            val month = monthNameRu(parsed.monthNumber)
+            val month = monthNameGenitiveFromInt(parsed.monthNumber)
             val weekday = weekdayNameRu(parsed.dayOfWeek.name)
             return "$day $month, $weekday"
         }
@@ -123,40 +136,3 @@ private fun buildDayLabel(plan: MealPlanDetail): String? {
     }
 }
 
-private fun monthNameRu(month: Int): String = when (month) {
-    1 -> "января"
-    2 -> "февраля"
-    3 -> "марта"
-    4 -> "апреля"
-    5 -> "мая"
-    6 -> "июня"
-    7 -> "июля"
-    8 -> "августа"
-    9 -> "сентября"
-    10 -> "октября"
-    11 -> "ноября"
-    12 -> "декабря"
-    else -> ""
-}
-
-private fun weekdayNameRu(wire: String): String = when (wire.uppercase()) {
-    "MONDAY" -> "понедельник"
-    "TUESDAY" -> "вторник"
-    "WEDNESDAY" -> "среда"
-    "THURSDAY" -> "четверг"
-    "FRIDAY" -> "пятница"
-    "SATURDAY" -> "суббота"
-    "SUNDAY" -> "воскресенье"
-    else -> wire.lowercase()
-}
-
-private fun weekdayShortRu(wire: String): String = when (wire.uppercase()) {
-    "MONDAY" -> "Пн"
-    "TUESDAY" -> "Вт"
-    "WEDNESDAY" -> "Ср"
-    "THURSDAY" -> "Чт"
-    "FRIDAY" -> "Пт"
-    "SATURDAY" -> "Сб"
-    "SUNDAY" -> "Вс"
-    else -> wire
-}

@@ -120,11 +120,6 @@ class ActivitiesViewModel(
         }
     }
 
-    /**
-     * Updates the schedule of a planned activity. Applies the change
-     * optimistically to the local list so the UI reflects it immediately,
-     * and rolls back on failure.
-     */
     fun updateSchedule(
         activityId: String,
         scheduleType: String?,
@@ -135,7 +130,6 @@ class ActivitiesViewModel(
             it.activityId == activityId
         } ?: return
 
-        // Optimistic update
         applySchedule(activityId, scheduleType, scheduleDays, oneOffDate)
         _state.update { it.copy(isScheduleUpdating = true, scheduleUpdateError = null) }
 
@@ -154,7 +148,7 @@ class ActivitiesViewModel(
                         sessionManager.triggerLogout()
                         return@launch
                     }
-                    // Roll back to previous schedule values
+
                     applySchedule(
                         activityId,
                         current.scheduleType,
@@ -168,6 +162,31 @@ class ActivitiesViewModel(
                         )
                     }
                 }
+        }
+    }
+
+    fun removeFromPlan(activityId: String) {
+        val removed = _state.value.todayActivities.firstOrNull {
+            it.activityId == activityId
+        } ?: return
+
+        _state.update { current ->
+            current.copy(todayActivities = current.todayActivities.filter { it.activityId != activityId })
+        }
+
+        scope.launch {
+            activityApi.removeFromPlan(activityId).onFailure { e ->
+                if (isUnauthorized(e)) {
+                    sessionManager.triggerLogout()
+                    return@launch
+                }
+                _state.update { current ->
+                    current.copy(
+                        todayActivities = current.todayActivities + removed,
+                        error = "Не удалось удалить активность",
+                    )
+                }
+            }
         }
     }
 

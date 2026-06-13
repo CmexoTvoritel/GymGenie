@@ -25,8 +25,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.navigationBarsPadding
 import com.asc.gymgenie.ui.components.GymGenieButton
 import com.asc.gymgenie.ui.theme.Coral
+import com.asc.gymgenie.ui.theme.WarmOffWhite
 
 private val termsText = """
 Условия использования приложения GymGenie
@@ -74,8 +76,9 @@ fun PrivacyScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(WarmOffWhite)
             .statusBarsPadding()
+            .navigationBarsPadding()
             .padding(horizontal = 24.dp),
     ) {
         Spacer(modifier = Modifier.height(24.dp))
@@ -130,6 +133,6 @@ fun PrivacyScreen(
             ),
         )
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }

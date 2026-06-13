@@ -1,10 +1,10 @@
 package com.asc.gymgenie.feature.home.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -19,9 +19,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.asc.gymgenie.R
 import com.asc.gymgenie.ui.theme.Coral
 import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
@@ -45,27 +49,26 @@ fun NoWorkoutPlaceholder(
             .padding(vertical = 28.dp, horizontal = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(
-            modifier = Modifier
-                .size(52.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(Color(0xFFF4F4F6)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(text = "🏋", fontSize = 24.sp)
-        }
+        Image(
+            painter = painterResource(R.drawable.ic_weekend_day),
+            contentDescription = null,
+            modifier = Modifier.size(100.dp),
+            contentScale = ContentScale.Fit,
+        )
         Spacer(modifier = Modifier.height(12.dp))
         Text(
             text = "Сегодня выходной",
-            fontSize = 16.sp,
+            fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
             color = DeepInk,
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = "На этот день тренировки не запланированы",
-            fontSize = 13.sp,
+            fontSize = 16.sp,
             color = MutedText,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
         )
         Spacer(modifier = Modifier.height(16.dp))
         Row(
@@ -78,7 +81,7 @@ fun NoWorkoutPlaceholder(
         ) {
             Text(
                 text = "Создать тренировку",
-                fontSize = 13.sp,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
             )

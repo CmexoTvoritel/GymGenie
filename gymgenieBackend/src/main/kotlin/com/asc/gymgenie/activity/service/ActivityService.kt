@@ -44,7 +44,7 @@ class ActivityService(
         val plan = userActivityRepository.findAllByUserIdWithActivity(userId)
         if (plan.isEmpty()) return emptyList()
 
-        val dayOfWeek = date.dayOfWeek.name // "MONDAY", "TUESDAY", etc.
+        val dayOfWeek = date.dayOfWeek.name
 
         val filteredPlan = plan.filter { ua -> isScheduledFor(ua, date, dayOfWeek) }
         if (filteredPlan.isEmpty()) return emptyList()
@@ -232,17 +232,6 @@ class ActivityService(
         return days
     }
 
-    // ================================================================
-    // Scheduling helpers
-    // ================================================================
-
-    /**
-     * Determines whether a [UserActivityEntity] is scheduled for the given [date].
-     *
-     *  - null scheduleType → every day (backward compatible)
-     *  - RECURRING → matches if [dayOfWeek] is in [UserActivityEntity.scheduleDays]
-     *  - ONE_TIME → matches if [date] equals [UserActivityEntity.oneOffDate]
-     */
     private fun isScheduledFor(ua: UserActivityEntity, date: LocalDate, dayOfWeek: String): Boolean {
         return when (ua.scheduleType) {
             WorkoutScheduleType.RECURRING -> ua.scheduleDays.contains(dayOfWeek)
@@ -250,10 +239,6 @@ class ActivityService(
             null -> true
         }
     }
-
-    // ================================================================
-    // Validation helpers
-    // ================================================================
 
     private fun validateScheduling(
         scheduleType: WorkoutScheduleType,
@@ -295,10 +280,6 @@ class ActivityService(
             false
         }
 
-    // ================================================================
-    // Completion computation
-    // ================================================================
-
     private fun computeCompletion(
         dayLogs: List<ActivityLogEntity>,
         plannedActivityIds: Set<UUID>,
@@ -315,10 +296,6 @@ class ActivityService(
         return completed.toDouble() / plannedCount.toDouble()
     }
 
-    // ================================================================
-    // Mapping helpers
-    // ================================================================
-
     private fun ActivityDefinitionEntity.toCatalogResponse() = ActivityCatalogResponse(
         id = id!!,
         name = name,
@@ -330,10 +307,6 @@ class ActivityService(
         inverse = inverse
     )
 
-    /**
-     * Maps a [UserActivityEntity] to [ActivityTodayResponse] using a pre-loaded
-     * map of today's logs keyed by activity ID.
-     */
     private fun UserActivityEntity.toTodayResponse(
         logsByActivityId: Map<UUID, ActivityLogEntity>
     ): ActivityTodayResponse {
@@ -354,10 +327,6 @@ class ActivityService(
         )
     }
 
-    /**
-     * Maps a [UserActivityEntity] to [ActivityTodayResponse] using a single
-     * nullable log (used when returning a single activity after schedule update).
-     */
     private fun UserActivityEntity.toTodayResponse(
         log: ActivityLogEntity?
     ): ActivityTodayResponse {

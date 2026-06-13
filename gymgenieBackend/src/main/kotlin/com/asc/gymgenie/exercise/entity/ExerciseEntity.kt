@@ -84,9 +84,7 @@ class ExerciseEntity(
     @Column(nullable = false)
     var updatedAt: Instant = Instant.now()
 ) {
-    // Computed via SQL CASE so that Hibernate can sort by semantic difficulty order
-    // (BEGINNER=1, INTERMEDIATE=2, ADVANCED=3) rather than alphabetical enum name.
-    // SpringPhysicalNamingStrategy maps difficultyLevel → difficulty_level.
+
     @Formula("CASE difficulty_level WHEN 'BEGINNER' THEN 1 WHEN 'INTERMEDIATE' THEN 2 WHEN 'ADVANCED' THEN 3 ELSE 4 END")
     var difficultyOrder: Int = 0
 }

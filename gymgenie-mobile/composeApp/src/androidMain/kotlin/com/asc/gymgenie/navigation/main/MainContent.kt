@@ -14,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,6 +26,7 @@ import com.arkivanov.decompose.extensions.compose.subscribeAsState
 import com.asc.gymgenie.feature.main.BottomNavBar
 import com.asc.gymgenie.feature.main.BottomNavItem
 import com.asc.gymgenie.feature.paywall.PaywallScreen
+import com.asc.gymgenie.feature.paywall.PurchaseSuccessScreen
 import com.asc.gymgenie.feature.workout_session.WorkoutSessionScreen
 import com.asc.gymgenie.navigation.tabs.ai.AiContent
 import com.asc.gymgenie.navigation.tabs.home.HomeContent
@@ -51,6 +53,7 @@ fun MainContent(
     val localWorkoutRepository = remember { koin.get<LocalWorkoutRepository>() }
     val coroutineScope = rememberCoroutineScope()
     var isLoadingSession by remember { mutableStateOf(false) }
+    var showingPurchaseSuccess by rememberSaveable { mutableStateOf(false) }
 
     val onStartPlan: (String, String) -> Unit = { planId, _ ->
         if (!isLoadingSession) {
@@ -119,10 +122,19 @@ fun MainContent(
         }
 
         if (isPaywallActive) {
-            PaywallScreen(
-                onPurchaseSuccess = component::closePaywall,
-                onSkip = component::closePaywall,
-            )
+            if (showingPurchaseSuccess) {
+                PurchaseSuccessScreen(
+                    onContinue = {
+                        showingPurchaseSuccess = false
+                        component.closePaywall()
+                    },
+                )
+            } else {
+                PaywallScreen(
+                    onPurchaseSuccess = { showingPurchaseSuccess = true },
+                    onSkip = component::closePaywall,
+                )
+            }
         }
 
         if (showBottomBar) {

@@ -15,8 +15,8 @@ class UserEntity(
     @GeneratedValue(strategy = GenerationType.UUID)
     var id: UUID? = null,
 
-    @Column(nullable = false, unique = true, length = 30)
-    var username: String,
+    @Column(length = 30)
+    var username: String? = null,
 
     @Column(nullable = false, unique = true)
     var email: String,

@@ -8,23 +8,6 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
 import java.nio.charset.StandardCharsets
 
-/**
- * Seeds the global food products catalog from the bundled SQL script
- * (`classpath:db/food_products_seed.sql`).
- *
- * Behavior:
- * - Runs once on application startup, after Hibernate has created/updated
- *   the schema (ddl-auto=update).
- * - No-op when `food_products` is already populated, so it is safe across
- *   restarts and on environments where the catalog is managed externally.
- * - Executes the bundled script in a single JDBC call so PostgreSQL can
- *   parse Postgres-specific blocks (`DO $$ ... $$`, `gen_random_uuid()`,
- *   `ON CONFLICT`) as one batch. The seed script itself is idempotent
- *   (`CREATE TABLE IF NOT EXISTS`, `ON CONFLICT (name_ru) DO NOTHING`).
- *
- * Ordered after [com.asc.gymgenie.activity.seed.ActivityCatalogSeeder] to
- * keep startup seeding deterministic and easy to reason about.
- */
 @Component
 @Order(200)
 class FoodProductSeeder(

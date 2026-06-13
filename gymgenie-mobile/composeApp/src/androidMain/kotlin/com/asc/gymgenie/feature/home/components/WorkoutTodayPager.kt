@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.asc.gymgenie.ui.components.WorkoutPlanCard
 import com.asc.gymgenie.ui.theme.Coral
+import com.asc.gymgenie.utils.weekdayNameRu
 import com.asc.gymgenie.workout.WorkoutPlanShortResponse
 
 private val InactiveDot = androidx.compose.ui.graphics.Color(0xFFD5D5DB)
@@ -103,16 +104,6 @@ data class TodaySlot(
     val isRecommended: Boolean,
 )
 
-private val DayNamesRu = mapOf(
-    "MONDAY" to "понедельник",
-    "TUESDAY" to "вторник",
-    "WEDNESDAY" to "среда",
-    "THURSDAY" to "четверг",
-    "FRIDAY" to "пятница",
-    "SATURDAY" to "суббота",
-    "SUNDAY" to "воскресенье",
-)
-
 fun resolveTodaySlot(
     activePlans: List<WorkoutPlanShortResponse>,
     today: String,
@@ -125,7 +116,7 @@ fun resolveTodaySlot(
     val oneOff = activePlans.filter {
         it.scheduleType.equals("ONE_TIME", ignoreCase = true)
     }
-    val dayRu = DayNamesRu[todayUpper] ?: todayUpper.lowercase()
+    val dayRu = weekdayNameRu(todayUpper)
 
     return when {
         recurringToday.isNotEmpty() -> TodaySlot(

@@ -31,9 +31,7 @@ fun GymGenieButton(
     val keyboardController = LocalSoftwareKeyboardController.current
     Button(
         onClick = {
-            // Dismiss the keyboard before invoking the action so taps on the
-            // primary CTA always release focus from any active text field
-            // (login/register screens, primary CTAs in flows, etc.).
+
             focusManager.clearFocus()
             keyboardController?.hide()
             onClick()

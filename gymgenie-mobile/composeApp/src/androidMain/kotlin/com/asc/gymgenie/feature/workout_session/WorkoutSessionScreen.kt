@@ -13,18 +13,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -44,12 +40,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.asc.gymgenie.feature.workout_session.components.CircularIconButton
 import com.asc.gymgenie.feature.workout_session.components.ControlCard
 import com.asc.gymgenie.feature.workout_session.components.ElapsedTimer
 import com.asc.gymgenie.feature.workout_session.components.ExerciseHero
 import com.asc.gymgenie.feature.workout_session.components.ExerciseInfoSheet
 import com.asc.gymgenie.presentation.WorkoutSessionViewModel
+import com.asc.gymgenie.utils.muscleGroupNameRu
+import com.asc.gymgenie.ui.components.GymGenieToolbar
 import com.asc.gymgenie.ui.theme.Coral
 import com.asc.gymgenie.ui.theme.OnBackground
 import com.asc.gymgenie.ui.theme.OnSurfaceVariant
@@ -148,27 +145,13 @@ private fun ExerciseScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(WarmOffWhite)
-            .statusBarsPadding(),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            CircularIconButton(onClick = { showExitDialog = true }) {
-                Icon(Icons.Filled.Close, contentDescription = "Закрыть", tint = OnBackground)
-            }
-            Text(
-                "Тренировка",
-                modifier = Modifier.weight(1f),
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 16.sp,
-                color = OnBackground,
-                textAlign = TextAlign.Center,
-            )
-            Spacer(modifier = Modifier.size(40.dp))
-        }
+        GymGenieToolbar(
+            title = "Тренировка",
+            showBackNavigation = true,
+            showCloseIcon = true,
+            onBackClick = { showExitDialog = true },
+        )
 
         Column(
             modifier = Modifier
@@ -178,6 +161,7 @@ private fun ExerciseScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             ExerciseHero(
+                muscleGroup = exercise?.muscleGroupLabel,
                 techniqueTip = exercise?.techniqueTip,
                 onInfoClick = { exercise?.exerciseId?.let { detailExerciseId = it } },
             )
@@ -193,10 +177,10 @@ private fun ExerciseScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             Text(
-                "Основная группа мышц: ${exercise?.muscleGroupLabel.orEmpty()}",
+                "Основная группа мышц: ${muscleGroupNameRu(exercise?.muscleGroupLabel.orEmpty())}",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.W500,
                 color = OnSurfaceVariant,
@@ -204,7 +188,7 @@ private fun ExerciseScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             Text(
                 "Подход ${state.displaySetNumber} из ${state.totalSets}",
@@ -212,7 +196,7 @@ private fun ExerciseScreen(
                 fontSize = 16.sp,
                 color = OnBackground,
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 repeat(state.totalSets) { i ->
                     Box(
@@ -227,7 +211,7 @@ private fun ExerciseScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             ElapsedTimer(
                 elapsedSeconds = elapsed,
@@ -235,7 +219,7 @@ private fun ExerciseScreen(
                 onTogglePause = { paused = !paused },
             )
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(5.dp))
 
             if (state.requiresWeight) {
                 Row(
@@ -279,8 +263,9 @@ private fun ExerciseScreen(
             onClick = { viewModel.completeSet(elapsed) },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 16.dp)
+                .padding(horizontal = 16.dp)
                 .navigationBarsPadding()
+                .padding(bottom = 16.dp)
                 .height(54.dp),
             shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Coral),
@@ -317,7 +302,6 @@ private fun ExerciseScreen(
                     viewModel.cancelWorkout(
                         ((System.currentTimeMillis() - sessionStartMillis) / 1000).toInt(),
                     )
-                    onBack()
                 }) {
                     Text(
                         text = "Завершить",

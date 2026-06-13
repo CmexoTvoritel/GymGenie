@@ -20,7 +20,7 @@ class AuthController(
 
     @PostMapping("/register")
     fun register(@Valid @RequestBody request: RegisterRequest): ResponseEntity<TokenResponse> {
-        log.debug("POST /register received for email={}, username={}", request.email, request.username)
+        log.debug("POST /register received for email={}, firstName={}", request.email, request.firstName)
         return ResponseEntity.status(HttpStatus.CREATED).body(authService.register(request))
     }
 

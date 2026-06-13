@@ -12,13 +12,25 @@ import com.arkivanov.decompose.router.stack.push
 import com.arkivanov.decompose.router.stack.replaceAll
 import com.arkivanov.decompose.value.MutableValue
 import com.arkivanov.decompose.value.Value
+import com.arkivanov.essenty.lifecycle.doOnDestroy
 import com.asc.gymgenie.feature.activities.GoalCategory
+import com.asc.gymgenie.nutrition.todayLocalDate
+import com.asc.gymgenie.presentation.CreateWorkoutViewModel
+import com.asc.gymgenie.presentation.HomeViewModel
+import org.koin.core.context.GlobalContext
 
 class DefaultHomeComponent(
     componentContext: ComponentContext,
+    private val createWorkoutViewModelProvider: () -> CreateWorkoutViewModel,
 ) : HomeComponent, ComponentContext by componentContext {
 
     private val navigation = StackNavigation<HomeConfig>()
+
+    private val createWorkoutViewModel: CreateWorkoutViewModel by lazy {
+        createWorkoutViewModelProvider().also { vm ->
+            lifecycle.doOnDestroy { vm.onCleared() }
+        }
+    }
 
     override val stack: Value<ChildStack<*, HomeComponent.Child>> =
         childStack(
@@ -50,8 +62,9 @@ class DefaultHomeComponent(
             scheduleDays = config.scheduleDays,
             oneOffDate = config.oneOffDate,
         )
-        is HomeConfig.MealPlanDetail -> HomeComponent.Child.MealPlanDetail(config.planId)
+        is HomeConfig.MealPlanDetail -> HomeComponent.Child.MealPlanDetail(config.planId, config.isPastDate)
         is HomeConfig.CreateMealPlan -> HomeComponent.Child.CreateMealPlan(config.initialMealType, config.initialDate, config.editPlanId)
+        HomeConfig.CreateWorkout -> HomeComponent.Child.CreateWorkout(createWorkoutViewModel)
         is HomeConfig.WorkoutDetail -> HomeComponent.Child.WorkoutDetail(config.planId)
         HomeConfig.Notifications -> HomeComponent.Child.Notifications
     }
@@ -87,11 +100,17 @@ class DefaultHomeComponent(
     }
 
     override fun openMealPlanDetail(planId: String) {
-        navigation.push(HomeConfig.MealPlanDetail(planId))
+        val homeVm = GlobalContext.get().get<HomeViewModel>()
+        val isPast = homeVm.state.value.selectedMealDate < todayLocalDate()
+        navigation.push(HomeConfig.MealPlanDetail(planId, isPast))
     }
 
     override fun openCreateMealPlan(initialMealType: String?, initialDate: String?, editPlanId: String?) {
         navigation.push(HomeConfig.CreateMealPlan(initialMealType, initialDate, editPlanId))
+    }
+
+    override fun openCreateWorkout() {
+        navigation.push(HomeConfig.CreateWorkout)
     }
 
     override fun openNotifications() {
@@ -106,7 +125,7 @@ class DefaultHomeComponent(
 
     override fun pop() {
         val current = stack.value.active.configuration
-        if (current is HomeConfig.ActivityCatalog || current is HomeConfig.ActivityScheduleSettings) {
+        if (current is HomeConfig.Activities || current is HomeConfig.ActivityCatalog || current is HomeConfig.ActivityScheduleSettings) {
             _activitiesRefreshSignal.value = _activitiesRefreshSignal.value + 1
         }
         navigation.pop()
@@ -129,5 +148,10 @@ class DefaultHomeComponent(
     override fun onMealPlanDeleted() {
         _mealPlansReloadKey.value = _mealPlansReloadKey.value + 1
         navigation.pop()
+    }
+
+    override fun onWorkoutCreated() {
+        createWorkoutViewModel.reset()
+        navigation.popWhile { it !is HomeConfig.Main }
     }
 }

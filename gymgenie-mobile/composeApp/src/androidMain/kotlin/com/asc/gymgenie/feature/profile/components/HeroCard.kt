@@ -1,5 +1,6 @@
 package com.asc.gymgenie.feature.profile.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -13,18 +14,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.WorkspacePremium
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.asc.gymgenie.R
 
 @Composable
 fun HeroCard(
@@ -75,11 +76,11 @@ fun HeroCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(5.dp),
             ) {
-                Icon(
-                    imageVector = Icons.Filled.WorkspacePremium,
-                    contentDescription = null,
-                    tint = Color.White,
+                Image(
+                    painter = painterResource(R.drawable.ic_premium_badge),
+                    contentDescription = "Premium",
                     modifier = Modifier.size(13.dp),
+                    colorFilter = ColorFilter.tint(Color.White),
                 )
                 Text(
                     text = "PRO MEMBER",

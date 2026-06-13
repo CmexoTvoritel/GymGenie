@@ -7,7 +7,6 @@ import java.util.*
 
 data class UserProfileResponse(
     val id: UUID,
-    val username: String,
     val email: String,
     val firstName: String?,
     val lastName: String?,

@@ -47,8 +47,24 @@ kotlin {
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.1")
+            implementation("io.ktor:ktor-client-mock:3.1.3")
         }
     }
+}
+
+tasks.withType<AbstractTestTask> {
+    testLogging {
+        events("passed", "failed", "skipped")
+        showStandardStreams = false
+        showExceptions = true
+        showStackTraces = true
+    }
+    afterSuite(KotlinClosure2<TestDescriptor, TestResult, Unit>({ desc, result ->
+        if (desc.parent == null) {
+            println("\nРезультаты: ${result.successfulTestCount} passed, ${result.failedTestCount} failed, ${result.skippedTestCount} skipped\n")
+        }
+    }))
 }
 
 android {

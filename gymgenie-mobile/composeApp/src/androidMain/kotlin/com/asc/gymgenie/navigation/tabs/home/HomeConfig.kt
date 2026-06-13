@@ -28,7 +28,7 @@ sealed class HomeConfig {
     ) : HomeConfig()
 
     @Serializable
-    data class MealPlanDetail(val planId: String) : HomeConfig()
+    data class MealPlanDetail(val planId: String, val isPastDate: Boolean = false) : HomeConfig()
 
     @Serializable
     data class CreateMealPlan(
@@ -39,6 +39,9 @@ sealed class HomeConfig {
 
     @Serializable
     data class WorkoutDetail(val planId: String) : HomeConfig()
+
+    @Serializable
+    data object CreateWorkout : HomeConfig()
 
     @Serializable
     data object Notifications : HomeConfig()

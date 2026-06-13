@@ -11,14 +11,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/**
- * UI state for the meal-plans list screen (`NutritionView` on iOS).
- *
- * Kept deliberately small: the list view shows short cards, supports
- * pull-to-refresh, and exposes an inline error banner. Pagination is
- * implemented as "load more" rather than infinite scroll because saved meal
- * plans are typically short lists; a single page covers most users.
- */
 data class MealPlansListUiState(
     val isLoading: Boolean = false,
     val isLoadingMore: Boolean = false,
@@ -31,17 +23,6 @@ data class MealPlansListUiState(
     val deletingPlanId: String? = null,
 )
 
-/**
- * Presenter for the saved meal plans list.
- *
- * Mirrors the read/refresh shape of [com.asc.gymgenie.presentation.WorkoutsViewModel]
- * for the workouts tab: a single in-flight load job, a refresh flag separate
- * from the initial-load flag, and graceful error surfaces. Delete is
- * implemented as an optimistic-by-id removal once the server acknowledges.
- *
- * Lifetime: callers must invoke [onCleared] when the surface is disposed so
- * in-flight coroutines are cancelled.
- */
 class MealPlansListViewModel(
     private val mealPlansApi: MealPlansApi,
     private val pageSize: Int = 20,
@@ -90,11 +71,6 @@ class MealPlansListViewModel(
         load()
     }
 
-    /**
-     * Deletes a plan and removes it from the in-memory list once the server
-     * acknowledges. The list is mutated by id rather than refetched so the
-     * scroll position and any other in-flight work survive the delete.
-     */
     fun deletePlan(planId: String) {
         if (_state.value.deletingPlanId != null) return
         _state.update { it.copy(deletingPlanId = planId, errorMessage = null) }

@@ -12,8 +12,7 @@ import org.koin.core.context.startKoin
 class GymGenieApplication : Application() {
     override fun onCreate() {
         super.onCreate()
-        // Must run before Koin resolves `TokenStorage`, since the Android
-        // implementation reads from the application context lazily on first use.
+
         AndroidTokenStorageContext.init(this)
 
         startKoin {

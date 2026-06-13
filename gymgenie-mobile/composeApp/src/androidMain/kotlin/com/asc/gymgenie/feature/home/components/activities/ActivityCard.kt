@@ -1,9 +1,12 @@
 package com.asc.gymgenie.feature.home.components.activities
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,10 +25,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.painterResource
+import kotlin.math.min
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.asc.gymgenie.R
 import com.asc.gymgenie.activity.ActivityKind
 import com.asc.gymgenie.activity.ActivityRing
 import com.asc.gymgenie.activity.ActivityTodayResponse
@@ -37,6 +42,8 @@ import com.asc.gymgenie.ui.theme.RingLife
 import com.asc.gymgenie.ui.theme.RingMind
 import com.asc.gymgenie.ui.theme.RingMove
 import com.asc.gymgenie.ui.theme.SoftCard
+import com.asc.gymgenie.utils.WeekdayOrder
+import com.asc.gymgenie.utils.weekdayShortRu
 import kotlin.math.max
 
 internal fun ringColorFor(ring: String): Color = when (ring) {
@@ -46,11 +53,13 @@ internal fun ringColorFor(ring: String): Color = when (ring) {
     else -> DeepInk
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun ActivityCard(
     activity: ActivityTodayResponse,
     onCheckIn: (String, Int) -> Unit,
     onOpenPreset: () -> Unit,
+    onLongPress: (() -> Unit)? = null,
     onOpenScheduleSettings: (() -> Unit)? = null,
 ) {
     val progress = remember(activity) { activity.toProgress() }
@@ -72,13 +81,10 @@ internal fun ActivityCard(
         .clip(cardShape)
         .background(Color.White)
         .border(1.5.dp, borderColor, cardShape)
-        .let { base ->
-            if (kind == ActivityKind.BINARY) {
-                base.clickable { toggleBinary(activity, onCheckIn) }
-            } else {
-                base
-            }
-        }
+        .combinedClickable(
+            onClick = { if (kind == ActivityKind.BINARY) toggleBinary(activity, onCheckIn) },
+            onLongClick = { onLongPress?.invoke() },
+        )
         .padding(horizontal = 14.dp, vertical = 12.dp)
 
     Row(
@@ -86,7 +92,7 @@ internal fun ActivityCard(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ActivityEmojiBadge(
-            name = activity.name,
+            ring = activity.ring,
             ringColor = ringColor,
             isDone = progress.isDone,
         )
@@ -141,8 +147,13 @@ internal fun ActivityCard(
 }
 
 @Composable
-private fun ActivityEmojiBadge(name: String, ringColor: Color, isDone: Boolean) {
+private fun ActivityEmojiBadge(ring: String, ringColor: Color, isDone: Boolean) {
     val background = if (isDone) ringColor else SoftCard
+    val ringIcon = when (ring) {
+        ActivityRing.MOVE.name -> R.drawable.ic_activity_run
+        ActivityRing.MIND.name -> R.drawable.ic_activity_mind
+        else -> R.drawable.ic_activity_schedule
+    }
     Box(
         modifier = Modifier
             .size(42.dp)
@@ -150,11 +161,10 @@ private fun ActivityEmojiBadge(name: String, ringColor: Color, isDone: Boolean) 
             .background(background),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = name.take(1).uppercase(),
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold,
-            color = if (isDone) Color.White else ringColor,
+        Image(
+            painter = painterResource(ringIcon),
+            contentDescription = null,
+            modifier = Modifier.size(22.dp),
         )
     }
 }
@@ -253,23 +263,66 @@ private fun ActionButton(
         }
 
         ActivityKind.COUNTER -> {
-            val background = if (isDone) ringColor else DeepInk
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(shape)
-                    .background(background)
-                    .pointerInput(activity.activityId, activity.logValue) {
-                        detectTapGestures(
-                            onTap = { onCheckIn(activity.activityId, activity.logValue + 1) },
-                            onLongPress = {
-                                onCheckIn(activity.activityId, max(0, activity.logValue - 1))
+            val maxVal = activity.goal ?: Int.MAX_VALUE
+            val minusEnabled = activity.logValue > 0
+            val plusEnabled = activity.logValue < maxVal
+
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(shape)
+                        .background(
+                            if (minusEnabled) {
+                                if (isDone) ringColor else DeepInk
+                            } else {
+                                (if (isDone) ringColor else DeepInk).copy(alpha = 0.3f)
                             },
                         )
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(text = "+", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        .then(
+                            if (minusEnabled) Modifier.clickable {
+                                onCheckIn(activity.activityId, max(0, activity.logValue - 1))
+                            } else Modifier,
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "−",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(shape)
+                        .background(
+                            if (plusEnabled) {
+                                if (isDone) ringColor else DeepInk
+                            } else {
+                                (if (isDone) ringColor else DeepInk).copy(alpha = 0.3f)
+                            },
+                        )
+                        .then(
+                            if (plusEnabled) Modifier.clickable {
+                                onCheckIn(
+                                    activity.activityId,
+                                    min(maxVal, activity.logValue + 1),
+                                )
+                            } else Modifier,
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "+",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                    )
+                }
             }
         }
 
@@ -302,27 +355,12 @@ internal fun toggleBinary(
     onCheckIn(activity.activityId, next)
 }
 
-private val backendDayToShort = mapOf(
-    "MONDAY" to "Пн",
-    "TUESDAY" to "Вт",
-    "WEDNESDAY" to "Ср",
-    "THURSDAY" to "Чт",
-    "FRIDAY" to "Пт",
-    "SATURDAY" to "Сб",
-    "SUNDAY" to "Вс",
-)
-
-/**
- * Returns a short human-readable label for the activity's schedule, or null
- * when the activity runs every day (the default — no indicator needed).
- */
 private fun formatScheduleLabel(activity: ActivityTodayResponse): String? {
     return when (activity.scheduleType) {
         "RECURRING" -> {
             if (activity.scheduleDays.isEmpty()) return null
-            val ordered = listOf("MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY")
-            val sorted = activity.scheduleDays.sortedBy { ordered.indexOf(it) }
-            sorted.mapNotNull { backendDayToShort[it] }.joinToString(" ")
+            val sorted = activity.scheduleDays.sortedBy { WeekdayOrder.indexOf(it) }
+            sorted.map { weekdayShortRu(it) }.joinToString(" ")
         }
         "ONE_TIME" -> {
             val raw = activity.oneOffDate ?: return null

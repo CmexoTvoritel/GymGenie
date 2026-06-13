@@ -1,11 +1,12 @@
 package com.asc.gymgenie.feature.workout_session.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -20,20 +21,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.asc.gymgenie.feature.create_workout.muscleGroupExerciseDrawable
 import com.asc.gymgenie.ui.theme.Coral
 
 @Composable
 internal fun ExerciseHero(
+    muscleGroup: String?,
     techniqueTip: String?,
     onInfoClick: () -> Unit,
 ) {
     Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .height(200.dp)
+            .size(200.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(
                 Brush.linearGradient(
@@ -42,7 +46,12 @@ internal fun ExerciseHero(
             ),
         contentAlignment = Alignment.Center,
     ) {
-        Text("🏋️", fontSize = 64.sp)
+        Image(
+            painter = painterResource(id = muscleGroupExerciseDrawable(muscleGroup ?: "")),
+            contentDescription = muscleGroup,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
+        )
 
         Box(
             modifier = Modifier

@@ -34,17 +34,6 @@ data class AiWorkoutDto(
     val exercises: List<AiWorkoutExerciseParsedDto>
 )
 
-/**
- * Lenient DTO used only for deserializing GigaChat JSON responses.
- *
- * `reps` and `restSeconds` are nullable because GigaChat omits these fields
- * for bodyweight or time-based exercises. This DTO must NOT be exposed on
- * mobile-facing endpoints — use [AiWorkoutExerciseDto] there.
- *
- * `setWeightsKg` is optional and only emitted by GigaChat for exercises whose
- * catalog entry has `requiresWeight = true`. When present, each element
- * corresponds to a single set; nulls mark sets without a target weight.
- */
 data class AiWorkoutExerciseParsedDto(
     val exerciseId: UUID,
     val sets: Int,
@@ -54,15 +43,6 @@ data class AiWorkoutExerciseParsedDto(
     val setWeightsKg: List<Double?>? = null
 )
 
-/**
- * Strict DTO used by the mobile-facing save/replace workout endpoints.
- *
- * All numeric prescription fields are required: clients must explicitly
- * specify `reps` before persistence. Rest time is now a workout-level
- * concern — see [SaveWorkoutRequest.restSeconds]. `setWeightsKg` stays
- * optional because not every exercise tracks per-set weight; when present,
- * the list size must match `sets` (validated server-side).
- */
 data class AiWorkoutExerciseDto(
     val exerciseId: UUID,
     val sets: Int,

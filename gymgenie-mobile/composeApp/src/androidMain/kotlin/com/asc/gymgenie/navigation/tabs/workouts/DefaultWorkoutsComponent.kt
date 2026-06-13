@@ -1,8 +1,4 @@
-// Required because StackNavigator.push (used by openExerciseDetail /
-// openWorkoutDetail / openCreateWorkout) is @DelicateDecomposeApi. Pushes
-// here are user-initiated and configurations carry distinct ids
-// (exerciseId / planId), so duplicate-configuration crashes are not a
-// realistic risk.
+
 @file:OptIn(com.arkivanov.decompose.DelicateDecomposeApi::class)
 
 package com.asc.gymgenie.navigation.tabs.workouts
@@ -17,6 +13,7 @@ import com.arkivanov.decompose.router.stack.replaceAll
 import com.arkivanov.decompose.value.MutableValue
 import com.arkivanov.decompose.value.Value
 import com.arkivanov.essenty.lifecycle.doOnDestroy
+import com.asc.gymgenie.exercise.ExerciseShortResponse
 import com.asc.gymgenie.presentation.CreateWorkoutViewModel
 
 class DefaultWorkoutsComponent(
@@ -31,6 +28,8 @@ class DefaultWorkoutsComponent(
             lifecycle.doOnDestroy { vm.onCleared() }
         }
     }
+
+    private var pendingInitialExercise: ExerciseShortResponse? = null
 
     override val stack: Value<ChildStack<*, WorkoutsComponent.Child>> =
         childStack(
@@ -51,7 +50,14 @@ class DefaultWorkoutsComponent(
         WorkoutsConfig.Main -> WorkoutsComponent.Child.Main
         is WorkoutsConfig.ExerciseDetail -> WorkoutsComponent.Child.ExerciseDetail(config.exerciseId)
         is WorkoutsConfig.WorkoutDetail -> WorkoutsComponent.Child.WorkoutDetail(config.planId)
-        WorkoutsConfig.CreateWorkout -> WorkoutsComponent.Child.CreateWorkout(createWorkoutViewModel)
+        WorkoutsConfig.CreateWorkout -> {
+            val exercise = pendingInitialExercise
+            pendingInitialExercise = null
+            WorkoutsComponent.Child.CreateWorkout(
+                viewModel = createWorkoutViewModel,
+                initialExercise = exercise,
+            )
+        }
     }
 
     override fun openExerciseDetail(exerciseId: String) {
@@ -63,6 +69,11 @@ class DefaultWorkoutsComponent(
     }
 
     override fun openCreateWorkout() {
+        navigation.push(WorkoutsConfig.CreateWorkout)
+    }
+
+    override fun openCreateWorkoutWithExercise(exercise: ExerciseShortResponse) {
+        pendingInitialExercise = exercise
         navigation.push(WorkoutsConfig.CreateWorkout)
     }
 

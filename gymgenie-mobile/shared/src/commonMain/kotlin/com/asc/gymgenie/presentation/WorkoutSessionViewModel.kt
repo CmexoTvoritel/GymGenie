@@ -19,18 +19,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 
-/**
- * Drives a single in-progress workout session.
- *
- * Offline-first behavior: every recorded set is persisted to the local
- * SQLDelight DB through [localRepository] as it happens. Only when the
- * session completes do we POST a single submit request to the backend; on
- * failure the local rows stay around so a future surface can retry the
- * upload.
- *
- * The view model intentionally owns no UI concerns — Android Compose and
- * iOS SwiftUI both observe [state] and call action methods.
- */
 class WorkoutSessionViewModel(
     private val session: ActiveWorkoutSession,
     private val localRepository: LocalWorkoutRepository,
@@ -80,8 +68,7 @@ class WorkoutSessionViewModel(
     val state: StateFlow<State> = _state.asStateFlow()
 
     init {
-        // Persist the session metadata up-front so that the rows we write per
-        // set always have a parent to point at.
+
         localRepository.saveSession(
             sessionId = sessionIdSeed,
             planId = session.planId.takeUnless { it.isBlank() },
@@ -127,10 +114,6 @@ class WorkoutSessionViewModel(
         )
     }
 
-    /**
-     * Called by the native platform when the rest countdown reaches zero.
-     * No-op if not currently in the rest phase.
-     */
     fun restComplete() {
         if (_state.value.phase != Phase.REST) return
         advanceToNextSet()
@@ -140,51 +123,37 @@ class WorkoutSessionViewModel(
         advanceToNextSet()
     }
 
-    /**
-     * Mark the current set as skipped and advance to the next set.
-     *
-     * A skipped set is recorded as a [CompletedSet] with `repsActual = 0` and
-     * `weightActual = 0.0`. We intentionally do not introduce a separate
-     * `skipped` flag on the model: callers that need to detect skipped sets can
-     * check `repsActual == 0 && weightActual == 0.0`. The persisted DB row
-     * carries the explicit `completed = false` flag for downstream analytics.
-     *
-     * If invoked during the rest phase, the method advances immediately
-     * so the UI moves to the next exercise/set.
-     */
     fun skipSet() {
         val current = _state.value
-        val skippedSet = CompletedSet(
-            exerciseIndex = current.currentExerciseIndex,
-            setIndex = current.currentSetIndex,
-            repsActual = 0,
-            weightActual = 0.0,
-            completedAt = currentTimeMillis(),
-        )
-
-        val exercise = current.currentExercise
-        if (exercise != null) {
-            persistSet(
-                exercise = exercise,
-                setIndex = current.currentSetIndex,
-                reps = 0,
-                weightKg = 0.0,
-                completed = false,
-            )
-        }
-        val isLastSet = exercise != null && current.currentSetIndex >= exercise.sets - 1
+        val exercise = current.currentExercise ?: return
+        val isLastSet = current.currentSetIndex >= exercise.sets - 1
         val isLastExercise = current.currentExerciseIndex >= current.session.exercises.size - 1
 
         if (isLastSet && isLastExercise) {
-            _state.value = current.copy(
-                completedSets = current.completedSets + skippedSet,
-                isFinished = true,
-            )
+            _state.value = current.copy(isFinished = true)
             submitWorkout()
             return
         }
 
-        _state.value = current.copy(completedSets = current.completedSets + skippedSet)
+        if (current.phase == Phase.REST) {
+            advanceToNextSet()
+            val after = _state.value
+            val afterExercise = after.currentExercise
+            if (afterExercise == null ||
+                (after.currentSetIndex >= afterExercise.sets - 1 &&
+                    after.currentExerciseIndex >= after.session.exercises.size - 1)
+            ) {
+                _state.value = after.copy(isFinished = true)
+                submitWorkout()
+                return
+            }
+            _state.value = after.copy(
+                phase = Phase.REST,
+                restDurationSeconds = current.restDurationSeconds,
+            )
+            return
+        }
+
         advanceToNextSet()
     }
 
@@ -262,6 +231,8 @@ class WorkoutSessionViewModel(
                         durationSeconds = set.durationSeconds,
                     )
                 },
+                totalPlannedSets = session.exercises.sumOf { it.sets },
+                totalPlannedExercises = session.exercises.size,
             )
             workoutApi.submitSession(request).fold(
                 onSuccess = {
@@ -285,8 +256,6 @@ class WorkoutSessionViewModel(
         scope.cancel()
     }
 
-    // -- Internals ------------------------------------------------------------
-
     private fun persistSet(
         exercise: ActiveExercise,
         setIndex: Int,
@@ -305,9 +274,7 @@ class WorkoutSessionViewModel(
                 durationSeconds = null,
             )
         }
-        // Failures here are intentionally swallowed: the in-memory state is
-        // still authoritative for the rest of the session and we don't want
-        // a transient sqlite error to derail the UX.
+
     }
 
     private fun submitWorkout() {
@@ -317,11 +284,6 @@ class WorkoutSessionViewModel(
         val pendingSession = localRepository.getSession(current.sessionId) ?: return
         val pendingSets = localRepository.getSetsForSession(current.sessionId)
 
-        // Stamp the row as finished BEFORE we kick off the submit so that:
-        //  (a) a process death between here and a successful POST still leaves
-        //      the row eligible for retry by [PendingSessionUploader], and
-        //  (b) the timestamp posted to the backend matches the one we just
-        //      committed to local storage.
         val finishedAtMillis = Clock.System.now().toEpochMilliseconds()
         runCatching { localRepository.markSessionFinished(current.sessionId, finishedAtMillis) }
 
@@ -344,6 +306,8 @@ class WorkoutSessionViewModel(
                         durationSeconds = set.durationSeconds,
                     )
                 },
+                totalPlannedSets = session.exercises.sumOf { it.sets },
+                totalPlannedExercises = session.exercises.size,
             )
 
             workoutApi.submitSession(request).fold(
@@ -370,12 +334,7 @@ class WorkoutSessionViewModel(
     }
 
     private companion object {
-        /**
-         * Generates a stable, unique session id without pulling in
-         * `kotlin.uuid.Uuid` (still beta as of Kotlin 2.3 in this project).
-         * The combination of monotonic millis + a random suffix is more than
-         * enough to disambiguate concurrent local sessions on a single device.
-         */
+
         fun generateSessionId(): String {
             val now = Clock.System.now().toEpochMilliseconds()
             val random = (0..9).joinToString("") { kotlin.random.Random.nextInt(0, 36).toString(36) }

@@ -50,14 +50,14 @@ internal fun ElapsedTimer(
             TimerBox(text = String.format("%02d", minutes), modifier = Modifier.weight(1f))
             Text(
                 ":",
-                fontSize = 42.sp,
+                fontSize = 38.sp,
                 fontWeight = FontWeight.Bold,
                 color = Coral,
             )
             TimerBox(text = String.format("%02d", seconds), modifier = Modifier.weight(1f))
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         Box(
             modifier = Modifier

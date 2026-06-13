@@ -1,6 +1,7 @@
 package com.asc.gymgenie.feature.activities
 
 import android.app.DatePickerDialog
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,15 +22,22 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.Warning
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -44,15 +52,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.asc.gymgenie.activity.ActivityKind
 import com.asc.gymgenie.activity.ActivityCatalogResponse
 import com.asc.gymgenie.activity.ActivityRing
+import com.asc.gymgenie.R
 import com.asc.gymgenie.feature.activities.components.CatalogActivityCard
+import com.asc.gymgenie.feature.activities.components.ringColorFor
 import com.asc.gymgenie.feature.activities.components.ringLabel
 import com.asc.gymgenie.presentation.ActivityCatalogViewModel
 import com.asc.gymgenie.ui.components.GymGenieToolbar
@@ -61,6 +73,7 @@ import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
 import com.asc.gymgenie.ui.theme.SoftCard
 import com.asc.gymgenie.ui.theme.WarmOffWhite
+import com.asc.gymgenie.utils.dayLabelToBackend
 import org.koin.core.context.GlobalContext
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -114,13 +127,13 @@ fun ActivityCatalogScreen(onBack: () -> Unit) {
     SchedulePickerBottomSheet(
         activity = scheduleTarget,
         onDismiss = { scheduleTarget = null },
-        onConfirm = { activityId, scheduleType, scheduleDays, oneOffDate ->
+        onConfirm = { activityId, scheduleType, scheduleDays, oneOffDate, goal ->
             viewModel.addToPlanWithSchedule(
                 activityId = activityId,
                 scheduleType = scheduleType,
                 scheduleDays = scheduleDays,
                 oneOffDate = oneOffDate,
-                goal = null,
+                goal = goal,
             )
             scheduleTarget = null
         },
@@ -129,57 +142,48 @@ fun ActivityCatalogScreen(onBack: () -> Unit) {
 
 @Composable
 private fun SearchBar(value: String, onValueChange: (String) -> Unit) {
-    Row(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 8.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(SoftCard)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .shadow(elevation = 2.dp, shape = RoundedCornerShape(50))
+            .clip(RoundedCornerShape(50))
+            .background(Color.White),
     ) {
-        Icon(
-            imageVector = Icons.Default.Search,
-            contentDescription = null,
-            tint = MutedText,
-            modifier = Modifier.size(20.dp),
-        )
-        Spacer(modifier = Modifier.width(10.dp))
-        Box(modifier = Modifier.weight(1f)) {
-            if (value.isEmpty()) {
-                Text(
-                    text = "Найти активность...",
-                    fontSize = 15.sp,
-                    color = MutedText,
-                )
-            }
-            BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                singleLine = true,
-                cursorBrush = SolidColor(DeepInk),
-                textStyle = TextStyle(color = DeepInk, fontSize = 15.sp),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        if (value.isNotEmpty()) {
-            Spacer(modifier = Modifier.width(8.dp))
-            Box(
-                modifier = Modifier
-                    .size(20.dp)
-                    .clip(CircleShape)
-                    .background(MutedText.copy(alpha = 0.3f))
-                    .clickable { onValueChange("") },
-                contentAlignment = Alignment.Center,
-            ) {
+        TextField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = { Text("Найти активность...") },
+            leadingIcon = {
                 Icon(
-                    imageVector = Icons.Default.Close,
+                    imageVector = Icons.Default.Search,
                     contentDescription = null,
-                    tint = DeepInk,
-                    modifier = Modifier.size(14.dp),
+                    tint = MutedText,
                 )
-            }
-        }
+            },
+            trailingIcon = {
+                if (value.isNotEmpty()) {
+                    IconButton(onClick = { onValueChange("") }) {
+                        Icon(
+                            imageVector = Icons.Default.Clear,
+                            contentDescription = "Очистить",
+                            tint = MutedText,
+                        )
+                    }
+                }
+            },
+            singleLine = true,
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                disabledContainerColor = Color.Transparent,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                disabledIndicatorColor = Color.Transparent,
+                errorIndicatorColor = Color.Transparent,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
@@ -197,7 +201,7 @@ private fun CatalogList(
 
     if (filtered.isEmpty()) {
         EmptyState(
-            icon = "🔍",
+            icon = Icons.Filled.Search,
             message = "Ничего не найдено",
             hint = "Попробуй изменить запрос",
         )
@@ -234,21 +238,7 @@ private fun CatalogList(
     }
 }
 
-// ---------------------------------------------------------------------------
-// Schedule picker bottom sheet — shown when adding an activity to the plan
-// ---------------------------------------------------------------------------
-
-private val catalogDayLabelToBackend = linkedMapOf(
-    "Пн" to "MONDAY",
-    "Вт" to "TUESDAY",
-    "Ср" to "WEDNESDAY",
-    "Чт" to "THURSDAY",
-    "Пт" to "FRIDAY",
-    "Сб" to "SATURDAY",
-    "Вс" to "SUNDAY",
-)
-
-private val catalogDaysOfWeek = catalogDayLabelToBackend.keys.toList()
+private val catalogDaysOfWeek = dayLabelToBackend.keys.toList()
 
 private enum class CatalogScheduleMode { EVERY_DAY, RECURRING, ONE_TIME }
 
@@ -257,7 +247,7 @@ private enum class CatalogScheduleMode { EVERY_DAY, RECURRING, ONE_TIME }
 private fun SchedulePickerBottomSheet(
     activity: ActivityCatalogResponse?,
     onDismiss: () -> Unit,
-    onConfirm: (activityId: String, scheduleType: String?, scheduleDays: List<String>?, oneOffDate: String?) -> Unit,
+    onConfirm: (activityId: String, scheduleType: String?, scheduleDays: List<String>?, oneOffDate: String?, goal: Int?) -> Unit,
 ) {
     if (activity == null) return
 
@@ -265,35 +255,66 @@ private fun SchedulePickerBottomSheet(
     var scheduleMode by rememberSaveable { mutableStateOf(CatalogScheduleMode.EVERY_DAY) }
     var selectedDays by rememberSaveable { mutableStateOf(catalogDaysOfWeek.toSet()) }
     var oneOffDate by rememberSaveable { mutableStateOf("") }
+    var goalValue by rememberSaveable { mutableStateOf(activity.defaultGoal?.toString() ?: "") }
     val context = LocalContext.current
+    val isBinary = remember(activity.kind) {
+        runCatching { ActivityKind.valueOf(activity.kind) }.getOrNull() == ActivityKind.BINARY
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = WarmOffWhite,
+        containerColor = Color.White,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp, vertical = 8.dp),
         ) {
-            // --- Header ---
-            Text(
-                text = activity.name,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = DeepInk,
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Выберите расписание",
-                fontSize = 14.sp,
-                color = MutedText,
-            )
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                val ringIcon = when (activity.ring) {
+                    ActivityRing.MOVE.name -> R.drawable.ic_activity_run
+                    ActivityRing.MIND.name -> R.drawable.ic_activity_mind
+                    else -> R.drawable.ic_activity_schedule
+                }
+                val ringColor = ringColorFor(activity.ring)
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(ringColor.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Image(
+                        painter = painterResource(ringIcon),
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = activity.name,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = DeepInk,
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Выберите расписание",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = MutedText,
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // --- Schedule mode selector ---
             CatalogScheduleMode.entries.forEach { mode ->
                 val label = when (mode) {
                     CatalogScheduleMode.EVERY_DAY -> "Каждый день"
@@ -334,8 +355,8 @@ private fun SchedulePickerBottomSheet(
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
                         text = label,
-                        fontSize = 15.sp,
-                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                        fontSize = 18.sp,
+                        fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
                         color = if (isSelected) DeepInk else MutedText,
                     )
                 }
@@ -343,7 +364,6 @@ private fun SchedulePickerBottomSheet(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // --- Day chips (RECURRING mode) ---
             if (scheduleMode == CatalogScheduleMode.RECURRING) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -385,7 +405,6 @@ private fun SchedulePickerBottomSheet(
                 Spacer(modifier = Modifier.height(12.dp))
             }
 
-            // --- Date picker (ONE_TIME mode) ---
             if (scheduleMode == CatalogScheduleMode.ONE_TIME) {
                 val displayDate = remember(oneOffDate) {
                     if (oneOffDate.isBlank()) "Выбрать дату"
@@ -434,9 +453,43 @@ private fun SchedulePickerBottomSheet(
                 Spacer(modifier = Modifier.height(12.dp))
             }
 
+            if (!isBinary) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Сколько хочешь выполнять?",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = DeepInk,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = goalValue,
+                    onValueChange = { newValue ->
+                        val filtered = newValue.filter { it.isDigit() }.take(3)
+                        goalValue = filtered
+                    },
+                    placeholder = {
+                        Text(
+                            text = "Например: 10",
+                            color = MutedText,
+                        )
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = AccentOrange,
+                        unfocusedBorderColor = MutedText.copy(alpha = 0.35f),
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
             Spacer(modifier = Modifier.height(8.dp))
 
-            // --- Confirm button ---
             val isFormValid = when (scheduleMode) {
                 CatalogScheduleMode.EVERY_DAY -> true
                 CatalogScheduleMode.RECURRING -> selectedDays.isNotEmpty()
@@ -453,7 +506,8 @@ private fun SchedulePickerBottomSheet(
                             val (type, days, date) = resolveCatalogScheduleParams(
                                 scheduleMode, selectedDays, oneOffDate,
                             )
-                            onConfirm(activity.id, type, days, date)
+                            val parsedGoal = goalValue.toIntOrNull()
+                            onConfirm(activity.id, type, days, date, parsedGoal)
                         } else Modifier,
                     )
                     .padding(vertical = 14.dp),
@@ -461,7 +515,7 @@ private fun SchedulePickerBottomSheet(
             ) {
                 Text(
                     text = "Добавить",
-                    fontSize = 15.sp,
+                    fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
                 )
@@ -469,7 +523,6 @@ private fun SchedulePickerBottomSheet(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // --- Cancel button ---
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -481,7 +534,7 @@ private fun SchedulePickerBottomSheet(
             ) {
                 Text(
                     text = "Отмена",
-                    fontSize = 14.sp,
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = DeepInk,
                 )
@@ -499,13 +552,11 @@ private fun resolveCatalogScheduleParams(
 ): Triple<String?, List<String>?, String?> = when (mode) {
     CatalogScheduleMode.EVERY_DAY -> Triple(null, null, null)
     CatalogScheduleMode.RECURRING -> {
-        val backendDays = selectedDays.mapNotNull { catalogDayLabelToBackend[it] }
+        val backendDays = selectedDays.mapNotNull { dayLabelToBackend[it] }
         Triple("RECURRING", backendDays, null)
     }
     CatalogScheduleMode.ONE_TIME -> Triple("ONE_TIME", null, oneOffDate)
 }
-
-// ---------------------------------------------------------------------------
 
 @Composable
 private fun CenteredSpinner() {
@@ -515,7 +566,7 @@ private fun CenteredSpinner() {
 }
 
 @Composable
-private fun EmptyState(icon: String, message: String, hint: String) {
+private fun EmptyState(icon: ImageVector, message: String, hint: String) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -531,7 +582,12 @@ private fun EmptyState(icon: String, message: String, hint: String) {
                 .padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(text = icon, fontSize = 32.sp)
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(32.dp),
+                tint = MutedText,
+            )
             Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = message,
@@ -562,7 +618,12 @@ private fun ErrorState(message: String, onRetry: () -> Unit) {
                 .padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(text = "⚠️", fontSize = 32.sp)
+            Icon(
+                imageVector = Icons.Outlined.Warning,
+                contentDescription = null,
+                modifier = Modifier.size(32.dp),
+                tint = AccentOrange,
+            )
             Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = "Не удалось загрузить",

@@ -33,6 +33,7 @@ class DefaultMainComponent(
     override val homeComponent: HomeComponent =
         DefaultHomeComponent(
             componentContext = childContext(key = "tab_home"),
+            createWorkoutViewModelProvider = createWorkoutViewModelProvider,
         )
 
     override val aiComponent: AiComponent =

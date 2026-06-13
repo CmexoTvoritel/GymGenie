@@ -1,5 +1,6 @@
 package com.asc.gymgenie.nutrition
 
+import com.asc.gymgenie.user.UpdateUserProfileRequest
 import com.asc.gymgenie.user.UserProfileResponse
 import com.asc.gymgenie.user.UserProfileStore
 import kotlinx.coroutines.CoroutineScope
@@ -13,13 +14,6 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/**
- * Steps in the AI meal-planning flow. Encoded as an enum with explicit
- * indices so the presenter exposes a single source of truth for navigation
- * between the 5 internal pages and the UI layer just renders whichever one is
- * current. Indices are also used by the iOS view layer to drive directional
- * step transitions.
- */
 enum class AiMealFlowStep(val index: Int) {
     CHOOSE(0),
     PROFILE(1),
@@ -28,13 +22,6 @@ enum class AiMealFlowStep(val index: Int) {
     CHAT(4),
 }
 
-/**
- * Profile data captured through screens 2-4 of the AI meal flow.
- *
- * Numeric fields default to `0` so the slider UI can use a single
- * "any value > 0 is valid" rule. The textual answers default to empty
- * strings, which the picker UI treats as "not picked".
- */
 data class AiMealProfileData(
     val age: Int = 0,
     val height: Int = 0,
@@ -48,11 +35,6 @@ data class AiMealProfileData(
     }
 }
 
-/**
- * One bubble in the chat transcript. The role is intentionally an inner enum
- * so the model is trivially round-trippable to platform UI without dragging
- * the wire-level [AiMealResponseType] into Compose / SwiftUI.
- */
 data class AiMealChatMessage(
     val role: Role,
     val text: String,
@@ -61,12 +43,14 @@ data class AiMealChatMessage(
 }
 
 data class AiMealUiState(
-    val step: AiMealFlowStep = AiMealFlowStep.PROFILE,
+    val step: AiMealFlowStep = AiMealFlowStep.CHOOSE,
     val profile: AiMealProfileData = AiMealProfileData(),
-    /** Wire string of the picked [MealGoal], empty until the user picks one. */
+
     val goal: String = "",
     val dietaryRestrictions: String = "",
     val allergies: String = "",
+
+    val selectedMealType: AiMealType? = null,
     val messages: List<AiMealChatMessage> = emptyList(),
     val isTyping: Boolean = false,
     val lastMealPlan: AiMealPlanData? = null,
@@ -74,29 +58,22 @@ data class AiMealUiState(
     val isSaving: Boolean = false,
     val isSaved: Boolean = false,
     val errorMessage: String? = null,
+
+    val showSchedulePicker: Boolean = false,
+
+    val scheduleMode: String = "ONE_OFF",
+
+    val selectedDate: String? = null,
+
+    val selectedWeekdays: List<String> = emptyList(),
+
+    val bookedOneOffDates: List<String> = emptyList(),
+    val bookedRecurringDays: List<String> = emptyList(),
+
+    val conflicts: List<AiMealConflictPlan> = emptyList(),
+    val showConflictDialog: Boolean = false,
 )
 
-/**
- * Presenter for the AI meal-planning flow.
- *
- * Owns:
- *  - step navigation between the 5 in-feature pages
- *  - the profile + goal + dietary data captured before chat starts
- *  - the chat transcript, typing indicator, and last-generated meal plan
- *  - calls into [AiMealApi] for `chat`, `saveMealPlan`, and `replaceMealPlan`
- *
- * Pre-fills [AiMealProfileData] from [UserProfileStore] so a returning user
- * does not have to re-enter age / height / weight on every visit. The user
- * can still freely edit any field. Goal / restrictions / allergies are not
- * pre-filled because the user profile does not currently store them.
- *
- * The view layer is purely declarative: it observes [state] and dispatches
- * intents (`goTo`, `setGoal`, `sendMessage`, `saveMealPlan`, `reset`).
- *
- * Lifetime: callers must invoke [onCleared] when the surface is disposed so
- * in-flight coroutines are cancelled. Android does this by tying the VM to
- * a `remember` block; iOS does it from the wrapper's `deinit`.
- */
 class AiMealViewModel(
     private val aiMealApi: AiMealApi,
     private val userProfileStore: UserProfileStore,
@@ -121,6 +98,10 @@ class AiMealViewModel(
     }
 
     fun goTo(step: AiMealFlowStep) {
+        val current = _state.value.step
+        if (step.index > current.index && current == AiMealFlowStep.PROFILE) {
+            syncProfileIfChanged()
+        }
         _state.update { it.copy(step = step, errorMessage = null) }
     }
 
@@ -131,8 +112,16 @@ class AiMealViewModel(
         goTo(previous)
     }
 
-    /** Stores the picked goal as a wire value (e.g. `"LOSE_WEIGHT"`). */
     fun setGoal(value: String) = _state.update { it.copy(goal = value) }
+
+    fun setMealType(type: AiMealType) {
+        _state.update { it.copy(selectedMealType = type) }
+    }
+
+    fun selectMealType(type: AiMealType) {
+        _state.update { it.copy(selectedMealType = type) }
+        goTo(AiMealFlowStep.PROFILE)
+    }
 
     fun setDietaryRestrictions(value: String) =
         _state.update { it.copy(dietaryRestrictions = value) }
@@ -149,13 +138,6 @@ class AiMealViewModel(
     fun setWeight(value: Int) =
         _state.update { it.copy(profile = it.profile.copy(weight = value)) }
 
-    /**
-     * Idempotent profile pre-fill from the cached [UserProfileResponse].
-     *
-     * Safe to call repeatedly: only fills numeric slots that are still at
-     * their default `0` value, so it cannot overwrite explicit edits the
-     * user has already made on the profile screen.
-     */
     fun prefillProfile() {
         val cached = userProfileStore.profile.value ?: return
         _state.update { current ->
@@ -170,23 +152,6 @@ class AiMealViewModel(
         }
     }
 
-    /**
-     * Sends a user-typed message to the AI. Appends the user bubble first
-     * (so the input feels responsive), turns on the typing indicator, then
-     * mutates the state again with the assistant's reply.
-     *
-     * Profile / goal / dietary fields are sent on every request: the backend
-     * keeps server-side session state and may ignore them after the first
-     * message, but resending keeps the wire contract idempotent and lets the
-     * backend rebuild context if its session expires.
-     *
-     * If the response is a [AiMealResponseType.MEAL_PLAN] we cache it on
-     * state so the UI can render the "save plan" CTA. Subsequent messages are
-     * still allowed: the user may keep refining the plan, and only the
-     * latest plan is offered for saving — but [AiMealUiState.savedPlanId] is
-     * preserved so further saves go through `replaceMealPlan` against the
-     * same persisted plan instead of creating duplicates.
-     */
     fun sendMessage(text: String) {
         val trimmed = text.trim()
         if (trimmed.isEmpty() || _state.value.isTyping) return
@@ -197,10 +162,7 @@ class AiMealViewModel(
                 messages = it.messages + userBubble,
                 isTyping = true,
                 errorMessage = null,
-                // A new message invalidates the previous "saved" badge so the
-                // user can save (or update) a fresh plan if the AI returns a
-                // different one. `savedPlanId` is intentionally preserved so
-                // subsequent saves overwrite the existing plan.
+
                 isSaved = false,
             )
         }
@@ -211,15 +173,13 @@ class AiMealViewModel(
                 AiMealChatRequest(
                     message = trimmed,
                     ageYears = state.profile.age.takeIf { it > 0 },
-                    // The picker UI captures whole-number cm / kg, but the
-                    // wire contract is Double to match the backend column
-                    // type. Convert on send rather than storing as Double on
-                    // [AiMealProfileData] to keep the slider state simple.
+
                     heightCm = state.profile.height.takeIf { it > 0 }?.toDouble(),
                     weightKg = state.profile.weight.takeIf { it > 0 }?.toDouble(),
                     goal = state.goal.takeIf { it.isNotBlank() },
                     dietaryRestrictions = state.dietaryRestrictions.takeIf { it.isNotBlank() },
                     allergies = state.allergies.takeIf { it.isNotBlank() },
+                    mealType = state.selectedMealType?.wireValue,
                 ),
             )
             result.fold(
@@ -248,51 +208,101 @@ class AiMealViewModel(
         }
     }
 
-    /**
-     * Persists the last AI-generated meal plan. Idempotent at the UI level:
-     * once `isSaved == true` the screen replaces the CTA with a success
-     * banner and only un-sets the flag when a new AI message arrives.
-     *
-     * If the user has already saved this conversation's plan once
-     * ([AiMealUiState.savedPlanId] is non-null), subsequent saves go through
-     * [AiMealApi.replaceMealPlan] and update the same persisted entry instead
-     * of creating new copies.
-     */
-    fun saveMealPlan() {
-        val plan = _state.value.lastMealPlan ?: return
-        if (_state.value.isSaving || _state.value.isSaved) return
+    fun onAddPlanTapped() {
+        if (_state.value.lastMealPlan == null) return
+        _state.update { it.copy(showSchedulePicker = true, isSaved = false, errorMessage = null) }
+        scope.launch {
+            aiMealApi.getBookedDays(mealType = _state.value.selectedMealType?.wireValue).fold(
+                onSuccess = { resp ->
+                    _state.update {
+                        it.copy(
+                            bookedOneOffDates = resp.oneOffDates,
+                            bookedRecurringDays = resp.recurringDays,
+                        )
+                    }
+                },
+                onFailure = {  },
+            )
+        }
+    }
+
+    fun setScheduleMode(mode: String) {
+        _state.update { it.copy(scheduleMode = mode) }
+    }
+
+    fun setSelectedDate(date: String?) {
+        _state.update { it.copy(selectedDate = date) }
+    }
+
+    fun toggleWeekday(day: String) {
+        _state.update {
+            val current = it.selectedWeekdays.toMutableList()
+            if (day in current) current.remove(day) else current.add(day)
+            it.copy(selectedWeekdays = current)
+        }
+    }
+
+    fun dismissSchedulePicker() {
+        _state.update {
+            it.copy(
+                showSchedulePicker = false,
+                selectedDate = null,
+                selectedWeekdays = emptyList(),
+                conflicts = emptyList(),
+                showConflictDialog = false,
+            )
+        }
+    }
+
+    fun saveWithSchedule() {
+        val s = _state.value
+        val plan = s.lastMealPlan ?: return
+
+        val scheduleType: String
+        val oneOffDate: String?
+        val scheduleDays: List<String>
+
+        if (s.scheduleMode == "ONE_OFF") {
+            if (s.selectedDate == null) return
+            scheduleType = "ONE_TIME"
+            oneOffDate = s.selectedDate
+            scheduleDays = emptyList()
+        } else {
+            if (s.selectedWeekdays.isEmpty()) return
+            scheduleType = "RECURRING"
+            oneOffDate = null
+            scheduleDays = s.selectedWeekdays
+        }
 
         _state.update { it.copy(isSaving = true, errorMessage = null) }
 
-        // The user's explicit goal selection takes precedence over whatever
-        // the AI may (or may not) have echoed back inside the plan payload.
-        val goal = _state.value.goal.takeIf { it.isNotBlank() } ?: plan.goal
-        val request = SaveMealPlanRequest(
-            name = plan.name,
-            description = plan.description,
-            goal = goal,
-            totalCalories = plan.totalCalories,
-            meals = plan.meals,
-        )
-
-        val existingPlanId = _state.value.savedPlanId
         scope.launch {
-            val result = if (existingPlanId == null) {
-                aiMealApi.saveMealPlan(request).map { it.mealPlanId }
-            } else {
-                aiMealApi.replaceMealPlan(existingPlanId, request).map { it.mealPlanId }
-            }
-            result.fold(
-                onSuccess = { planId ->
-                    _state.update {
-                        it.copy(isSaving = false, isSaved = true, savedPlanId = planId)
+
+            val conflictResult = aiMealApi.checkConflicts(
+                scheduleType = scheduleType,
+                oneOffDate = oneOffDate,
+                scheduleDays = scheduleDays,
+                mealType = _state.value.selectedMealType?.wireValue,
+            )
+            conflictResult.fold(
+                onSuccess = { resp ->
+                    if (resp.hasConflicts) {
+                        _state.update {
+                            it.copy(
+                                isSaving = false,
+                                conflicts = resp.conflicts,
+                                showConflictDialog = true,
+                            )
+                        }
+                    } else {
+                        doSave(plan, scheduleType, oneOffDate, scheduleDays, emptyList())
                     }
                 },
                 onFailure = { error ->
                     _state.update {
                         it.copy(
                             isSaving = false,
-                            errorMessage = error.message ?: "Не удалось сохранить рацион",
+                            errorMessage = error.message ?: "Не удалось проверить конфликты",
                         )
                     }
                 },
@@ -300,17 +310,124 @@ class AiMealViewModel(
         }
     }
 
+    fun confirmReplace() {
+        val s = _state.value
+        val plan = s.lastMealPlan ?: return
+        val conflictIds = s.conflicts.map { it.planId }
+
+        val scheduleType: String
+        val oneOffDate: String?
+        val scheduleDays: List<String>
+
+        if (s.scheduleMode == "ONE_OFF") {
+            if (s.selectedDate == null) return
+            scheduleType = "ONE_TIME"
+            oneOffDate = s.selectedDate
+            scheduleDays = emptyList()
+        } else {
+            if (s.selectedWeekdays.isEmpty()) return
+            scheduleType = "RECURRING"
+            oneOffDate = null
+            scheduleDays = s.selectedWeekdays
+        }
+
+        _state.update { it.copy(showConflictDialog = false, isSaving = true) }
+        scope.launch {
+            doSave(plan, scheduleType, oneOffDate, scheduleDays, conflictIds)
+        }
+    }
+
+    fun dismissConflictDialog() {
+        _state.update { it.copy(showConflictDialog = false, conflicts = emptyList()) }
+    }
+
+    private suspend fun doSave(
+        plan: AiMealPlanData,
+        scheduleType: String,
+        oneOffDate: String?,
+        scheduleDays: List<String>,
+        replaceConflictPlanIds: List<String>,
+    ) {
+        val goal = _state.value.goal.takeIf { it.isNotBlank() } ?: plan.goal
+        val request = SaveMealPlanRequest(
+            name = plan.name,
+            description = plan.description,
+            goal = goal,
+            totalCalories = plan.totalCalories,
+            mealType = _state.value.selectedMealType?.wireValue,
+            scheduleType = scheduleType,
+            oneOffDate = oneOffDate,
+            scheduleDays = scheduleDays,
+            replaceConflictPlanIds = replaceConflictPlanIds,
+            meals = plan.meals,
+        )
+
+        val existingPlanId = _state.value.savedPlanId
+        val result = if (existingPlanId == null) {
+            aiMealApi.saveMealPlan(request).map { it.mealPlanId }
+        } else {
+            aiMealApi.replaceMealPlan(existingPlanId, request).map { it.mealPlanId }
+        }
+        result.fold(
+            onSuccess = { planId ->
+                _state.update {
+                    it.copy(
+                        isSaving = false,
+                        isSaved = true,
+                        savedPlanId = planId,
+                        showSchedulePicker = false,
+                        selectedDate = null,
+                        selectedWeekdays = emptyList(),
+                        conflicts = emptyList(),
+                    )
+                }
+            },
+            onFailure = { error ->
+                _state.update {
+                    it.copy(
+                        isSaving = false,
+                        errorMessage = error.message ?: "Не удалось сохранить рацион",
+                    )
+                }
+            },
+        )
+    }
+
     fun clearError() {
         _state.update { it.copy(errorMessage = null) }
     }
 
-    /**
-     * Resets the entire flow back to the starting screen. Also fires a
-     * best-effort server-side session clear so the AI doesn't continue from
-     * a stale conversation if the user starts over.
-     */
+    private fun syncProfileIfChanged() {
+        val current = _state.value.profile
+        val stored = userProfileStore.profile.value ?: return
+
+        val ageChanged = current.age > 0 && current.age != (stored.ageYears ?: 0)
+        val heightChanged = current.height > 0 && current.height != (stored.heightCm?.toInt() ?: 0)
+        val weightChanged = current.weight > 0 && current.weight != (stored.weightKg?.toInt() ?: 0)
+
+        if (!ageChanged && !heightChanged && !weightChanged) return
+
+        val request = UpdateUserProfileRequest(
+            ageYears = if (ageChanged) current.age else null,
+            heightCm = if (heightChanged) current.height.toDouble() else null,
+            weightKg = if (weightChanged) current.weight.toDouble() else null,
+        )
+        scope.launch { userProfileStore.saveProfile(request) }
+    }
+
+    fun refreshProfileFromStore() {
+        if (_state.value.step != AiMealFlowStep.CHOOSE) return
+        val stored = userProfileStore.profile.value ?: return
+        _state.update { it.copy(profile = stored.toAiMealProfileData()) }
+    }
+
     fun reset() {
-        _state.value = AiMealUiState()
+        val stored = userProfileStore.profile.value
+        _state.value = if (stored != null) {
+            AiMealUiState(profile = stored.toAiMealProfileData())
+        } else {
+            AiMealUiState()
+        }
         scope.launch { aiMealApi.clearSession() }
     }
 

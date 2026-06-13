@@ -11,14 +11,8 @@ import java.util.*
 
 interface WorkoutPlanRepository : JpaRepository<WorkoutPlanEntity, UUID> {
 
-    // No @EntityGraph here: Hibernate 7 throws when combining a collection-fetch join
-    // with Pageable (firstResult/maxResults). Lazy loading is handled by the
-    // @Transactional(readOnly = true) on WorkoutPlanService.getAllByUser instead.
     fun findByUserId(userId: UUID, pageable: Pageable): Page<WorkoutPlanEntity>
 
-    // No @EntityGraph — same reason as findByUserId: Hibernate 7 throws MultipleBagFetchException
-    // when fetching two nested OneToMany bags (days → exercises) in one JOIN FETCH query.
-    // Lazy loading handled by @Transactional(readOnly = true) on getActiveByUser.
     fun findByUserIdAndIsActiveTrue(userId: UUID): List<WorkoutPlanEntity>
 
     fun findByIdAndUserId(id: UUID, userId: UUID): WorkoutPlanEntity?

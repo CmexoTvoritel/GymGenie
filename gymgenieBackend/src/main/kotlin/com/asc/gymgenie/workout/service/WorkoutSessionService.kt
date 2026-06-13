@@ -82,7 +82,9 @@ class WorkoutSessionService(
                 startedAt = request.startedAt,
                 finishedAt = request.finishedAt,
                 status = request.status,
-                notes = request.notes
+                notes = request.notes,
+                totalPlannedSets = request.totalPlannedSets,
+                totalPlannedExercises = request.totalPlannedExercises
             )
         )
 
@@ -251,9 +253,13 @@ class WorkoutSessionService(
             startedAt = startedAt,
             finishedAt = finishedAt,
             status = status,
-            totalSets = workoutPlanDay?.exercises?.sumOf { it.sets } ?: allSets.size,
+            totalSets = workoutPlanDay?.exercises?.sumOf { it.sets }
+                ?: totalPlannedSets
+                ?: allSets.size,
             completedSets = allSets.count { it.completed },
-            totalExercises = workoutPlanDay?.exercises?.size ?: distinctExerciseIds.size,
+            totalExercises = workoutPlanDay?.exercises?.size
+                ?: totalPlannedExercises
+                ?: distinctExerciseIds.size,
             completedExercises = completedExerciseIds.size,
             totalReps = totalReps,
             primaryMuscleGroup = primaryMuscleGroup,

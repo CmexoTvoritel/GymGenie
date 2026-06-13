@@ -39,23 +39,6 @@ import io.ktor.client.HttpClient
 import org.koin.core.parameter.parametersOf
 import org.koin.dsl.module
 
-/**
- * Network-layer singletons.
- *
- * - [TokenStorage] is a process-wide singleton because credentials must be
- *   read/written from a single source of truth across all auth flows.
- * - [AuthApi] owns its own internal `HttpClient`; making it a singleton avoids
- *   spawning a new client on every login/refresh.
- * - [SessionManager] is the bridge that lets the network layer signal a
- *   forced logout (refresh failed) up to the UI layer without taking a
- *   navigation dependency.
- * - The authenticated [HttpClient] depends on the three above and is shared
- *   by all API classes (UserApi, WorkoutApi, AiApi, ...). Sharing this
- *   instance is critical: every additional client carries its own Ktor
- *   `BearerTokens` cache, and concurrent clients race on every refresh —
- *   one wins, the others retry with a now-invalidated refresh token and
- *   sign the user out.
- */
 val networkModule = module {
     single<TokenStorage> { createTokenStorage() }
     single { AuthApi() }
@@ -78,19 +61,6 @@ val profileModule = module {
     single { UserProfileStore(get()) }
 }
 
-/**
- * Presentation-layer view models.
- *
- * View models are registered as factories: each screen owns a fresh instance
- * for the duration of its composition / SwiftUI scene. The shared coroutine
- * scope they hold is cancelled by the platform layer (`onCleared` /
- * `deinit`) so a factory does not leak across navigations.
- *
- * View models that need a runtime parameter — currently [WorkoutDetailViewModel]
- * keyed by `planId` and [MealPlanDetailViewModel] keyed by `planId` — read
- * the value from [parametersOf]; callers resolve them via
- * `koin.get { parametersOf(planId) }`.
- */
 val viewModelModule = module {
     factory { AuthViewModel(get(), get()) }
     single { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get()) }

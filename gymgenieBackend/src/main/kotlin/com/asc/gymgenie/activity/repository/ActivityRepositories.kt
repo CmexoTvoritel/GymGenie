@@ -16,14 +16,6 @@ interface ActivityDefinitionRepository : JpaRepository<ActivityDefinitionEntity,
 
 interface UserActivityRepository : JpaRepository<UserActivityEntity, UUID> {
 
-    /**
-     * Fetches all planned activities for the user, eagerly loading both the
-     * activity definition and the schedule-days element collection to avoid
-     * N+1 queries during date filtering.
-     *
-     * Using `LEFT JOIN FETCH` for `scheduleDays` because the collection may
-     * be empty (every-day / one-time activities) and we still want those rows.
-     */
     @Query("""
         SELECT DISTINCT ua FROM UserActivityEntity ua
         JOIN FETCH ua.activity

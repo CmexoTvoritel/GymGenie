@@ -10,11 +10,10 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -66,9 +65,6 @@ import com.asc.gymgenie.R
 import com.asc.gymgenie.presentation.AuthViewModel
 import com.asc.gymgenie.ui.components.GymGenieButton
 import com.asc.gymgenie.ui.components.GymGenieTextField
-import com.asc.gymgenie.ui.components.IconEmail
-import com.asc.gymgenie.ui.components.IconLock
-import com.asc.gymgenie.ui.components.IconPerson
 import com.asc.gymgenie.ui.theme.Coral
 
 @Composable
@@ -94,9 +90,6 @@ fun AuthScreen(
         }
     }
 
-    // Synchronized cross-fade between login and register states.
-    // We drive every mode-dependent element from the same alpha pair
-    // so they animate in lockstep without any layout reflow.
     val loginAlpha by animateFloatAsState(
         targetValue = if (isLoginMode) 1f else 0f,
         animationSpec = tween(durationMillis = 300, easing = LinearEasing),
@@ -111,7 +104,6 @@ fun AuthScreen(
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    // Focus requesters for IME field navigation
     val loginPasswordFocus = remember { FocusRequester() }
     val registerEmailFocus = remember { FocusRequester() }
     val registerPasswordFocus = remember { FocusRequester() }
@@ -132,87 +124,56 @@ fun AuthScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState()),
+                .clipToBounds(),
         ) {
-            // Top illustration area — coral tinted background, images bottom-aligned.
-            // Height is computed from the image's intrinsic aspect ratio so that
-            // the coral area tightly wraps: 16dp top padding + rendered image + 32dp
-            // bottom padding (the card overlaps those 32dp with its negative offset).
-            BoxWithConstraints(
-                modifier = Modifier.fillMaxWidth(),
+            val loginPainter = painterResource(id = R.drawable.ic_login)
+            val registerPainter = painterResource(id = R.drawable.ic_registration)
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .background(Coral.copy(alpha = 0.20f)),
+                contentAlignment = Alignment.BottomCenter,
             ) {
-                val loginPainter = painterResource(id = R.drawable.ic_login)
-                val loginIntrinsicSize = loginPainter.intrinsicSize
-                val loginAspectRatio = if (loginIntrinsicSize.height > 0f) {
-                    loginIntrinsicSize.width / loginIntrinsicSize.height
-                } else {
-                    1f
-                }
-
-                val registerPainter = painterResource(id = R.drawable.ic_registration)
-                val registerIntrinsicSize = registerPainter.intrinsicSize
-                val registerAspectRatio = if (registerIntrinsicSize.height > 0f) {
-                    registerIntrinsicSize.width / registerIntrinsicSize.height
-                } else {
-                    1f
-                }
-
-                val imageWidth = maxWidth - 40.dp
-                val loginImageHeight = imageWidth / loginAspectRatio
-                val registerImageHeight = imageWidth / registerAspectRatio
-                val maxImageHeight = maxOf(loginImageHeight, registerImageHeight)
-                val coralHeight = 16.dp + maxImageHeight + 32.dp
-
-                Box(
+                Image(
+                    painter = loginPainter,
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(coralHeight)
-                        .background(Coral.copy(alpha = 0.20f)),
-                    contentAlignment = Alignment.BottomCenter,
-                ) {
-                    Image(
-                        painter = loginPainter,
-                        contentDescription = null,
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp)
-                            .padding(bottom = 32.dp)
-                            .aspectRatio(loginAspectRatio)
-                            .alpha(loginAlpha)
-                            .zIndex(if (isLoginMode) 1f else 0f),
-                    )
+                        .padding(horizontal = 20.dp)
+                        .padding(bottom = 32.dp)
+                        .alpha(loginAlpha)
+                        .zIndex(if (isLoginMode) 1f else 0f),
+                )
 
-                    Image(
-                        painter = registerPainter,
-                        contentDescription = null,
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp)
-                            .padding(bottom = 32.dp)
-                            .aspectRatio(registerAspectRatio)
-                            .alpha(registerAlpha)
-                            .zIndex(if (!isLoginMode) 1f else 0f),
-                    )
-                }
+                Image(
+                    painter = registerPainter,
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .padding(bottom = 32.dp)
+                        .alpha(registerAlpha)
+                        .zIndex(if (!isLoginMode) 1f else 0f),
+                )
             }
 
-            // White card with rounded top corners. Overlaps the coral area by 32dp
-            // via negative offset so the rounded corners visually sit on top of the
-            // illustration. Everything scrolls as one unit — when the keyboard opens,
-            // the illustration goes off-screen and the fields + button remain visible.
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .offset(y = (-32).dp)
                     .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
                     .background(Color.White)
+                    .verticalScroll(rememberScrollState())
+                    .navigationBarsPadding()
                     .padding(horizontal = 24.dp)
                     .padding(top = 32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                // Title — both variants stacked, alpha-cross-faded.
+
                 Box(
                     modifier = Modifier.fillMaxWidth(),
                     contentAlignment = Alignment.Center,
@@ -237,16 +198,11 @@ fun AuthScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Fields box — register column always reserves the height (3 fields),
-                // login column is centered inside the same space (2 fields). No fixed
-                // height: the box naturally grows to the taller (register) child.
                 Box(
                     modifier = Modifier.fillMaxWidth(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    // Register fields — define box height. Always present in layout.
-                    // Visible Column lives above the hidden one via zIndex, so the
-                    // hidden Column never receives touches.
+
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -254,10 +210,10 @@ fun AuthScreen(
                             .zIndex(if (!isLoginMode) 1f else 0f),
                     ) {
                         GymGenieTextField(
-                            value = state.username,
-                            onValueChange = viewModel::onUsernameChanged,
+                            value = state.name,
+                            onValueChange = viewModel::onNameChanged,
                             label = "Имя",
-                            leadingIcon = IconPerson,
+                            leadingIcon = { Image(painter = painterResource(R.drawable.ic_name), contentDescription = null, modifier = Modifier.size(20.dp)) },
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                             keyboardActions = KeyboardActions(onNext = { registerEmailFocus.requestFocus() }),
                             isError = state.errorMessage != null,
@@ -269,7 +225,7 @@ fun AuthScreen(
                             value = state.email,
                             onValueChange = viewModel::onEmailChanged,
                             label = "Email",
-                            leadingIcon = IconEmail,
+                            leadingIcon = { Image(painter = painterResource(R.drawable.ic_mail), contentDescription = null, modifier = Modifier.size(20.dp)) },
                             modifier = Modifier.focusRequester(registerEmailFocus),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
                             keyboardActions = KeyboardActions(onNext = { registerPasswordFocus.requestFocus() }),
@@ -282,7 +238,7 @@ fun AuthScreen(
                             value = state.password,
                             onValueChange = viewModel::onPasswordChanged,
                             label = "Пароль",
-                            leadingIcon = IconLock,
+                            leadingIcon = { Image(painter = painterResource(R.drawable.ic_password), contentDescription = null, modifier = Modifier.size(20.dp)) },
                             modifier = Modifier.focusRequester(registerPasswordFocus),
                             visualTransformation = PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
@@ -293,7 +249,6 @@ fun AuthScreen(
                         )
                     }
 
-                    // Login fields — vertically centered by the parent Box.
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -304,7 +259,7 @@ fun AuthScreen(
                             value = state.email,
                             onValueChange = viewModel::onEmailChanged,
                             label = "Email",
-                            leadingIcon = IconEmail,
+                            leadingIcon = { Image(painter = painterResource(R.drawable.ic_mail), contentDescription = null, modifier = Modifier.size(20.dp)) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
                             keyboardActions = KeyboardActions(onNext = { loginPasswordFocus.requestFocus() }),
                             isError = state.errorMessage != null,
@@ -316,7 +271,7 @@ fun AuthScreen(
                             value = state.password,
                             onValueChange = viewModel::onPasswordChanged,
                             label = "Пароль",
-                            leadingIcon = IconLock,
+                            leadingIcon = { Image(painter = painterResource(R.drawable.ic_password), contentDescription = null, modifier = Modifier.size(20.dp)) },
                             modifier = Modifier.focusRequester(loginPasswordFocus),
                             visualTransformation = PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
@@ -340,8 +295,6 @@ fun AuthScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Primary action button — both variants stacked, only the visible one
-                // is interactive. Coral background per design.
                 Box(
                     modifier = Modifier.fillMaxWidth(),
                     contentAlignment = Alignment.Center,
@@ -372,7 +325,6 @@ fun AuthScreen(
 
                 Spacer(modifier = Modifier.height(32.dp))
 
-                // Static section — divider + social row never transitions between modes.
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -392,7 +344,6 @@ fun AuthScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Mode-switch link — both labels stacked, only the visible one captures clicks.
                 Box(
                     modifier = Modifier.fillMaxWidth(),
                     contentAlignment = Alignment.Center,
@@ -443,12 +394,7 @@ fun AuthScreen(
                     )
                 }
 
-                // Safe-area bottom padding
-                Spacer(
-                    modifier = Modifier
-                        .navigationBarsPadding()
-                        .height(16.dp),
-                )
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }
@@ -456,33 +402,32 @@ fun AuthScreen(
 
 @Composable
 fun SocialButtonsRow() {
-    val socialLabels = listOf("G", "A", "VK", "TG")
-    val socialColors = listOf(
-        Color(0xFFDB4437),
-        Color(0xFF000000),
-        Color(0xFF4680C2),
-        Color(0xFF0088CC),
+    data class SocialIcon(val drawableRes: Int, val contentDescription: String, val bgColor: Color)
+
+    val socialIcons = listOf(
+        SocialIcon(R.drawable.ic_google, "Google", Coral),
+        SocialIcon(R.drawable.ic_apple, "Apple", Coral),
+        SocialIcon(R.drawable.ic_vk, "VK", Coral),
+        SocialIcon(R.drawable.ic_telegram, "Telegram", Coral),
     )
 
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.Center,
     ) {
-        socialLabels.forEachIndexed { index, label ->
+        socialIcons.forEach { social ->
             Box(
                 modifier = Modifier
                     .padding(horizontal = 8.dp)
                     .size(48.dp)
                     .clip(CircleShape)
-                    .background(socialColors[index].copy(alpha = 0.1f)),
+                    .background(social.bgColor.copy(alpha = 0.1f)),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    text = label,
-                    color = socialColors[index],
-                    style = MaterialTheme.typography.labelLarge,
-                    fontSize = 14.sp,
-                    textAlign = TextAlign.Center,
+                Image(
+                    painter = painterResource(social.drawableRes),
+                    contentDescription = social.contentDescription,
+                    modifier = Modifier.size(24.dp),
                 )
             }
         }

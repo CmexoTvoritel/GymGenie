@@ -19,16 +19,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/**
- * Holds both the read-only "view" projection of a [WorkoutPlanResponse] and the
- * mutable copy used while the user is editing it.
- *
- * The two projections deliberately live side-by-side: the original [plan] is
- * the source of truth between save cycles and is restored on [WorkoutDetailViewModel.cancelEditing],
- * while the `edit*` fields hold the mutating draft. After a successful save we
- * reload the plan so the view-mode reflects the persisted server state without
- * relying on optimistic mutation.
- */
 data class WorkoutDetailUiState(
     val isLoading: Boolean = false,
     val isEditing: Boolean = false,
@@ -48,18 +38,6 @@ data class WorkoutDetailUiState(
     val editExercises: List<PendingExercise> = emptyList(),
 )
 
-/**
- * Drives the workout-detail screen's view + edit flow.
- *
- * The view model owns the load → display → edit → save cycle for a single
- * plan id and is intentionally short-lived: each navigation to a detail screen
- * creates its own instance with a fresh coroutine scope, mirroring the pattern
- * used by [com.asc.gymgenie.presentation.ExerciseDetailViewModel].
- *
- * 401 responses are treated as a session-level signal — tokens are cleared and
- * [SessionManager.triggerLogout] is invoked. All other failures surface as an
- * [WorkoutDetailUiState.errorMessage] so the UI can present a retry path.
- */
 class WorkoutDetailViewModel(
     private val planId: String,
     private val workoutApi: WorkoutApi,
@@ -155,17 +133,8 @@ class WorkoutDetailViewModel(
         setEditRestSeconds(_state.value.editRestSeconds - CreateWorkoutLimits.REST_STEP_SECONDS)
     }
 
-    /**
-     * Adds an exercise picked from the catalog into the edit draft using the
-     * default sets/reps from [CreateWorkoutLimits]. Per-exercise tuning is
-     * outside the scope of the detail screen — the create-workout flow remains
-     * the single source of truth for set/rep configuration.
-     */
     fun addExercise(exercise: ExerciseShortResponse) {
-        // When the catalog marks the exercise as weight-tracked, seed every
-        // set with the default kilograms so the saved plan carries a sensible
-        // payload even though the detail screen does not expose a per-set
-        // weight editor. Users can still refine via the create-workout flow.
+
         val seededWeights: List<Double?>? = if (exercise.requiresWeight) {
             List(CreateWorkoutLimits.DEFAULT_SETS) { CreateWorkoutLimits.DEFAULT_WEIGHT_KG }
         } else {
@@ -207,15 +176,6 @@ class WorkoutDetailViewModel(
         }
     }
 
-    /**
-     * Replaces the pending exercise at [index] with a normalized [updated] copy.
-     *
-     * Mirrors [CreateWorkoutViewModel.normalizeExercise]: clamps sets/reps to the
-     * declared limits and enforces the `setWeightsKg.size == sets` invariant so
-     * downstream save logic does not need to defensively re-validate. Out-of-range
-     * indices are no-ops to keep this safe to call from UI code that might lag
-     * one frame behind a delete.
-     */
     fun updatePendingExerciseAt(index: Int, updated: PendingExercise) {
         _state.update { current ->
             if (index !in current.editExercises.indices) return@update current
@@ -415,11 +375,6 @@ class WorkoutDetailViewModel(
             .toSet()
     }
 
-    /**
-     * The detail endpoint stores the rest interval per-exercise. For the edit
-     * draft we only need a single global value, so we take the most common
-     * one and fall back to the first exercise / default if the plan is empty.
-     */
     private fun collectRestSeconds(plan: WorkoutPlanResponse): Int {
         val perExerciseRest = plan.days.flatMap { it.exercises }.map { it.restSeconds }
         if (perExerciseRest.isEmpty()) return CreateWorkoutLimits.DEFAULT_REST_SECONDS
@@ -435,10 +390,7 @@ class WorkoutDetailViewModel(
     }
 
     private fun collectPendingExercises(plan: WorkoutPlanResponse): List<PendingExercise> {
-        // For RECURRING plans every day carries the same exercise list.
-        // Taking only the first day avoids flattening all days into one
-        // list which the backend would then replicate across days again,
-        // causing a ×N duplication on every save.
+
         val referenceDay = plan.days.minByOrNull { it.orderIndex } ?: return emptyList()
         return referenceDay.exercises
             .sortedBy { it.orderIndex }

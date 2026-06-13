@@ -3,6 +3,7 @@ package com.asc.gymgenie.feature.nutrition
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.Image
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -16,6 +17,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -41,8 +43,7 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -71,8 +72,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -81,12 +84,15 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.asc.gymgenie.R
+import com.asc.gymgenie.feature.food_picker.categoryDrawable
 import com.asc.gymgenie.nutrition.AddedMealItem
 import com.asc.gymgenie.nutrition.CreateMealPlanStep
 import com.asc.gymgenie.nutrition.CreateMealPlanViewModel
@@ -103,6 +109,8 @@ import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
 import com.asc.gymgenie.ui.theme.SoftCard
 import com.asc.gymgenie.ui.theme.WarmOffWhite
+import com.asc.gymgenie.utils.WeekdayPairs
+import com.asc.gymgenie.utils.weekdayShortFromCalendar
 import org.koin.core.context.GlobalContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -301,7 +309,6 @@ fun CreateMealPlanFlowScreen(
     }
 }
 
-
 @Composable
 private fun SetupStep(
     state: com.asc.gymgenie.nutrition.CreateMealPlanUiState,
@@ -388,10 +395,10 @@ private fun MealKindCard(
     isSelected: Boolean,
     onTap: () -> Unit,
 ) {
-    val emoji = when (kind) {
-        ManualMealKind.BREAKFAST -> "🌅"
-        ManualMealKind.LUNCH -> "☀️"
-        ManualMealKind.DINNER -> "🌙"
+    val iconRes = when (kind) {
+        ManualMealKind.BREAKFAST -> R.drawable.ic_breakfast
+        ManualMealKind.LUNCH -> R.drawable.ic_lunch
+        ManualMealKind.DINNER -> R.drawable.ic_dinner
     }
     val border = if (isSelected) Coral else CardBorder
     val borderWidth = if (isSelected) 2.dp else 1.5.dp
@@ -412,7 +419,14 @@ private fun MealKindCard(
                 .clip(RoundedCornerShape(16.dp))
                 .background(if (isSelected) Coral.copy(alpha = 0.18f) else SoftCard),
             contentAlignment = Alignment.Center,
-        ) { Text(text = emoji, fontSize = 26.sp) }
+        ) {
+            Image(
+                painter = painterResource(id = iconRes),
+                contentDescription = null,
+                modifier = Modifier.size(32.dp),
+                contentScale = ContentScale.Fit,
+            )
+        }
 
         Spacer(modifier = Modifier.width(14.dp))
 
@@ -551,7 +565,7 @@ private fun upcomingDateStrip(daysAhead: Int): List<DateStripEntry> {
         val entry = DateStripEntry(
             iso = iso,
             day = cal.get(Calendar.DAY_OF_MONTH),
-            weekdayShort = weekdayShortRu(cal.get(Calendar.DAY_OF_WEEK)),
+            weekdayShort = weekdayShortFromCalendar(cal.get(Calendar.DAY_OF_WEEK)),
         )
         cal.add(Calendar.DAY_OF_MONTH, 1)
         entry
@@ -617,15 +631,6 @@ private fun WeekdayChipsRow(
     selectedDays: List<String>,
     onToggle: (String) -> Unit,
 ) {
-    val days = listOf(
-        "MONDAY" to "Пн",
-        "TUESDAY" to "Вт",
-        "WEDNESDAY" to "Ср",
-        "THURSDAY" to "Чт",
-        "FRIDAY" to "Пт",
-        "SATURDAY" to "Сб",
-        "SUNDAY" to "Вс",
-    )
     val scrollState = rememberScrollState()
     Row(
         modifier = Modifier
@@ -633,7 +638,7 @@ private fun WeekdayChipsRow(
             .horizontalScroll(scrollState),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        days.forEach { (wire, label) ->
+        WeekdayPairs.forEach { (wire, label) ->
             val isBooked = bookedDays.contains(wire)
             val isSelected = selectedDays.contains(wire)
             WeekdayChip(
@@ -686,7 +691,6 @@ private fun WeekdayChip(
         }
     }
 }
-
 
 @Composable
 private fun EditStep(
@@ -795,7 +799,13 @@ private fun MacrosSummaryCard(
                     color = Color.White,
                 )
             }
-            Text(text = "🔥", fontSize = 32.sp)
+            Image(
+                painter = painterResource(id = R.drawable.ic_calories),
+                contentDescription = null,
+                modifier = Modifier.size(44.dp),
+                contentScale = ContentScale.Fit,
+                colorFilter = ColorFilter.tint(Color.Red),
+            )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MacroPill(label = "Б", grams = proteinG)
@@ -877,9 +887,11 @@ private fun AddedItemRow(item: AddedMealItem, onEdit: () -> Unit, onDelete: () -
                 .background(SoftCard),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = item.product.emoji ?: defaultEmoji(item.product.category),
-                fontSize = 20.sp,
+            Image(
+                painter = painterResource(id = item.product.category.categoryDrawable()),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize().aspectRatio(1f),
+                contentScale = ContentScale.Crop,
             )
         }
         Spacer(modifier = Modifier.width(12.dp))
@@ -904,32 +916,32 @@ private fun AddedItemRow(item: AddedMealItem, onEdit: () -> Unit, onDelete: () -
         ) {
             Box(
                 modifier = Modifier
-                    .size(24.dp)
+                    .size(36.dp)
                     .clip(CircleShape)
                     .background(SoftCard)
                     .clickable { onEdit() },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.Edit,
+                Image(
+                    painter = painterResource(R.drawable.ic_edit),
                     contentDescription = "Изменить",
-                    tint = DeepInk,
-                    modifier = Modifier.size(16.dp),
+                    modifier = Modifier.size(18.dp),
+                    colorFilter = ColorFilter.tint(DeepInk),
                 )
             }
             Box(
                 modifier = Modifier
-                    .size(24.dp)
+                    .size(36.dp)
                     .clip(CircleShape)
                     .background(Color(0xFFFFE8E8))
                     .clickable { onDelete() },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.Delete,
+                Image(
+                    painter = painterResource(R.drawable.ic_delete),
                     contentDescription = "Удалить",
-                    tint = Color(0xFFE5392E),
-                    modifier = Modifier.size(16.dp),
+                    modifier = Modifier.size(18.dp),
+                    colorFilter = ColorFilter.tint(Color(0xFFE5392E)),
                 )
             }
         }
@@ -975,7 +987,12 @@ private fun EmptyEditState(onAdd: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text(text = "🥗", fontSize = 40.sp)
+        Image(
+            painter = painterResource(id = R.drawable.ic_lunch),
+            contentDescription = null,
+            modifier = Modifier.size(40.dp),
+            contentScale = ContentScale.Fit,
+        )
         Text(
             text = "Пока пусто",
             fontSize = 18.sp,
@@ -1006,7 +1023,6 @@ private fun EmptyEditState(onAdd: () -> Unit) {
         }
     }
 }
-
 
 @Composable
 private fun PickerStep(
@@ -1243,9 +1259,11 @@ private fun PickerProductRow(product: FoodProduct, onTap: () -> Unit) {
                 .background(categoryBg(product.category)),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = product.emoji ?: defaultEmoji(product.category),
-                fontSize = 20.sp,
+            Image(
+                painter = painterResource(id = product.category.categoryDrawable()),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize().aspectRatio(1f),
+                contentScale = ContentScale.Crop,
             )
         }
         Spacer(modifier = Modifier.width(12.dp))
@@ -1294,7 +1312,6 @@ private fun MiniMacroChip(label: String, value: String) {
     }
 }
 
-
 @Composable
 private fun InfoStep(
     state: com.asc.gymgenie.nutrition.CreateMealPlanUiState,
@@ -1318,14 +1335,15 @@ private fun InfoStep(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(160.dp)
+                            .aspectRatio(1f)
                             .clip(RoundedCornerShape(24.dp))
                             .background(categoryBg(product.category)),
-                        contentAlignment = Alignment.Center,
                     ) {
-                        Text(
-                            text = product.emoji ?: defaultEmoji(product.category),
-                            fontSize = 64.sp,
+                        Image(
+                            painter = painterResource(id = product.category.categoryDrawable()),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
                         )
                     }
                 }
@@ -1423,7 +1441,6 @@ private fun BigMacroCell(
     }
 }
 
-
 @Composable
 private fun GramsSheet(
     product: FoodProduct,
@@ -1455,9 +1472,11 @@ private fun GramsSheet(
                     .background(categoryBg(product.category)),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    text = product.emoji ?: defaultEmoji(product.category),
-                    fontSize = 24.sp,
+                Image(
+                    painter = painterResource(id = product.category.categoryDrawable()),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize().aspectRatio(1f),
+                    contentScale = ContentScale.Crop,
                 )
             }
             Spacer(modifier = Modifier.width(12.dp))
@@ -1626,7 +1645,6 @@ private fun VerticalDivider() {
     )
 }
 
-
 @Composable
 private fun DismissCreateMealPlanDialog(
     onConfirm: () -> Unit,
@@ -1666,7 +1684,6 @@ private fun DismissCreateMealPlanDialog(
         containerColor = Color.White,
     )
 }
-
 
 @Composable
 private fun BottomCtaBar(content: @Composable () -> Unit) {
@@ -1719,7 +1736,12 @@ private fun ErrorBanner(message: String, onDismiss: () -> Unit) {
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text = "⚠️", fontSize = 16.sp)
+        Icon(
+            imageVector = Icons.Outlined.Warning,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = Color(0xFFE5392E),
+        )
         Spacer(modifier = Modifier.width(10.dp))
         Text(
             text = message,
@@ -1768,7 +1790,12 @@ private fun ErrorPlaceholder(message: String) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(text = "⚠️", fontSize = 36.sp)
+        Icon(
+            imageVector = Icons.Outlined.Warning,
+            contentDescription = null,
+            modifier = Modifier.size(36.dp),
+            tint = AccentOrange,
+        )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = message,
@@ -1788,12 +1815,16 @@ private fun EmptyPlaceholder() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(text = "🔍", fontSize = 36.sp)
+        Icon(
+            imageVector = Icons.Filled.Search,
+            contentDescription = null,
+            modifier = Modifier.size(36.dp),
+            tint = MutedText,
+        )
         Spacer(modifier = Modifier.height(8.dp))
         Text(text = "Ничего не найдено", fontSize = 14.sp, color = MutedText)
     }
 }
-
 
 private fun shortMacro(value: Double): String {
     return if (value == value.toLong().toDouble()) value.toLong().toString()
@@ -1802,30 +1833,6 @@ private fun shortMacro(value: Double): String {
 
 private fun Double.roundToIntSafe(): Int = (this + 0.5).toInt()
 
-private fun weekdayShortRu(calendarDayOfWeek: Int): String = when (calendarDayOfWeek) {
-    Calendar.MONDAY -> "Пн"
-    Calendar.TUESDAY -> "Вт"
-    Calendar.WEDNESDAY -> "Ср"
-    Calendar.THURSDAY -> "Чт"
-    Calendar.FRIDAY -> "Пт"
-    Calendar.SATURDAY -> "Сб"
-    Calendar.SUNDAY -> "Вс"
-    else -> ""
-}
-
-private fun defaultEmoji(category: FoodCategory): String = when (category) {
-    FoodCategory.MEAT -> "🍗"
-    FoodCategory.FISH -> "🐟"
-    FoodCategory.DAIRY -> "🥛"
-    FoodCategory.EGGS -> "🥚"
-    FoodCategory.GRAINS -> "🌾"
-    FoodCategory.LEGUMES -> "🫘"
-    FoodCategory.VEGETABLES -> "🥦"
-    FoodCategory.FRUITS -> "🍎"
-    FoodCategory.NUTS_SEEDS -> "🥜"
-    FoodCategory.OILS -> "🫙"
-    FoodCategory.OTHER -> "🍴"
-}
 
 private fun categoryBg(category: FoodCategory): Color = when (category) {
     FoodCategory.MEAT -> Color(0xFFFFE8E0)

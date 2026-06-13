@@ -1,5 +1,6 @@
 package com.asc.gymgenie.feature.profile.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,7 +14,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -24,6 +24,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.painterResource
+import com.asc.gymgenie.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -51,12 +54,21 @@ fun ConfirmAccountSheetContent(
                 .background(if (isDelete) ProfileDangerSoft else ProfileCoralSoft),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(
-                imageVector = if (isDelete) Icons.Filled.Delete else Icons.AutoMirrored.Filled.ExitToApp,
-                contentDescription = null,
-                tint = if (isDelete) ProfileDangerRed else Coral,
-                modifier = Modifier.size(26.dp),
-            )
+            if (isDelete) {
+                Image(
+                    painter = painterResource(R.drawable.ic_delete),
+                    contentDescription = null,
+                    colorFilter = ColorFilter.tint(ProfileDangerRed),
+                    modifier = Modifier.size(26.dp),
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                    contentDescription = null,
+                    tint = Coral,
+                    modifier = Modifier.size(26.dp),
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(14.dp))

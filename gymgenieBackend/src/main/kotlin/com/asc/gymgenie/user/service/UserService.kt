@@ -53,7 +53,6 @@ class UserService(
 
     private fun UserEntity.toProfileResponse() = UserProfileResponse(
         id = id!!,
-        username = username,
         email = email,
         firstName = firstName,
         lastName = lastName,

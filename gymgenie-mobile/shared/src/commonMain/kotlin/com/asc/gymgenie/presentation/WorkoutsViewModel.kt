@@ -60,15 +60,10 @@ class WorkoutsViewModel(
     private val _state = MutableStateFlow(WorkoutsUiState())
     val state: StateFlow<WorkoutsUiState> = _state.asStateFlow()
 
-    /**
-     * Tracks the in-flight network call so [refresh] cannot stack concurrent
-     * requests if the user pulls multiple times in a row.
-     */
     private var loadJob: Job? = null
 
     fun loadWorkoutPlans() {
-        // A pull-to-refresh is the source of truth while in flight; we don't
-        // want a parallel "after create-plan" reload to race it.
+
         if (_state.value.isRefreshing) return
         if (_state.value.isLoading) return
         _state.update { it.copy(isLoading = true, errorMessage = null) }
@@ -118,15 +113,11 @@ class WorkoutsViewModel(
     }
 
     fun loadExercises(reset: Boolean = false) {
-        // A pull-to-refresh is the source of truth while in flight: it owns
-        // the page reset, so we must not race a parallel pagination/first-load
-        // call against it.
+
         if (_state.value.isRefreshing) return
 
         if (reset) {
-            // Cancel any in-flight load and clear loading flags so the new
-            // request can start. Keep `exercises` intact so the UI does not
-            // unmount the search bar / filter chips while the next page loads.
+
             loadJob?.cancel()
             _state.update {
                 it.copy(
@@ -141,9 +132,6 @@ class WorkoutsViewModel(
         val state = _state.value
         if (state.isLoading || state.isLoadingMore || !state.hasMoreExercises) return
 
-        // Pick the indicator based on whether we already have something to show:
-        // first ever load → full-screen spinner; refresh of existing list →
-        // footer spinner so the header and current items stay on screen.
         if (state.currentExercisePage == 0 && state.exercises.isEmpty()) {
             _state.update { it.copy(isLoading = true, errorMessage = null) }
         } else {
@@ -161,16 +149,6 @@ class WorkoutsViewModel(
         loadExercises(reset = true)
     }
 
-    /**
-     * User-initiated background refresh of the currently visible tab.
-     *
-     * Unlike [load*] entry points this never flips [WorkoutsUiState.isLoading]
-     * to true — it keeps existing content on screen and only toggles
-     * [WorkoutsUiState.isRefreshing] so the platform pull-to-refresh affordance
-     * stays visible. Pagination state for the exercises tab is reset so the
-     * user gets the freshest first page; subsequent infinite-scroll triggers
-     * continue to work normally afterwards.
-     */
     fun refresh() {
         if (loadJob?.isActive == true) return
 
@@ -296,10 +274,6 @@ class WorkoutsViewModel(
             )
         }
 
-        // If the user switched category/query while the request was in flight,
-        // the surrounding job has been cancelled but cooperative cancellation
-        // does not interrupt a completed suspending call. Check here before
-        // mutating state so a stale result cannot overwrite the new selection.
         currentCoroutineContext().ensureActive()
 
         result.fold(
@@ -310,9 +284,7 @@ class WorkoutsViewModel(
                         isLoading = false,
                         isLoadingMore = false,
                         isRefreshing = if (isRefresh) false else it.isRefreshing,
-                        // On refresh we replace the list wholesale; on the
-                        // first non-refresh page we also replace; later pages
-                        // append to support pagination.
+
                         exercises = if (isRefresh || page == 0) newItems else it.exercises + newItems,
                         hasMoreExercises = !(pagedResponse.last ?: true),
                         currentExercisePage = page + 1,

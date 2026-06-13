@@ -1,5 +1,6 @@
 package com.asc.gymgenie.feature.profile
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,8 +16,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Notifications
@@ -26,20 +25,28 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.asc.gymgenie.R
 import com.asc.gymgenie.common.SessionManager
 import com.asc.gymgenie.feature.profile.components.ConfirmAccountSheetContent
 import com.asc.gymgenie.feature.profile.components.ExperienceStrip
@@ -50,8 +57,11 @@ import com.asc.gymgenie.feature.profile.components.SettingsRow
 import com.asc.gymgenie.feature.profile.components.SubscriptionCard
 import com.asc.gymgenie.ui.components.GymGenieToolbar
 import com.asc.gymgenie.ui.components.ToolbarAction
+import com.asc.gymgenie.ui.theme.Coral
 import com.asc.gymgenie.ui.theme.WarmOffWhite
 import com.asc.gymgenie.user.UserProfileStore
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.koin.core.context.GlobalContext
 
 private val ProfileBorderDivider = Color(0xFFEDEDEF)
@@ -84,6 +94,10 @@ fun ProfileScreen(
         }.getOrNull() ?: "—"
     }
 
+    var isRefreshing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val refreshState = rememberPullToRefreshState()
+
     val hasPro = profile?.subscriptionType == "PREMIUM"
     val displayName = buildString {
         profile?.firstName?.takeIf { it.isNotBlank() }?.let { append(it) }
@@ -91,10 +105,31 @@ fun ProfileScreen(
             if (isNotEmpty()) append(" ")
             append(it)
         }
-        if (isEmpty()) profile?.username?.let { append(it) }
+        if (isEmpty()) profile?.firstName?.let { append(it) }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(WarmOffWhite)) {
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = {
+            scope.launch {
+                isRefreshing = true
+                userProfileStore.load()
+                delay(500)
+                isRefreshing = false
+            }
+        },
+        state = refreshState,
+        modifier = Modifier.fillMaxSize().background(WarmOffWhite),
+        indicator = {
+            PullToRefreshDefaults.Indicator(
+                state = refreshState,
+                isRefreshing = isRefreshing,
+                containerColor = Color.White,
+                color = Coral,
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+        },
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -105,9 +140,9 @@ fun ProfileScreen(
                 actions = listOf(
                     ToolbarAction(
                         content = {
-                            Icon(
-                                imageVector = Icons.Filled.Edit,
-                                contentDescription = null,
+                            Image(
+                                painter = painterResource(R.drawable.ic_edit),
+                                contentDescription = "Редактировать",
                                 modifier = Modifier.size(16.dp),
                             )
                             Text(
@@ -202,7 +237,14 @@ fun ProfileScreen(
                     HorizontalDivider(color = ProfileBorderDivider, modifier = Modifier.padding(horizontal = 16.dp))
                     SettingsRow(
                         label = "Удалить аккаунт",
-                        icon = Icons.Filled.Delete,
+                        iconContent = {
+                            Image(
+                                painter = painterResource(R.drawable.ic_delete),
+                                contentDescription = "Удалить",
+                                modifier = Modifier.size(24.dp),
+                                colorFilter = ColorFilter.tint(ProfileDangerRow),
+                            )
+                        },
                         labelColor = ProfileDangerRow,
                         iconColor = ProfileDangerRow,
                         onClick = { confirmDialog = "delete" },
@@ -234,9 +276,7 @@ fun ProfileScreen(
                         when (dialogKey) {
                             "logout" -> {
                                 confirmDialog = null
-                                // Token clearance and profile-store reset
-                                // happen in `App.kt`'s SessionManager listener;
-                                // ProfileScreen only signals the intent.
+
                                 sessionManager.triggerLogout()
                             }
                             "delete" -> confirmDialog = null
@@ -248,4 +288,3 @@ fun ProfileScreen(
         }
     }
 }
-

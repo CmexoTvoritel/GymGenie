@@ -13,17 +13,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/**
- * UI state of the food product picker.
- *
- * - [allProducts] is the raw catalog snapshot loaded once per session.
- * - [filteredProducts] is what the list renders. We keep it in state so the
- *   UI never has to recompute the filter on every recomposition; the VM
- *   is the only writer.
- * - [selectedProduct] / [amountGrams] / [amountInputError] together describe
- *   the detail-sheet state. Putting them on the same state class keeps the
- *   "open detail with X grams" transition atomic.
- */
 data class FoodPickerUiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
@@ -34,11 +23,7 @@ data class FoodPickerUiState(
     val selectedProduct: FoodProduct? = null,
     val amountGrams: String = DEFAULT_AMOUNT_GRAMS,
 ) {
-    /**
-     * Numeric grams parsed from [amountGrams]. `null` when the input is empty
-     * or non-numeric — used by the UI to gate the confirm button without
-     * splitting validation logic across layers.
-     */
+
     val parsedAmountGrams: Double?
         get() = amountGrams.replace(',', '.').trim().toDoubleOrNull()?.takeIf { it > 0.0 }
 
@@ -50,18 +35,6 @@ data class FoodPickerUiState(
     }
 }
 
-/**
- * Presenter for the food product picker.
- *
- * - Fetches the full catalog once on [load] (catalogs are small, the UI
- *   filters in-memory on every keystroke / chip tap).
- * - Filtering is applied synchronously on every state mutation so the UI
- *   never observes a transient inconsistent (`searchQuery` updated, list
- *   not yet recomputed) state.
- *
- * Lives in `commonMain` so iOS and Android can share both the contract and
- * the filter rules without re-implementing them per platform.
- */
 class FoodPickerViewModel(
     private val foodProductApi: FoodProductApi,
 ) {
@@ -69,11 +42,6 @@ class FoodPickerViewModel(
     private val _state = MutableStateFlow(FoodPickerUiState())
     val state: StateFlow<FoodPickerUiState> = _state.asStateFlow()
 
-    /**
-     * Triggers an initial load if the catalog is empty. Subsequent calls are
-     * no-ops while a load is in flight to avoid duplicate requests when the
-     * screen recomposes.
-     */
     fun load() {
         val current = _state.value
         if (current.isLoading) return
@@ -139,11 +107,6 @@ class FoodPickerViewModel(
         }
     }
 
-    /**
-     * Opens the detail sheet for [product] with the default 100g amount.
-     * The default is reset on every open so a previously-typed amount from
-     * another product doesn't leak across selections.
-     */
     fun selectProduct(product: FoodProduct) {
         _state.update {
             it.copy(
@@ -158,9 +121,7 @@ class FoodPickerViewModel(
     }
 
     fun onAmountChange(raw: String) {
-        // Allow only digits and one separator. Strip everything else so the
-        // numeric keyboard input stays predictable on locales that emit a
-        // decimal comma.
+
         val sanitized = raw
             .filter { it.isDigit() || it == '.' || it == ',' }
             .replace(',', '.')

@@ -128,8 +128,6 @@ class WorkoutPlanService(
             exercises = request.exercises
         )
 
-        // Use the in-memory entity directly — days and exercises were populated by
-        // populateSimpleDays into savedPlan.days / savedDay.exercises, so no re-fetch needed.
         return savedPlan.toResponse()
     }
 
@@ -145,7 +143,7 @@ class WorkoutPlanService(
             request.scheduleType != null || request.scheduleDays != null || request.exercises != null
 
         if (schedulingChanged) {
-            // Full plan-shape edit: replace days + exercises atomically.
+
             val effectiveScheduleType = request.scheduleType ?: plan.scheduleType
             val effectiveScheduleDays = when {
                 request.scheduleDays != null -> request.scheduleDays
@@ -169,8 +167,7 @@ class WorkoutPlanService(
                             exerciseId = it.exercise.id!!,
                             sets = it.sets,
                             reps = it.reps,
-                            // Carry stored per-set weights through the self-merge so an update that
-                            // does not resend the exercise list does not silently drop them.
+
                             setWeightsKg = decodeSetWeights(it.setWeightsKg)
                         )
                     }
@@ -179,10 +176,9 @@ class WorkoutPlanService(
             validateSimpleSchedule(effectiveScheduleType, effectiveScheduleDays)
 
             plan.scheduleType = effectiveScheduleType
-            // Clear existing days; orphanRemoval + cascade ALL on WorkoutPlanEntity.days will delete day rows
-            // and (transitively) their exercises via the same cascade on WorkoutPlanDayEntity.exercises.
+
             plan.days.clear()
-            // Force the orphan delete to be flushed before re-inserting days that share the same plan.
+
             workoutPlanRepository.saveAndFlush(plan)
 
             populateSimpleDays(
@@ -195,7 +191,7 @@ class WorkoutPlanService(
         }
 
         val savedPlan = workoutPlanRepository.save(plan)
-        // Re-fetch through the repository so the entity graph is reapplied with the new day/exercise rows.
+
         return workoutPlanRepository.findByIdAndUserId(savedPlan.id!!, userId)
             ?.toResponse()
             ?: throw NotFoundException("Workout plan not found")
@@ -331,12 +327,6 @@ class WorkoutPlanService(
         }
     }
 
-    /**
-     * Creates one [WorkoutPlanDayEntity] per resolved day (placeholder Monday for ONE_TIME, distinct schedule days for
-     * RECURRING) and persists each provided exercise with the shared rest interval.
-     *
-     * Caller is responsible for clearing any pre-existing days when this is invoked from an edit flow.
-     */
     private fun populateSimpleDays(
         plan: WorkoutPlanEntity,
         scheduleType: WorkoutScheduleType,
@@ -345,14 +335,12 @@ class WorkoutPlanService(
         exercises: List<SimpleWorkoutExerciseItem>
     ) {
         val daysToCreate: List<DayOfWeek> = when (scheduleType) {
-            WorkoutScheduleType.ONE_TIME -> listOf(DayOfWeek.MONDAY) // placeholder day for one-time workouts
+            WorkoutScheduleType.ONE_TIME -> listOf(DayOfWeek.MONDAY)
             WorkoutScheduleType.RECURRING -> scheduleDays.distinct()
         }
 
-        // Validate set-weight payloads up front so we fail fast with a 400 before any rows are written.
         exercises.forEach { validateSetWeights(it) }
 
-        // Resolve all referenced exercises up front so we fail fast on bad ids and avoid repeated lookups per day.
         val resolvedExercises = exercises.map { item ->
             item to exerciseRepository.findById(item.exerciseId)
                 .orElseThrow { NotFoundException("Exercise not found: ${item.exerciseId}") }
@@ -366,8 +354,7 @@ class WorkoutPlanService(
                 orderIndex = dayIndex
             )
             val savedDay = workoutPlanDayRepository.save(day)
-            // Keep the in-memory plan.days collection consistent with the DB so callers that read the plan
-            // back through the same persistence context (first-level cache) see the freshly created days.
+
             plan.days.add(savedDay)
 
             resolvedExercises.forEachIndexed { index, (item, exercise) ->
@@ -390,11 +377,6 @@ class WorkoutPlanService(
         }
     }
 
-    /**
-     * Throws [BadRequestException] when the optional per-set weights list is present but its size
-     * does not match the declared [SimpleWorkoutExerciseItem.sets] count. Empty/null lists are valid
-     * (they mean "no weight tracking").
-     */
     private fun validateSetWeights(item: SimpleWorkoutExerciseItem) {
         val weights = item.setWeightsKg ?: return
         if (weights.isEmpty()) return
@@ -412,18 +394,9 @@ class WorkoutPlanService(
         }
     }
 
-    /**
-     * Treats an empty list as `null` so we don't store `"[]"` strings that would be indistinguishable
-     * from "no tracking" on read-back.
-     */
     private fun normalizeSetWeights(weights: List<Double?>?): List<Double?>? =
         weights?.takeIf { it.isNotEmpty() }
 
-    /**
-     * Picks a scalar weight for the legacy [WorkoutPlanExerciseEntity.weightKg] column so that older
-     * clients still see a meaningful value. Uses the first non-null entry — more predictable than
-     * averaging a partially-filled list and matches what the mobile UI typically previews.
-     */
     private fun unifiedWeightFor(weights: List<Double?>?): Double? =
         weights?.firstOrNull { it != null }
 
@@ -437,8 +410,7 @@ class WorkoutPlanService(
         return try {
             objectMapper.readValue(json, SET_WEIGHTS_TYPE).takeIf { it.isNotEmpty() }
         } catch (_: JacksonException) {
-            // The column is service-managed; we only land here if it was hand-edited to an invalid
-            // shape. Degrade gracefully to "no per-set weights" instead of failing the whole read.
+
             null
         }
     }
@@ -448,7 +420,6 @@ class WorkoutPlanService(
         private const val DEFAULT_REST_SECONDS = 60
         private const val DEFAULT_SECONDS_PER_10_REPS = 30
 
-        // Reused across reads to avoid allocating a TypeReference per call.
         private val SET_WEIGHTS_TYPE = object : TypeReference<List<Double?>>() {}
     }
 }

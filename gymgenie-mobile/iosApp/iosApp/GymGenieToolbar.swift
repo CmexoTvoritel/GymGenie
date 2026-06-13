@@ -31,6 +31,8 @@ struct GymGenieToolbar: View {
                 Text(title)
                     .font(.system(size: 24, weight: .semibold))
                     .foregroundColor(titleColor)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
 
             Spacer()

@@ -17,16 +17,6 @@ import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 
-/**
- * Workout backend client.
- *
- * Authentication is delegated to the injected [HttpClient]: the bearer token,
- * 401-driven refresh, and storage-clearing on refresh failure are handled by
- * the Ktor `Auth` plugin configured in `createAuthenticatedClient`. Callers
- * must therefore inject an authenticated client; passing a plain client will
- * cause every endpoint to fail with 401 because no `Authorization` header
- * will be attached.
- */
 class WorkoutApi(
     private val client: HttpClient,
     private val baseUrl: String = AppConfig.BASE_URL,
@@ -65,10 +55,6 @@ class WorkoutApi(
         }
     }
 
-    /**
-     * Creates a user-authored workout plan from a list of exercises with
-     * per-exercise sets/reps and a global rest interval.
-     */
     suspend fun createSimpleWorkout(
         request: CreateSimpleWorkoutRequest,
     ): Result<WorkoutPlanShortResponse> {
@@ -88,14 +74,6 @@ class WorkoutApi(
         }
     }
 
-    /**
-     * Submits a finished workout session in a single request.
-     *
-     * The client-side flow accumulates set-level entries in a local DB while
-     * the user trains; once they finish, the full payload is uploaded here.
-     * This keeps the protocol simple (one round-trip, no server-side session
-     * state) and resilient to flaky networks during the workout itself.
-     */
     suspend fun submitSession(
         request: SubmitWorkoutSessionRequest,
     ): Result<WorkoutSessionResponse> {
@@ -115,13 +93,6 @@ class WorkoutApi(
         }
     }
 
-    /**
-     * Fetches all workout sessions for the given calendar date.
-     *
-     * [date] must be an ISO-8601 local date string (`"2026-05-15"`). The
-     * backend resolves it to the user's server-side timezone. Returns an
-     * empty list when no sessions exist for that day.
-     */
     suspend fun getSessionsByDate(date: String): Result<List<WorkoutSessionHistoryItem>> {
         return try {
             val response = client.get("$baseUrl/api/v1/workout-sessions/by-date") {
@@ -152,10 +123,6 @@ class WorkoutApi(
         }
     }
 
-    /**
-     * Permanently deletes a workout plan. The backend responds with 204 on
-     * success — we accept any 2xx and treat the body as empty.
-     */
     suspend fun deletePlan(planId: String): Result<Unit> {
         return try {
             val response = client.delete("$baseUrl/api/v1/workout-plans/$planId")
@@ -170,12 +137,6 @@ class WorkoutApi(
         }
     }
 
-    /**
-     * Applies a partial update to an existing plan. Fields left null on the
-     * request are kept untouched on the server; the response is the freshly
-     * persisted [WorkoutPlanResponse] so the client can replace its local copy
-     * without a follow-up GET.
-     */
     suspend fun updatePlan(
         planId: String,
         request: UpdateWorkoutPlanRequest,

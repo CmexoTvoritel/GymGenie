@@ -4,18 +4,6 @@ import com.asc.gymgenie.db.DatabaseDriverFactory
 import com.asc.gymgenie.db.GymGenieDatabase
 import kotlinx.datetime.Clock
 
-/**
- * Offline-first persistence for an in-progress workout session.
- *
- * Each completed (or skipped) set is written here as soon as the user records
- * it. When the session ends, [getSession] + [getSetsForSession] feed the
- * "submit session" backend call and [clearSession] erases the local rows on
- * success. Failed submits keep the rows around for a future retry.
- *
- * The repository purposely exposes plain domain-shaped data classes
- * ([PendingSession] / [PendingSet]) and never leaks SQLDelight types so that
- * presenters and use cases stay decoupled from the persistence engine.
- */
 class LocalWorkoutRepository(driverFactory: DatabaseDriverFactory) {
 
     private val database = GymGenieDatabase(driverFactory.createDriver())
@@ -39,7 +27,6 @@ class LocalWorkoutRepository(driverFactory: DatabaseDriverFactory) {
         )
     }
 
-    /** Append a single completed/skipped set to the session. */
     fun saveSet(
         sessionId: String,
         exerciseId: String,
@@ -60,13 +47,6 @@ class LocalWorkoutRepository(driverFactory: DatabaseDriverFactory) {
         )
     }
 
-    /**
-     * Stamp the session row as finished. Only sessions with a non-null
-     * `finished_at` are eligible for background retry via
-     * [getAllPendingSessions]; in-progress sessions are intentionally
-     * invisible to the uploader so it cannot race against
-     * [WorkoutSessionViewModel].
-     */
     fun markSessionFinished(sessionId: String, finishedAtEpochMillis: Long) {
         queries.markSessionFinished(finishedAtEpochMillis, sessionId)
     }
@@ -95,17 +75,6 @@ class LocalWorkoutRepository(driverFactory: DatabaseDriverFactory) {
         )
     }
 
-    /**
-     * Returns the metadata for every session currently persisted locally that
-     * has been explicitly marked as finished.
-     *
-     * Used by [PendingSessionUploader] on app startup to discover sessions
-     * that were never successfully submitted (the user dismissed the summary
-     * screen, the process died, etc.) so they can be retried in the
-     * background. In-progress sessions (no `finished_at`) are filtered out by
-     * the underlying query so the uploader cannot trample on rows that
-     * [WorkoutSessionViewModel] is still writing to.
-     */
     fun getAllPendingSessions(): List<PendingSession> {
         return queries.getAllSessions().executeAsList().map { row ->
             PendingSession(
@@ -134,7 +103,6 @@ class LocalWorkoutRepository(driverFactory: DatabaseDriverFactory) {
         }
     }
 
-    /** Remove session row and all its child sets. Called after a successful submit. */
     fun clearSession(sessionId: String) {
         queries.transaction {
             queries.deleteSetsBySession(sessionId)

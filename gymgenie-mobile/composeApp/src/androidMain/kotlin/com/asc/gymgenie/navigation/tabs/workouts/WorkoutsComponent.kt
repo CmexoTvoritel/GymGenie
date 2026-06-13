@@ -2,6 +2,7 @@ package com.asc.gymgenie.navigation.tabs.workouts
 
 import com.arkivanov.decompose.router.stack.ChildStack
 import com.arkivanov.decompose.value.Value
+import com.asc.gymgenie.exercise.ExerciseShortResponse
 import com.asc.gymgenie.presentation.CreateWorkoutViewModel
 
 interface WorkoutsComponent {
@@ -12,6 +13,7 @@ interface WorkoutsComponent {
     fun openExerciseDetail(exerciseId: String)
     fun openWorkoutDetail(planId: String)
     fun openCreateWorkout()
+    fun openCreateWorkoutWithExercise(exercise: ExerciseShortResponse)
     fun pop()
     fun resetToMain()
     fun onWorkoutCreated()
@@ -20,6 +22,9 @@ interface WorkoutsComponent {
         data object Main : Child()
         data class ExerciseDetail(val exerciseId: String) : Child()
         data class WorkoutDetail(val planId: String) : Child()
-        data class CreateWorkout(val viewModel: CreateWorkoutViewModel) : Child()
+        data class CreateWorkout(
+            val viewModel: CreateWorkoutViewModel,
+            val initialExercise: ExerciseShortResponse? = null,
+        ) : Child()
     }
 }

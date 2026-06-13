@@ -3,6 +3,7 @@ package com.asc.gymgenie.feature.workout_session
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,12 +17,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -46,15 +45,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.asc.gymgenie.feature.workout_session.components.CircularIconButton
+import com.asc.gymgenie.feature.create_workout.muscleGroupExerciseDrawable
 import com.asc.gymgenie.feature.workout_session.components.ExerciseInfoSheet
+import com.asc.gymgenie.ui.components.GymGenieToolbar
 import com.asc.gymgenie.presentation.WorkoutSessionViewModel
 import com.asc.gymgenie.ui.theme.Coral
-import com.asc.gymgenie.ui.theme.CoralLight
 import com.asc.gymgenie.ui.theme.OnBackground
 import com.asc.gymgenie.ui.theme.OnSurfaceVariant
 import com.asc.gymgenie.ui.theme.WarmOffWhite
@@ -71,17 +71,14 @@ fun RestTimerScreen(
 
     BackHandler { showExitDialog = true }
 
-    // Native rest countdown timer
     var restRemaining by remember { mutableIntStateOf(state.restDurationSeconds) }
     var circleMax by remember { mutableIntStateOf(state.restDurationSeconds) }
 
-    // Reset countdown when entering rest for a new set
     LaunchedEffect(state.currentExerciseIndex, state.currentSetIndex) {
         restRemaining = state.restDurationSeconds
         circleMax = state.restDurationSeconds
     }
 
-    // Handle ±10s adjustments without resetting the countdown
     var prevDuration by remember { mutableIntStateOf(state.restDurationSeconds) }
     LaunchedEffect(state.restDurationSeconds) {
         if (state.restDurationSeconds != prevDuration) {
@@ -92,7 +89,6 @@ fun RestTimerScreen(
         }
     }
 
-    // Tick-down loop — keyed on set identity so the coroutine restarts cleanly
     LaunchedEffect(state.currentExerciseIndex, state.currentSetIndex) {
         while (restRemaining > 0) {
             delay(1_000)
@@ -110,29 +106,15 @@ fun RestTimerScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(WarmOffWhite)
-            .statusBarsPadding(),
+            .background(WarmOffWhite),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            CircularIconButton(onClick = { showExitDialog = true }) {
-                Icon(Icons.Filled.Close, contentDescription = "Закрыть", tint = OnBackground)
-            }
-            Text(
-                "Тренировка",
-                modifier = Modifier.weight(1f),
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 16.sp,
-                color = OnBackground,
-                textAlign = TextAlign.Center,
-            )
-            Spacer(modifier = Modifier.size(40.dp))
-        }
+        GymGenieToolbar(
+            title = "Тренировка",
+            showBackNavigation = true,
+            showCloseIcon = true,
+            onBackClick = { showExitDialog = true },
+        )
 
         Spacer(modifier = Modifier.weight(1f))
 
@@ -217,15 +199,16 @@ fun RestTimerScreen(
                 modifier = Modifier.padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(
+                Image(
+                    painter = painterResource(
+                        id = muscleGroupExerciseDrawable(nextMuscleGroup(state)),
+                    ),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
                     modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(CoralLight),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("🏋️", fontSize = 18.sp)
-                }
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(8.dp)),
+                )
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Далее", fontSize = 15.sp, color = OnSurfaceVariant)
@@ -322,7 +305,6 @@ fun RestTimerScreen(
                     viewModel.cancelWorkout(
                         ((System.currentTimeMillis() - sessionStartMillis) / 1000).toInt(),
                     )
-                    onBack()
                 }) {
                     Text(
                         text = "Завершить",
@@ -368,5 +350,14 @@ private fun nextExerciseId(state: WorkoutSessionViewModel.State): String? {
         current.exerciseId
     } else {
         state.nextExercise?.exerciseId
+    }
+}
+
+private fun nextMuscleGroup(state: WorkoutSessionViewModel.State): String {
+    val current = state.currentExercise ?: return ""
+    return if (state.currentSetIndex + 2 <= current.sets) {
+        current.muscleGroupLabel
+    } else {
+        state.nextExercise?.muscleGroupLabel ?: ""
     }
 }

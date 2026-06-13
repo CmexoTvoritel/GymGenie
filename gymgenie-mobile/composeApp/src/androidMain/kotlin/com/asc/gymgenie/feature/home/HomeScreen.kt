@@ -32,7 +32,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,6 +67,8 @@ import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
 import com.asc.gymgenie.ui.theme.SoftCard
 import com.asc.gymgenie.ui.theme.WarmOffWhite
+import com.asc.gymgenie.user.UserProfileResponse
+import com.asc.gymgenie.user.UserProfileStore
 import com.asc.gymgenie.workout.ActiveWorkoutSession
 import com.asc.gymgenie.workout.WorkoutPlanShortResponse
 import kotlinx.datetime.LocalDate
@@ -81,7 +85,9 @@ fun HomeScreen(
     onSessionReady: (ActiveWorkoutSession) -> Unit,
     onCreateMealPlan: (mealType: String?, date: String?) -> Unit,
     onViewMealPlan: (planId: String) -> Unit,
+    onCreateWorkout: () -> Unit = {},
     mealPlansReloadKey: Int = 0,
+    activitiesRefreshSignal: Int = 0,
     onOpenPaywall: () -> Unit = {},
     onNotificationsClick: () -> Unit = {},
     onSwitchToProfile: () -> Unit = {},
@@ -91,8 +97,11 @@ fun HomeScreen(
 ) {
     val koin = remember { GlobalContext.get() }
     val viewModel = remember { koin.get<HomeViewModel>() }
+    val userProfileStore = remember { koin.get<UserProfileStore>() }
 
     val state by viewModel.state.collectAsState()
+    val profile by userProfileStore.profile.collectAsState()
+    val displayName = remember(profile) { buildDisplayName(profile) }
 
     LaunchedEffect(Unit) {
         if (!state.isContentLoaded) {
@@ -105,6 +114,12 @@ fun HomeScreen(
     LaunchedEffect(mealPlansReloadKey) {
         if (mealPlansReloadKey > 0) {
             viewModel.refreshMealPlans()
+        }
+    }
+
+    LaunchedEffect(activitiesRefreshSignal) {
+        if (activitiesRefreshSignal > 0) {
+            viewModel.refreshTodayActivities()
         }
     }
 
@@ -123,12 +138,17 @@ fun HomeScreen(
     }
 
     val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(state.activityError) {
         state.activityError?.let { msg ->
             snackbarHostState.showSnackbar(msg)
             viewModel.clearActivityError()
         }
+    }
+
+    val onPastDateBlocked: () -> Unit = {
+        scope.launch { snackbarHostState.showSnackbar("Создание на вчерашний день недоступно") }
     }
 
     Box(
@@ -149,6 +169,7 @@ fun HomeScreen(
                 )
                 ScreenState.Content -> ContentWithPullToRefresh(
                     state = state,
+                    displayName = displayName,
                     onRefresh = viewModel::refresh,
                     onViewPlan = onViewPlan,
                     onStartPlan = { plan -> viewModel.startWorkout(plan.id, plan.name) },
@@ -156,7 +177,10 @@ fun HomeScreen(
                     onOpenCatalog = onOpenCatalog,
                     onViewMealPlan = onViewMealPlan,
                     onCreateMealPlan = onCreateMealPlan,
+                    onCreateWorkout = onCreateWorkout,
+                    onPastDateBlocked = onPastDateBlocked,
                     onCheckIn = viewModel::checkIn,
+                    onRemoveFromPlan = viewModel::removeFromPlan,
                     selectedMealDate = state.selectedMealDate,
                     onMealDateSelected = viewModel::selectMealDate,
                     isPremium = state.subscriptionType != "FREE",
@@ -180,6 +204,7 @@ fun HomeScreen(
 @Composable
 private fun ContentWithPullToRefresh(
     state: com.asc.gymgenie.presentation.HomeUiState,
+    displayName: String,
     onRefresh: () -> Unit,
     onViewPlan: (WorkoutPlanShortResponse) -> Unit,
     onStartPlan: (WorkoutPlanShortResponse) -> Unit,
@@ -187,7 +212,10 @@ private fun ContentWithPullToRefresh(
     onOpenCatalog: () -> Unit,
     onViewMealPlan: (planId: String) -> Unit,
     onCreateMealPlan: (mealType: String?, date: String?) -> Unit,
+    onCreateWorkout: () -> Unit,
+    onPastDateBlocked: () -> Unit,
     onCheckIn: (String, Int) -> Unit,
+    onRemoveFromPlan: (String) -> Unit,
     selectedMealDate: LocalDate,
     onMealDateSelected: (LocalDate) -> Unit,
     isPremium: Boolean,
@@ -214,7 +242,7 @@ private fun ContentWithPullToRefresh(
         },
     ) {
         HomeContent(
-            username = state.username.ifBlank { "друг" },
+            username = displayName,
             activePlans = state.activeWorkoutPlans,
             todayActivities = state.todayActivities,
             todayMealPlans = state.todayMealPlans,
@@ -227,7 +255,10 @@ private fun ContentWithPullToRefresh(
             onOpenCatalog = onOpenCatalog,
             onViewMealPlan = onViewMealPlan,
             onCreateMealPlan = onCreateMealPlan,
+            onCreateWorkout = onCreateWorkout,
+            onPastDateBlocked = onPastDateBlocked,
             onCheckIn = onCheckIn,
+            onRemoveFromPlan = onRemoveFromPlan,
             isLoadingSession = state.isLoadingSession,
             sessionError = state.sessionError,
             isPremium = isPremium,
@@ -260,8 +291,6 @@ private fun ErrorState(message: String, onRetry: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(text = "⚠️", fontSize = 40.sp)
-        Spacer(modifier = Modifier.height(12.dp))
         Text(
             text = message,
             fontSize = 14.sp,
@@ -294,7 +323,10 @@ private fun HomeContent(
     onOpenCatalog: () -> Unit,
     onViewMealPlan: (planId: String) -> Unit,
     onCreateMealPlan: (mealType: String?, date: String?) -> Unit,
+    onCreateWorkout: () -> Unit,
+    onPastDateBlocked: () -> Unit,
     onCheckIn: (String, Int) -> Unit,
+    onRemoveFromPlan: (String) -> Unit,
     isLoadingSession: Boolean,
     sessionError: String?,
     isPremium: Boolean,
@@ -337,7 +369,7 @@ private fun HomeContent(
 
         item {
             if (todaySlot.plans.isEmpty()) {
-                NoWorkoutPlaceholder(onCreate = { })
+                NoWorkoutPlaceholder(onCreate = onCreateWorkout)
             } else {
                 WorkoutTodayPager(
                     plans = todaySlot.plans,
@@ -373,6 +405,7 @@ private fun HomeContent(
             ActivityRowsCard(
                 activities = todayActivities,
                 onCheckIn = onCheckIn,
+                onRemoveFromPlan = onRemoveFromPlan,
                 onOpenScheduleSettings = { activity ->
                     onOpenActivityScheduleSettings(
                         activity.activityId,
@@ -397,6 +430,7 @@ private fun HomeContent(
                 onDateSelected = onMealDateSelected,
                 onPlanTap = onViewMealPlan,
                 onCreatePlan = onCreateMealPlan,
+                onPastDateBlocked = onPastDateBlocked,
                 isPremium = isPremium,
                 onOpenPaywall = onOpenPaywall,
                 modifier = Modifier.padding(top = 12.dp),
@@ -442,8 +476,6 @@ private fun SessionStatusBanner(isLoading: Boolean, errorMessage: String?) {
                 color = DeepInk,
             )
         } else if (errorMessage != null) {
-            Text(text = "⚠️", fontSize = 18.sp)
-            Spacer(modifier = Modifier.width(12.dp))
             Text(
                 text = errorMessage,
                 fontSize = 13.sp,
@@ -506,6 +538,13 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRoundRectBorder
 private fun currentDateLabel(): String {
     val formatter = SimpleDateFormat("EEEE, d MMMM", Locale("ru", "RU"))
     return formatter.format(Date())
+}
+
+private fun buildDisplayName(profile: UserProfileResponse?): String {
+    if (profile == null) return "друг"
+    val firstName = profile.firstName
+    if (!firstName.isNullOrBlank()) return firstName
+    return "друг"
 }
 
 private fun currentDayOfWeek(): String {

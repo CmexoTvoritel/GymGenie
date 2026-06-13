@@ -1,5 +1,6 @@
 package com.asc.gymgenie.feature.home.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,13 +27,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.asc.gymgenie.R
 import com.asc.gymgenie.nutrition.TodayMealDish
+import androidx.annotation.DrawableRes
 import com.asc.gymgenie.nutrition.TodayMealPlanCard
 import com.asc.gymgenie.nutrition.todayLocalDate
 import com.asc.gymgenie.ui.theme.AccentOrange
@@ -40,6 +45,7 @@ import com.asc.gymgenie.ui.theme.Coral
 import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
 import com.asc.gymgenie.ui.theme.SoftCard
+import com.asc.gymgenie.utils.monthNameGenitive
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.Month
@@ -50,14 +56,14 @@ private val MealCardBorder = Color(0xFFEDEDEF)
 
 private val STANDARD_SLOTS = listOf("BREAKFAST", "LUNCH", "DINNER")
 
-private data class MealPalette(val iconBg: Color, val iconFg: Color, val emoji: String)
+private data class MealPalette(val iconBg: Color, val iconFg: Color, @DrawableRes val iconRes: Int)
 
 private fun paletteFor(mealType: String): MealPalette = when (mealType.uppercase()) {
-    "BREAKFAST" -> MealPalette(Color(0xFFFFF6D6), Color(0xFFD4A017), "☀️")
-    "LUNCH" -> MealPalette(Color(0xFFFFEEDD), Color(0xFFE07B00), "🥗")
-    "DINNER" -> MealPalette(Color(0xFFE6E9FF), Color(0xFF3B5BDB), "🌙")
-    "SNACK" -> MealPalette(Color(0xFFE8F7E8), Color(0xFF2F9E44), "🍎")
-    else -> MealPalette(Color(0xFFF3F2EF), Color(0xFF6E6E76), "🍽️")
+    "BREAKFAST" -> MealPalette(Color(0xFFFFF6D6), Color(0xFFD4A017), R.drawable.ic_breakfast)
+    "LUNCH" -> MealPalette(Color(0xFFFFEEDD), Color(0xFFE07B00), R.drawable.ic_lunch)
+    "DINNER" -> MealPalette(Color(0xFFE6E9FF), Color(0xFF3B5BDB), R.drawable.ic_dinner)
+    "SNACK" -> MealPalette(Color(0xFFE8F7E8), Color(0xFF2F9E44), R.drawable.ic_dinner)
+    else -> MealPalette(Color(0xFFF3F2EF), Color(0xFF6E6E76), R.drawable.ic_lunch)
 }
 
 private fun mealTypeDisplayName(mealType: String): String = when (mealType.uppercase()) {
@@ -76,11 +82,13 @@ fun MealPlanSection(
     onDateSelected: (LocalDate) -> Unit,
     onPlanTap: (planId: String) -> Unit,
     onCreatePlan: (mealType: String?, date: String?) -> Unit,
+    onPastDateBlocked: () -> Unit = {},
     isPremium: Boolean = true,
     onOpenPaywall: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val totalKcal = todayPlans.sumOf { it.estimatedCalories ?: 0 }
+    val isPastDate = selectedDate < todayLocalDate()
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SectionHeaderPremium(
@@ -102,11 +110,16 @@ fun MealPlanSection(
             )
 
             val dateIso = selectedDate.toString()
+            val handleCreate: (String?, String?) -> Unit = if (isPastDate) {
+                { _, _ -> onPastDateBlocked() }
+            } else {
+                onCreatePlan
+            }
 
             if (isLoading) {
                 MealPlansLoadingState()
             } else if (todayPlans.isEmpty()) {
-                EmptyPlanCard(onCreate = { onCreatePlan(null, null) })
+                EmptyPlanCard(onCreate = { handleCreate(null, null) })
             } else {
                 STANDARD_SLOTS.forEach { slot ->
                     val card = todayPlans.firstOrNull { it.mealType.uppercase() == slot }
@@ -118,7 +131,7 @@ fun MealPlanSection(
                     } else {
                         EmptyMealSlotCard(
                             mealType = slot,
-                            onCreatePlan = { mealType -> onCreatePlan(mealType, dateIso) },
+                            onCreatePlan = { mealType -> handleCreate(mealType, dateIso) },
                         )
                     }
                 }
@@ -231,7 +244,7 @@ private fun MealDatePicker(
         today -> "Сегодня"
         today.minus(1, DateTimeUnit.DAY) -> "Вчера"
         today.plus(1, DateTimeUnit.DAY) -> "Завтра"
-        else -> "${selectedDate.dayOfMonth} ${monthName(selectedDate.month)}"
+        else -> "${selectedDate.dayOfMonth} ${monthNameGenitive(selectedDate.month)}"
     }
 
     Row(
@@ -298,22 +311,6 @@ private fun DateArrowButton(forward: Boolean, onClick: () -> Unit) {
     }
 }
 
-private fun monthName(month: Month): String = when (month) {
-    Month.JANUARY -> "января"
-    Month.FEBRUARY -> "февраля"
-    Month.MARCH -> "марта"
-    Month.APRIL -> "апреля"
-    Month.MAY -> "мая"
-    Month.JUNE -> "июня"
-    Month.JULY -> "июля"
-    Month.AUGUST -> "августа"
-    Month.SEPTEMBER -> "сентября"
-    Month.OCTOBER -> "октября"
-    Month.NOVEMBER -> "ноября"
-    Month.DECEMBER -> "декабря"
-    else -> month.name
-}
-
 @Composable
 private fun EmptyPlanCard(onCreate: () -> Unit) {
     Column(
@@ -325,21 +322,30 @@ private fun EmptyPlanCard(onCreate: () -> Unit) {
             .padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(text = "🍽️", fontSize = 30.sp)
-        Spacer(modifier = Modifier.height(8.dp))
+        Image(
+            painter = painterResource(R.drawable.ic_empty_food_plan),
+            contentDescription = null,
+            modifier = Modifier.height(100.dp),
+            contentScale = ContentScale.FillHeight,
+        )
+        Spacer(modifier = Modifier.height(16.dp))
         Text(
             text = "Нет плана питания на эту дату",
-            fontSize = 17.sp,
+            fontSize = 18.sp,
             fontWeight = FontWeight.ExtraBold,
             color = DeepInk,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = "Создай рацион — расписание само подскажет, что есть в этот день",
-            fontSize = 15.sp,
+            fontSize = 16.sp,
             color = MutedText,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
         )
         Spacer(modifier = Modifier.height(14.dp))
         Box(
@@ -353,7 +359,7 @@ private fun EmptyPlanCard(onCreate: () -> Unit) {
         ) {
             Text(
                 text = "Создать план",
-                fontSize = 14.sp,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
             )
@@ -383,7 +389,12 @@ private fun EmptyMealSlotCard(mealType: String, onCreatePlan: (mealType: String)
                 .background(palette.iconBg),
             contentAlignment = Alignment.Center,
         ) {
-            Text(text = palette.emoji, fontSize = 18.sp)
+            Image(
+                painter = painterResource(id = palette.iconRes),
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+                contentScale = ContentScale.Fit,
+            )
         }
 
         Spacer(modifier = Modifier.width(12.dp))
@@ -446,7 +457,12 @@ private fun MealRow(card: TodayMealPlanCard, onTap: () -> Unit) {
                 .background(palette.iconBg),
             contentAlignment = Alignment.Center,
         ) {
-            Text(text = palette.emoji, fontSize = 18.sp)
+            Image(
+                painter = painterResource(id = palette.iconRes),
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+                contentScale = ContentScale.Fit,
+            )
         }
 
         Spacer(modifier = Modifier.width(12.dp))

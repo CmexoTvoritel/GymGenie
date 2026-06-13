@@ -16,8 +16,6 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -80,9 +78,6 @@ fun ExerciseFilterBottomSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    // Local pending state — the user can dismiss without applying. Keyed on
-    // incoming props so a re-open with different current values resets the
-    // pending selection.
     var pendingDifficulties by remember(currentDifficulties) {
         mutableStateOf(currentDifficulties.toSet())
     }
@@ -168,14 +163,11 @@ fun ExerciseFilterBottomSheet(
 
             SectionTitle(text = "Оборудование")
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            ToggleRow(
-                label = "Требуется оборудование",
-                checked = pendingRequiresEquipment == true,
-                onCheckedChange = { isChecked ->
-                    pendingRequiresEquipment = if (isChecked) true else null
-                },
+            EquipmentChipsRow(
+                selected = pendingRequiresEquipment,
+                onSelected = { pendingRequiresEquipment = it },
             )
 
             Spacer(modifier = Modifier.height(28.dp))
@@ -250,14 +242,6 @@ private fun DifficultyOptionChip(
     )
 }
 
-/**
- * Row with two mutually-exclusive sort direction chips (DESC / ASC).
- *
- * Tapping the active chip clears the selection (passes `null`) so the user
- * does not need a separate "no sort" option. Used by both the difficulty
- * and the calories sort sections — keeps the chip style and interaction
- * model identical across the sheet.
- */
 @Composable
 private fun SortChipsRow(
     selected: String?,
@@ -312,35 +296,25 @@ private fun SortChip(
 }
 
 @Composable
-private fun ToggleRow(
-    label: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
+private fun EquipmentChipsRow(
+    selected: Boolean?,
+    onSelected: (Boolean?) -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) }
-            .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(
-            text = label,
-            fontSize = 17.sp,
-            color = SectionTitleColor,
+        SortChip(
+            label = "Да",
+            isSelected = selected == true,
+            onClick = { onSelected(if (selected == true) null else true) },
             modifier = Modifier.weight(1f),
         )
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = AccentOrange,
-                uncheckedThumbColor = Color.White,
-                uncheckedTrackColor = Color(0xFFD7D7D9),
-                uncheckedBorderColor = Color(0xFFD7D7D9),
-            ),
+        SortChip(
+            label = "Нет",
+            isSelected = selected == false,
+            onClick = { onSelected(if (selected == false) null else false) },
+            modifier = Modifier.weight(1f),
         )
     }
 }

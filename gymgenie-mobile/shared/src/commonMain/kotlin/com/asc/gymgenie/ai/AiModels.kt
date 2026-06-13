@@ -2,24 +2,6 @@ package com.asc.gymgenie.ai
 
 import kotlinx.serialization.Serializable
 
-/**
- * Transport models for the AI workout chat feature.
- *
- * These mirror the backend contract one-to-one and stay confined to the
- * `ai` package so they do not leak into UI code. The chat surface keeps a
- * lightweight in-memory message list (see [AiChatMessage] in `AiViewModel`)
- * which is built from these DTOs at the presenter layer.
- */
-
-/**
- * Discriminator for the AI response kind.
- *
- * - [CLARIFICATION]: the assistant needs more information from the user
- *   before it can produce a workout. The UI keeps the chat input enabled
- *   and renders the assistant text as a regular bubble.
- * - [WORKOUT]: the assistant returned a generated plan inside the same
- *   response. The UI shows the message and offers a "save workout" CTA.
- */
 @Serializable
 enum class AiResponseType {
     CLARIFICATION,

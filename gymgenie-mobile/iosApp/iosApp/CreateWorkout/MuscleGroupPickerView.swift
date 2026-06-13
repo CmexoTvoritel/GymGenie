@@ -1,11 +1,6 @@
 import SwiftUI
 import Shared
 
-/// Step 1 of the create-workout flow — choose which muscle group to browse.
-///
-/// Pure UI: it relies on the already-populated `CreateWorkoutViewModelWrapper`
-/// to hold the muscle-group list (so tapping Back and re-entering does not
-/// re-hit the backend).
 struct MuscleGroupPickerView: View {
     @ObservedObject var vm: CreateWorkoutViewModelWrapper
     let onBack: () -> Void
@@ -36,8 +31,6 @@ struct MuscleGroupPickerView: View {
         .background(warmOffWhite.ignoresSafeArea())
     }
 
-    // MARK: - Content
-
     @ViewBuilder
     private var content: some View {
         if vm.isMuscleGroupsLoading && vm.muscleGroups.isEmpty {
@@ -58,9 +51,7 @@ struct MuscleGroupPickerView: View {
     }
 
     private var grid: some View {
-        // SwiftUI's `ScrollView` extends under the home indicator; padding the
-        // last spacer to the safe-area bottom ensures the final row clears the
-        // gesture handle on every device class.
+
         GeometryReader { proxy in
             ScrollView(showsIndicators: false) {
                 LazyVGrid(columns: columns, spacing: 12) {
@@ -86,17 +77,19 @@ struct MuscleGroupPickerView: View {
 
                 Image(muscleGroupImageName(group.key))
                     .resizable()
-                    .scaledToFit()
-                    .padding(12)
+                    .scaledToFill()
             }
             .aspectRatio(1, contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
         }
         .buttonStyle(.plain)
     }
 
     private var emptyView: some View {
         VStack(spacing: 10) {
-            Text("🗂").font(.system(size: 44))
+            Image(systemName: "folder")
+                .font(.system(size: 38))
+                .foregroundColor(mutedText)
             Text("Нет доступных групп")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(deepInk)
@@ -119,7 +112,9 @@ struct MuscleGroupPickerView: View {
 
     private func errorView(message: String) -> some View {
         VStack(spacing: 12) {
-            Text("⚠️").font(.system(size: 40))
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 36))
+                .foregroundColor(orange)
             Text(message)
                 .font(.system(size: 14))
                 .foregroundColor(mutedText)

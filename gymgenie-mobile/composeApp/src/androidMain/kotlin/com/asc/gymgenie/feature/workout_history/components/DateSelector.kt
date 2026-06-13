@@ -40,9 +40,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.asc.gymgenie.ui.theme.Coral
+import com.asc.gymgenie.utils.MonthNamesNominative
+import com.asc.gymgenie.utils.weekdayShortFromKotlinxDayOfWeek
 import com.asc.gymgenie.workout.WorkoutSessionHistoryItem
 import kotlinx.datetime.DateTimeUnit
-import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -56,20 +57,6 @@ private val MutedGray = Color(0xFF8B8B92)
 private val CompletedAccent = Color(0xFF22A06B)
 private val IncompleteAccent = Color(0xFFE89B12)
 
-private val DayAbbreviations = mapOf(
-    DayOfWeek.MONDAY to "Пн",
-    DayOfWeek.TUESDAY to "Вт",
-    DayOfWeek.WEDNESDAY to "Ср",
-    DayOfWeek.THURSDAY to "Чт",
-    DayOfWeek.FRIDAY to "Пт",
-    DayOfWeek.SATURDAY to "Сб",
-    DayOfWeek.SUNDAY to "Вс",
-)
-
-private val MonthNames = listOf(
-    "", "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
-    "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь",
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,9 +74,9 @@ fun DateSelector(
         val dateLabel = when {
             selectedDate == today -> "Сегодня"
             selectedDate == today.minus(1, DateTimeUnit.DAY) -> "Вчера"
-            else -> "${selectedDate.dayOfMonth} ${MonthNames.getOrElse(selectedDate.monthNumber) { "" }.lowercase()}"
+            else -> "${selectedDate.dayOfMonth} ${MonthNamesNominative.getOrElse(selectedDate.monthNumber) { "" }.lowercase()}"
         }
-        val monthName = MonthNames.getOrElse(selectedDate.monthNumber) { "" }
+        val monthName = MonthNamesNominative.getOrElse(selectedDate.monthNumber) { "" }
 
         Row(
             modifier = Modifier
@@ -227,7 +214,7 @@ private fun WeekDayButton(
         isToday -> Coral
         else -> InkBlack
     }
-    val dayAbbr = DayAbbreviations[date.dayOfWeek] ?: ""
+    val dayAbbr = weekdayShortFromKotlinxDayOfWeek(date.dayOfWeek)
 
     val borderModifier = when {
         isFuture -> Modifier

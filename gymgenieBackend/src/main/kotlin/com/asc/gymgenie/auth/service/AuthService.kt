@@ -29,12 +29,8 @@ class AuthService(
 
     @Transactional
     fun register(request: RegisterRequest): TokenResponse {
-        log.info("Registration attempt for email={}, username={}", request.email, request.username)
+        log.info("Registration attempt for email={}, firstName={}", request.email, request.firstName)
 
-        if (userRepository.existsByUsername(request.username)) {
-            log.info("Registration rejected: username '{}' already taken", request.username)
-            throw ConflictException("Username already taken")
-        }
         if (userRepository.existsByEmail(request.email)) {
             log.info("Registration rejected: email '{}' already registered", request.email)
             throw ConflictException("Email already registered")
@@ -42,9 +38,9 @@ class AuthService(
 
         val user = userRepository.save(
             UserEntity(
-                username = request.username,
                 email = request.email,
-                passwordHash = passwordEncoder.encode(request.password)!!
+                passwordHash = passwordEncoder.encode(request.password)!!,
+                firstName = request.firstName,
             )
         )
 
@@ -114,7 +110,7 @@ class AuthService(
             refreshToken = refreshToken,
             user = AuthUserResponse(
                 id = user.id!!,
-                username = user.username,
+                firstName = user.firstName ?: "",
                 email = user.email,
                 subscriptionType = user.subscriptionType.name,
             )

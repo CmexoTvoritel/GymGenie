@@ -28,10 +28,10 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -41,10 +41,13 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -56,6 +59,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -80,20 +84,23 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.activity.compose.BackHandler
 import com.asc.gymgenie.nutrition.AiMealChatMessage
+import com.asc.gymgenie.nutrition.AiMealConflictPlan
 import com.asc.gymgenie.nutrition.AiMealFlowStep
 import com.asc.gymgenie.nutrition.AiMealProfileData
+import com.asc.gymgenie.nutrition.AiMealType
 import com.asc.gymgenie.nutrition.AiMealViewModel
 import com.asc.gymgenie.nutrition.MealGoal
 import com.asc.gymgenie.ui.components.GymGenieToolbar
 import com.asc.gymgenie.ui.theme.Coral
 import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.WarmOffWhite
+import com.asc.gymgenie.user.UserProfileStore
 import com.asc.gymgenie.R
+import com.asc.gymgenie.utils.WeekdayPairs
+import com.asc.gymgenie.utils.weekdayShortFromDayOfWeek
 import kotlin.math.roundToInt
 import org.koin.core.context.GlobalContext
 
-// Local palette — mirrors `AiFlowScreen.kt` so the meal flow has the same
-// visual chrome as the workout flow without sharing private composables.
 private val MealOffWhite = WarmOffWhite
 private val MealCardBg = Color(0xFFFFFFFF)
 private val MealBorderGray = Color(0xFFE0E0E0)
@@ -102,44 +109,58 @@ private val MealGreenSave = Color(0xFF22C55E)
 private val MealGreenLight = Color(0xFFF0FDF4)
 private val MealGreenText = Color(0xFF16A34A)
 
-/**
- * AI-powered meal-planning flow.
- *
- * 5 in-feature steps, mirrors [com.asc.gymgenie.feature.ai.AiFlowScreen]:
- *  - 0 Choose       — single welcome card "Составить рацион на день"
- *  - 1 Profile      — age / height / weight sliders
- *  - 2 Goal         — three-card goal picker (lose / maintain / gain)
- *  - 3 Restrictions — diet + allergies free-text fields
- *  - 4 Chat         — meal-plan chat with save CTA
- *
- * The shared [AiMealViewModel] from KMM owns step navigation + chat state +
- * persistence calls. This Compose surface only renders the active step and
- * forwards user intents into the VM. Lifetime is tied to the Compose tree
- * via `remember { } / DisposableEffect` — same convention used by
- * [com.asc.gymgenie.feature.ai.AiFlowScreen].
- */
 @Composable
 fun AiMealFlowScreen(
     onDismiss: () -> Unit,
 ) {
     val koin = remember { GlobalContext.get() }
     val viewModel = remember { koin.get<AiMealViewModel>() }
+    val userProfileStore = remember { koin.get<UserProfileStore>() }
     DisposableEffect(Unit) { onDispose { viewModel.onCleared() } }
 
     val state by viewModel.state.collectAsState()
 
-    BackHandler(enabled = state.step != AiMealFlowStep.CHOOSE) {
-        if (state.step == AiMealFlowStep.PROFILE) {
-            onDismiss()
-        } else {
-            viewModel.goBack()
+    val mealProfileSnapshot by userProfileStore.profile.collectAsState()
+    LaunchedEffect(mealProfileSnapshot) {
+        viewModel.refreshProfileFromStore()
+    }
+
+    var showChatExitDialog by remember { mutableStateOf(false) }
+
+    val needsChatExitConfirmation = state.step == AiMealFlowStep.CHAT
+            && !state.isSaved
+            && (state.messages.isNotEmpty() || state.isTyping)
+
+    BackHandler {
+        when {
+            state.step == AiMealFlowStep.CHOOSE -> onDismiss()
+            state.step == AiMealFlowStep.CHAT -> {
+                if (needsChatExitConfirmation) showChatExitDialog = true else onDismiss()
+            }
+            else -> viewModel.goBack()
         }
     }
 
-    // Re-pull the cached profile every time the surface is shown — guards
-    // against a returning user whose profile loaded *after* the VM was
-    // first constructed (the VM's init-time pull would have missed it).
-    LaunchedEffect(Unit) { viewModel.prefillProfile() }
+    if (showChatExitDialog) {
+        AlertDialog(
+            onDismissRequest = { showChatExitDialog = false },
+            title = { Text("Выйти из чата?") },
+            text = { Text("Весь прогресс будет потерян. Убедитесь, что план сохранён.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showChatExitDialog = false
+                    onDismiss()
+                }) {
+                    Text("Выйти", color = Color(0xFFDC2626))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showChatExitDialog = false }) {
+                    Text("Остаться")
+                }
+            },
+        )
+    }
 
     AnimatedContent(
         targetState = state.step,
@@ -156,10 +177,15 @@ fun AiMealFlowScreen(
         label = "ai_meal_step",
     ) { step ->
         when (step) {
-            AiMealFlowStep.CHOOSE -> Unit
+            AiMealFlowStep.CHOOSE -> MealTypeChooseScreen(
+                selectedType = state.selectedMealType,
+                onClose = onDismiss,
+                onSelectType = { viewModel.setMealType(it) },
+                onContinue = { viewModel.goTo(AiMealFlowStep.PROFILE) },
+            )
             AiMealFlowStep.PROFILE -> ProfileScreen(
                 profile = state.profile,
-                onBack = onDismiss,
+                onBack = { viewModel.goBack() },
                 onNext = { viewModel.goTo(AiMealFlowStep.GOAL) },
                 onAge = { viewModel.setAge(it) },
                 onHeight = { viewModel.setHeight(it) },
@@ -187,61 +213,58 @@ fun AiMealFlowScreen(
                 isSaving = state.isSaving,
                 isSaved = state.isSaved,
                 errorMessage = state.errorMessage,
-                onBack = { viewModel.goBack() },
+                showSchedulePicker = state.showSchedulePicker,
+                scheduleMode = state.scheduleMode,
+                selectedDate = state.selectedDate,
+                selectedWeekdays = state.selectedWeekdays,
+                bookedOneOffDates = state.bookedOneOffDates,
+                bookedRecurringDays = state.bookedRecurringDays,
+                showConflictDialog = state.showConflictDialog,
+                conflicts = state.conflicts,
+                onBack = {
+                    if (needsChatExitConfirmation) showChatExitDialog = true else onDismiss()
+                },
                 onSend = { viewModel.sendMessage(it) },
-                onSave = { viewModel.saveMealPlan() },
+                onAddPlanTapped = { viewModel.onAddPlanTapped() },
+                onSetScheduleMode = { viewModel.setScheduleMode(it) },
+                onSelectDate = { viewModel.setSelectedDate(it) },
+                onToggleWeekday = { viewModel.toggleWeekday(it) },
+                onSaveWithSchedule = { viewModel.saveWithSchedule() },
+                onDismissSchedulePicker = { viewModel.dismissSchedulePicker() },
+                onConfirmReplace = { viewModel.confirmReplace() },
+                onDismissConflict = { viewModel.dismissConflictDialog() },
             )
         }
     }
 }
 
-// ---------------------------------------------------------------------------
-// Step 0 — Choose
-// ---------------------------------------------------------------------------
-
 @Composable
-private fun ChooseScreen(onClose: () -> Unit, onNext: () -> Unit) {
+private fun MealTypeChooseScreen(
+    selectedType: AiMealType?,
+    onClose: () -> Unit,
+    onSelectType: (AiMealType) -> Unit,
+    onContinue: () -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MealOffWhite)
-            .statusBarsPadding()
             .navigationBarsPadding(),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onClose) {
-                Icon(
-                    imageVector = Icons.Filled.Close,
-                    contentDescription = "Закрыть",
-                    tint = DeepInk,
-                )
-            }
-            Spacer(modifier = Modifier.weight(1f))
-            Text(
-                "AI Питание",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = DeepInk,
-            )
-            Spacer(modifier = Modifier.weight(1f))
-            // Symmetric spacer so the title is centered between the close
-            // button and the trailing edge.
-            Spacer(modifier = Modifier.size(48.dp))
-        }
+        GymGenieToolbar(
+            title = "План питания",
+            showBackNavigation = true,
+            onBackClick = onClose,
+        )
 
         Column(
             modifier = Modifier
                 .weight(1f)
                 .padding(horizontal = 20.dp),
         ) {
-            Spacer(Modifier.height(40.dp))
+            Spacer(Modifier.height(8.dp))
             Text(
-                "Что хотите получить от ИИ-нутрициолога?",
+                "Какой приём пищи составить?",
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 color = DeepInk,
@@ -249,53 +272,82 @@ private fun ChooseScreen(onClose: () -> Unit, onNext: () -> Unit) {
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(32.dp))
-            GenerateTypeCard(
-                emoji = "🥗",
-                title = "Составить рацион на день",
-                subtitle = "Завтрак, обед и ужин с учётом ваших целей",
-                onClick = onNext,
-            )
+            AiMealType.entries.forEach { type ->
+                MealTypeCard(
+                    type = type,
+                    isSelected = selectedType == type,
+                    onClick = { onSelectType(type) },
+                )
+                Spacer(Modifier.height(12.dp))
+            }
         }
+        PrimaryButton(
+            text = "Продолжить",
+            enabled = selectedType != null,
+            onClick = onContinue,
+        )
     }
 }
 
 @Composable
-private fun GenerateTypeCard(
-    emoji: String,
-    title: String,
-    subtitle: String,
+private fun MealTypeCard(
+    type: AiMealType,
+    isSelected: Boolean,
     onClick: () -> Unit,
 ) {
-    var pressed by remember { mutableStateOf(false) }
-    Box(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(MealCardBg)
             .border(
-                width = 2.dp,
-                color = if (pressed) Coral else MealBorderGray,
+                width = if (isSelected) 2.dp else 1.5.dp,
+                color = if (isSelected) Coral else Color(0xFFEEEEEE),
                 shape = RoundedCornerShape(16.dp),
             )
-            .clickable {
-                pressed = false
-                onClick()
-            }
-            .padding(24.dp),
+            .clickable { onClick() }
+            .padding(horizontal = 18.dp, vertical = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column {
-            Text(emoji, fontSize = 28.sp)
-            Spacer(Modifier.height(8.dp))
-            Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = DeepInk)
-            Spacer(Modifier.height(4.dp))
-            Text(subtitle, fontSize = 13.sp, color = MealMutedGray)
+        Image(
+            painter = painterResource(
+                id = when (type) {
+                    AiMealType.BREAKFAST -> R.drawable.ic_breakfast
+                    AiMealType.LUNCH -> R.drawable.ic_lunch
+                    AiMealType.DINNER -> R.drawable.ic_dinner
+                },
+            ),
+            contentDescription = null,
+            modifier = Modifier.size(28.dp),
+            contentScale = ContentScale.Fit,
+        )
+        Spacer(Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                type.displayName,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = DeepInk,
+            )
+        }
+        if (isSelected) {
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(Coral),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Check,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
         }
     }
 }
-
-// ---------------------------------------------------------------------------
-// Step 1 — Profile
-// ---------------------------------------------------------------------------
 
 @Composable
 private fun ProfileScreen(
@@ -314,7 +366,7 @@ private fun ProfileScreen(
             .navigationBarsPadding(),
     ) {
         GymGenieToolbar(
-            title = "Рацион на день",
+            title = "План питания",
             showBackNavigation = true,
             onBackClick = onBack,
         )
@@ -469,13 +521,9 @@ private fun SliderField(
     }
 }
 
-// ---------------------------------------------------------------------------
-// Step 2 — Goal
-// ---------------------------------------------------------------------------
-
 private data class GoalOption(
     val wireValue: String,
-    val emoji: String,
+    val iconRes: Int,
     val title: String,
     val subtitle: String,
 )
@@ -483,19 +531,19 @@ private data class GoalOption(
 private val goalOptions = listOf(
     GoalOption(
         wireValue = MealGoal.LOSE_WEIGHT.wireValue,
-        emoji = "🔥",
+        iconRes = R.drawable.ic_ai_weight_loss,
         title = MealGoal.LOSE_WEIGHT.displayName,
         subtitle = "Дефицит калорий, лёгкий рацион",
     ),
     GoalOption(
         wireValue = MealGoal.MAINTAIN.wireValue,
-        emoji = "⚖️",
+        iconRes = R.drawable.ic_ai_keeping_fit,
         title = MealGoal.MAINTAIN.displayName,
         subtitle = "Сбалансированное питание",
     ),
     GoalOption(
         wireValue = MealGoal.GAIN_MUSCLE.wireValue,
-        emoji = "💪",
+        iconRes = R.drawable.ic_ai_muscles,
         title = MealGoal.GAIN_MUSCLE.displayName,
         subtitle = "Профицит и больше белка",
     ),
@@ -516,7 +564,7 @@ private fun GoalScreen(
             .navigationBarsPadding(),
     ) {
         GymGenieToolbar(
-            title = "Рацион на день",
+            title = "План питания",
             showBackNavigation = true,
             onBackClick = onBack,
         )
@@ -561,7 +609,11 @@ private fun GoalCard(
             .padding(horizontal = 18.dp, vertical = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(option.emoji, fontSize = 28.sp)
+        Image(
+            painter = painterResource(option.iconRes),
+            contentDescription = null,
+            modifier = Modifier.size(32.dp),
+        )
         Spacer(Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(option.title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = DeepInk)
@@ -587,10 +639,6 @@ private fun GoalCard(
     }
 }
 
-// ---------------------------------------------------------------------------
-// Step 3 — Restrictions
-// ---------------------------------------------------------------------------
-
 @Composable
 private fun RestrictionsScreen(
     dietaryRestrictions: String,
@@ -609,10 +657,7 @@ private fun RestrictionsScreen(
             .background(MealOffWhite)
             .navigationBarsPadding()
             .imePadding()
-            // Tap on any non-interactive area (paddings, labels, screen
-            // background) clears focus from the text fields. The BasicTextField
-            // and the header back button / primary CTA dismiss the keyboard
-            // from their own click handlers.
+
             .pointerInput(Unit) {
                 detectTapGestures {
                     focusManager.clearFocus()
@@ -621,7 +666,7 @@ private fun RestrictionsScreen(
             },
     ) {
         GymGenieToolbar(
-            title = "Рацион на день",
+            title = "План питания",
             showBackNavigation = true,
             onBackClick = {
                 focusManager.clearFocus()
@@ -663,8 +708,7 @@ private fun RestrictionsScreen(
                 onChange = onAllergiesChange,
             )
         }
-        // The Restrictions step is intentionally always advanceable — both
-        // fields are optional per the wire contract.
+
         PrimaryButton(text = "Далее", enabled = true, onClick = onNext)
     }
 }
@@ -712,10 +756,6 @@ private fun TextEditorField(
     }
 }
 
-// ---------------------------------------------------------------------------
-// Step 4 — Chat
-// ---------------------------------------------------------------------------
-
 @Composable
 private fun ChatScreen(
     messages: List<AiMealChatMessage>,
@@ -725,9 +765,24 @@ private fun ChatScreen(
     isSaving: Boolean,
     isSaved: Boolean,
     errorMessage: String?,
+    showSchedulePicker: Boolean,
+    scheduleMode: String,
+    selectedDate: String?,
+    selectedWeekdays: List<String>,
+    bookedOneOffDates: List<String>,
+    bookedRecurringDays: List<String>,
+    showConflictDialog: Boolean,
+    conflicts: List<AiMealConflictPlan>,
     onBack: () -> Unit,
     onSend: (String) -> Unit,
-    onSave: () -> Unit,
+    onAddPlanTapped: () -> Unit,
+    onSetScheduleMode: (String) -> Unit,
+    onSelectDate: (String?) -> Unit,
+    onToggleWeekday: (String) -> Unit,
+    onSaveWithSchedule: () -> Unit,
+    onDismissSchedulePicker: () -> Unit,
+    onConfirmReplace: () -> Unit,
+    onDismissConflict: () -> Unit,
 ) {
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
@@ -750,7 +805,7 @@ private fun ChatScreen(
             .imePadding(),
     ) {
         GymGenieToolbar(
-            title = "AI диетолог",
+            title = "План питания",
             showBackNavigation = true,
             onBackClick = {
                 focusManager.clearFocus()
@@ -764,9 +819,7 @@ private fun ChatScreen(
             modifier = Modifier
                 .weight(1f)
                 .padding(horizontal = 20.dp)
-                // Tapping a chat bubble or any empty space in the messages
-                // list clears focus from the input field. The input field
-                // itself and the send button consume their own taps.
+
                 .pointerInput(Unit) {
                     detectTapGestures {
                         focusManager.clearFocus()
@@ -817,19 +870,38 @@ private fun ChatScreen(
             )
         }
 
-        if (hasMealPlan && !isSaved) {
-            Box(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
-                PrimaryButton(
-                    text = when {
-                        isSaving -> "Сохранение..."
-                        savedPlanId != null -> "✓ Обновить рацион"
-                        else -> "✓ Сохранить рацион"
-                    },
-                    enabled = !isSaving,
-                    color = MealGreenSave,
-                    onClick = onSave,
+        if (hasMealPlan && !isSaved && !showSchedulePicker) {
+            Button(
+                onClick = onAddPlanTapped,
+                colors = ButtonDefaults.buttonColors(containerColor = MealGreenSave),
+                shape = RoundedCornerShape(28.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+            ) {
+                Text(
+                    "Добавить план",
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp,
+                    color = Color.White,
                 )
             }
+        }
+
+        if (showSchedulePicker) {
+            AiMealSchedulePickerCard(
+                scheduleMode = scheduleMode,
+                selectedDate = selectedDate,
+                selectedWeekdays = selectedWeekdays,
+                bookedOneOffDates = bookedOneOffDates,
+                bookedRecurringDays = bookedRecurringDays,
+                isSaving = isSaving,
+                onSetScheduleMode = onSetScheduleMode,
+                onSelectDate = onSelectDate,
+                onToggleWeekday = onToggleWeekday,
+                onSave = onSaveWithSchedule,
+                onCancel = onDismissSchedulePicker,
+            )
         }
 
         if (isSaved) {
@@ -843,12 +915,31 @@ private fun ChatScreen(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    "Рацион сохранён! ✓",
+                    "Рацион сохранён!",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MealGreenText,
                 )
             }
+        }
+
+        if (showConflictDialog) {
+            AlertDialog(
+                onDismissRequest = onDismissConflict,
+                title = { Text("Заменить существующий план?") },
+                text = {
+                    val names = conflicts.joinToString(", ") { it.planName }
+                    Text("На выбранные даты уже есть план: «$names». Заменить его новым?")
+                },
+                confirmButton = {
+                    TextButton(onClick = onConfirmReplace) {
+                        Text("Заменить", color = Color(0xFFDC2626))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = onDismissConflict) { Text("Отмена") }
+                },
+            )
         }
 
         Row(
@@ -894,8 +985,7 @@ private fun ChatScreen(
                     .clip(CircleShape)
                     .background(if (input.isNotBlank()) Coral else MealBorderGray)
                     .clickable(enabled = input.isNotBlank() && !isTyping) {
-                        // Drop focus on send so the keyboard collapses; the
-                        // user can tap the field again to compose a follow-up.
+
                         focusManager.clearFocus()
                         keyboardController?.hide()
                         onSend(input)
@@ -903,7 +993,12 @@ private fun ChatScreen(
                     },
                 contentAlignment = Alignment.Center,
             ) {
-                Text("↑", fontSize = 18.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                Image(
+                    painter = painterResource(R.drawable.ic_send),
+                    contentDescription = "Отправить",
+                    modifier = Modifier.size(20.dp),
+                    colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color.White),
+                )
             }
         }
     }
@@ -967,9 +1062,237 @@ private fun TypingBubble() {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Shared in-flow controls
-// ---------------------------------------------------------------------------
+@Composable
+private fun AiMealSchedulePickerCard(
+    scheduleMode: String,
+    selectedDate: String?,
+    selectedWeekdays: List<String>,
+    bookedOneOffDates: List<String>,
+    bookedRecurringDays: List<String>,
+    isSaving: Boolean,
+    onSetScheduleMode: (String) -> Unit,
+    onSelectDate: (String?) -> Unit,
+    onToggleWeekday: (String) -> Unit,
+    onSave: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(MealCardBg)
+            .border(1.5.dp, Color(0xFFEDEDEF), RoundedCornerShape(16.dp))
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Text(
+            "Расписание",
+            fontSize = 17.sp,
+            fontWeight = FontWeight.Bold,
+            color = DeepInk,
+        )
+
+        AiMealScheduleToggle(mode = scheduleMode, onSelect = onSetScheduleMode)
+
+        when (scheduleMode) {
+            "ONE_OFF" -> AiMealDateStrip(
+                bookedDates = bookedOneOffDates,
+                selectedDate = selectedDate,
+                onSelect = onSelectDate,
+            )
+            "RECURRING" -> AiMealWeekdayChips(
+                bookedDays = bookedRecurringDays,
+                selectedDays = selectedWeekdays,
+                onToggle = onToggleWeekday,
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(modifier = Modifier.weight(1f)) {
+                PrimaryButton(
+                    text = "Отмена",
+                    enabled = !isSaving,
+                    color = Color(0xFFE5E7EB),
+                    onClick = onCancel,
+                )
+            }
+            Box(modifier = Modifier.weight(1f)) {
+                PrimaryButton(
+                    text = if (isSaving) "Сохранение..." else "Сохранить",
+                    enabled = !isSaving,
+                    color = MealGreenSave,
+                    onClick = onSave,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AiMealScheduleToggle(mode: String, onSelect: (String) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color(0xFFF3F4F6))
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+    ) {
+        listOf("ONE_OFF" to "Разово", "RECURRING" to "По дням").forEach { (value, label) ->
+            val isSelected = mode == value
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(11.dp))
+                    .background(if (isSelected) Coral else Color.Transparent)
+                    .clickable { onSelect(value) }
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    label,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    color = if (isSelected) Color.White else DeepInk,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AiMealDateStrip(
+    bookedDates: List<String>,
+    selectedDate: String?,
+    onSelect: (String?) -> Unit,
+) {
+    val today = java.time.LocalDate.now()
+    val dates = (0L until 14L).map { offset ->
+        val date = today.plusDays(offset)
+        Triple(
+            date.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE),
+            date.dayOfMonth,
+            weekdayShortFromDayOfWeek(date.dayOfWeek),
+        )
+    }
+
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(dates) { (iso, day, weekday) ->
+            val isBooked = iso in bookedDates
+            val isSelected = iso == selectedDate
+            Box(
+                modifier = Modifier
+                    .width(56.dp)
+                    .height(70.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(
+                        when {
+                            isSelected -> Coral
+                            isBooked -> Color(0xFFF3F4F6)
+                            else -> Color.White
+                        },
+                    )
+                    .border(
+                        1.5.dp,
+                        if (isSelected) Coral else Color(0xFFEDEDEF),
+                        RoundedCornerShape(14.dp),
+                    )
+                    .alpha(if (isBooked && !isSelected) 0.55f else 1f)
+                    .clickable { onSelect(if (isSelected) null else iso) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        weekday,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isSelected) Color.White else MealMutedGray,
+                    )
+                    Text(
+                        "$day",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = when {
+                            isSelected -> Color.White
+                            isBooked -> MealMutedGray
+                            else -> DeepInk
+                        },
+                    )
+                    if (isBooked && !isSelected) {
+                        Icon(
+                            Icons.Filled.Lock,
+                            contentDescription = null,
+                            modifier = Modifier.size(10.dp),
+                            tint = MealMutedGray,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun AiMealWeekdayChips(
+    bookedDays: List<String>,
+    selectedDays: List<String>,
+    onToggle: (String) -> Unit,
+) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(WeekdayPairs) { (wire, label) ->
+            val isBooked = wire in bookedDays
+            val isSelected = wire in selectedDays
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(
+                        when {
+                            isSelected -> Coral
+                            isBooked -> Color(0xFFF3F4F6)
+                            else -> Color.White
+                        },
+                    )
+                    .border(
+                        1.5.dp,
+                        if (isSelected) Coral else Color(0xFFEDEDEF),
+                        RoundedCornerShape(50),
+                    )
+                    .alpha(if (isBooked && !isSelected) 0.55f else 1f)
+                    .clickable { onToggle(wire) }
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        label,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = when {
+                            isSelected -> Color.White
+                            isBooked -> MealMutedGray
+                            else -> DeepInk
+                        },
+                    )
+                    if (isBooked && !isSelected) {
+                        Icon(
+                            Icons.Filled.Lock,
+                            contentDescription = null,
+                            modifier = Modifier.size(10.dp),
+                            tint = MealMutedGray,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun PrimaryButton(
@@ -987,9 +1310,7 @@ private fun PrimaryButton(
             .clip(RoundedCornerShape(28.dp))
             .background(color.copy(alpha = if (enabled) 1f else 0.4f))
             .clickable(enabled = enabled) {
-                // The CTA always advances/saves — clear focus first so the
-                // keyboard doesn't sit on top of the next state (next step
-                // or "saved" success card).
+
                 focusManager.clearFocus()
                 keyboardController?.hide()
                 onClick()

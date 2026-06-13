@@ -1,9 +1,11 @@
 package com.asc.gymgenie.feature.create_workout
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -24,16 +26,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -44,13 +43,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.asc.gymgenie.exercise.ExerciseShortResponse
 import com.asc.gymgenie.presentation.CreateWorkoutLimits
-import com.asc.gymgenie.presentation.ExerciseDetailViewModel
 import com.asc.gymgenie.presentation.PendingExercise
 import com.asc.gymgenie.ui.components.GymGenieToolbar
 import com.asc.gymgenie.ui.theme.AccentOrange
@@ -58,27 +57,10 @@ import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
 import com.asc.gymgenie.ui.theme.SoftCard
 import com.asc.gymgenie.ui.theme.WarmOffWhite
-import org.koin.core.context.GlobalContext
+import com.asc.gymgenie.utils.muscleGroupNameRu
+import com.asc.gymgenie.feature.workout_session.components.ExerciseDetailSheetContent
 import kotlin.math.round
 
-/**
- * Step 3 of the create-workout flow: configures sets/reps (and optionally
- * per-set weights) for the chosen exercise.
- *
- * This screen does not know about the rest of the flow — it just constructs a
- * [PendingExercise] and hands it upwards. Limit enforcement mirrors the values
- * declared in [CreateWorkoutLimits] so that the UI and view model agree.
- *
- * The weight configuration card is only rendered when
- * [ExerciseShortResponse.requiresWeight] is `true`, keeping bodyweight-only
- * exercises uncluttered.
- *
- * When [prefillFrom] is non-null the screen acts as the edit surface for an
- * already-added row: stepper state seeds from the supplied [PendingExercise],
- * the wizard's step indicator is hidden via [showStepHeader], and the bottom
- * CTA switches to "Сохранить изменения". The "add new exercise" path keeps
- * the legacy defaults and unchanged copy.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExerciseConfigScreen(
@@ -97,10 +79,6 @@ fun ExerciseConfigScreen(
         mutableIntStateOf(prefillFrom?.reps ?: CreateWorkoutLimits.DEFAULT_REPS)
     }
 
-    // Initial weight mode mirrors the variance of the prefilled weights: if all
-    // sets share a value (or the row never had weights), keep the simpler
-    // "одинаковый вес" stepper; otherwise drop straight into per-set mode so
-    // the user sees the actual pyramid configuration on first render.
     var weightMode by remember(exercise.id) {
         val initialMode = if (
             prefillFrom?.setWeightsKg != null &&
@@ -131,10 +109,6 @@ fun ExerciseConfigScreen(
         )
     }
 
-    // Resize the per-set list when the number of sets changes. Growing keeps
-    // the previously-entered values and seeds new sets with the last weight
-    // the user picked; shrinking drops the tail. Keeping the legacy values in
-    // place is important so a user moving sets 3→4→3 sees the same weights.
     LaunchedEffect(sets) {
         if (perSetWeightsKg.size != sets) {
             perSetWeightsKg = if (sets > perSetWeightsKg.size) {
@@ -167,9 +141,6 @@ fun ExerciseConfigScreen(
                 WorkoutFlowStepHeader(currentStep = 3)
             }
 
-            // LazyColumn so the weight-per-set section stays scrollable when the
-            // user picks the maximum number of sets — otherwise long lists could
-            // push the confirm button off-screen on small devices.
             LazyColumn(
                 modifier = Modifier
                     .weight(1f)
@@ -308,13 +279,6 @@ fun ExerciseConfigScreen(
     }
 }
 
-/**
- * Two-way toggle that drives the weight configuration UI on the config screen.
- *
- * `UNIFORM` shows a single stepper applied to every set; `PER_SET` reveals one
- * stepper per set so the user can pyramid up/down. Kept as a screen-local enum
- * because no other surface needs to express this concept yet.
- */
 internal enum class WeightMode { UNIFORM, PER_SET }
 
 @Composable
@@ -330,15 +294,23 @@ private fun ExerciseSummaryCard(
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = muscleGroupPickerEmoji(exercise.muscleGroup),
-            fontSize = 40.sp,
-        )
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(12.dp)),
+        ) {
+            Image(
+                painter = painterResource(id = muscleGroupExerciseDrawable(exercise.muscleGroup)),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize().aspectRatio(1f),
+                contentScale = ContentScale.Fit,
+            )
+        }
         Spacer(modifier = Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = exercise.nameRu,
-                fontSize = 18.sp, // bumped +2sp per spec
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = DeepInk,
                 maxLines = 2,
@@ -346,8 +318,8 @@ private fun ExerciseSummaryCard(
             if (exercise.muscleGroup.isNotBlank()) {
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = muscleGroupDisplayNameRu(exercise.muscleGroup),
-                    fontSize = 15.sp, // bumped +2sp per spec
+                    text = muscleGroupNameRu(exercise.muscleGroup),
+                    fontSize = 15.sp,
                     color = MutedText,
                 )
             }
@@ -355,8 +327,6 @@ private fun ExerciseSummaryCard(
 
         Spacer(modifier = Modifier.width(8.dp))
 
-        // Info entry-point lives at the end of the row so the touch target is
-        // distinct from the title area; tap opens the detail bottom sheet.
         Box(
             modifier = Modifier
                 .size(40.dp)
@@ -395,7 +365,7 @@ private fun StepperCard(
     ) {
         Text(
             text = label,
-            fontSize = 17.sp, // bumped +2sp per spec
+            fontSize = 17.sp,
             fontWeight = FontWeight.SemiBold,
             color = DeepInk,
             modifier = Modifier.weight(1f),
@@ -590,130 +560,15 @@ private fun WeightStepperRow(
     }
 }
 
-@Composable
-private fun ExerciseDetailSheetContent(exerciseId: String) {
-    val koin = remember { GlobalContext.get() }
-    val viewModel = remember(exerciseId) { koin.get<ExerciseDetailViewModel>() }
-    DisposableEffect(exerciseId) { onDispose { viewModel.onCleared() } }
-
-    LaunchedEffect(exerciseId) { viewModel.load(exerciseId) }
-
-    val state by viewModel.state.collectAsState()
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 8.dp)
-            .padding(bottom = 24.dp),
-    ) {
-        when {
-            state.isLoading && state.exercise == null -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator(color = AccentOrange)
-                }
-            }
-
-            state.errorMessage != null && state.exercise == null -> {
-                Text(
-                    text = state.errorMessage ?: "Ошибка загрузки",
-                    color = MutedText,
-                    fontSize = 14.sp,
-                    modifier = Modifier.padding(vertical = 32.dp).fillMaxWidth(),
-                    textAlign = TextAlign.Center,
-                )
-            }
-
-            state.exercise != null -> {
-                val ex = state.exercise!!
-                Text(
-                    text = ex.nameRu,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = DeepInk,
-                )
-                if (ex.nameEn.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = ex.nameEn,
-                        fontSize = 14.sp,
-                        color = MutedText,
-                    )
-                }
-
-                ex.description?.takeIf { it.isNotBlank() }?.let {
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Text(text = "Описание", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = DeepInk)
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(text = it, fontSize = 14.sp, color = DeepInk, lineHeight = 20.sp)
-                }
-
-                if (ex.equipment.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Text(text = "Оборудование", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = DeepInk)
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(text = ex.equipment.joinToString(", "), fontSize = 14.sp, color = DeepInk)
-                }
-
-                if (ex.instructions.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Text(text = "Техника выполнения", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = DeepInk)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    ex.instructions.forEachIndexed { index, step ->
-                        Text(
-                            text = "${index + 1}. $step",
-                            fontSize = 14.sp,
-                            color = DeepInk,
-                            lineHeight = 20.sp,
-                        )
-                        if (index < ex.instructions.lastIndex) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * Renders kilograms using a single decimal when needed so the user sees `2.5`
- * for half-step values but the cleaner `20` for whole numbers.
- */
 private fun formatWeightKg(value: Double): String {
     val rounded = round(value * 10.0) / 10.0
     return if (rounded % 1.0 == 0.0) {
         "${rounded.toInt()} кг"
     } else {
-        // Avoid locale-dependent string formatters in shared/common Compose
-        // paths — explicit string concatenation keeps the output deterministic.
+
         val whole = rounded.toInt()
         val tenths = ((rounded - whole) * 10).toInt()
         "$whole.$tenths кг"
     }
 }
 
-/**
- * Small local mapping — mirrors the ru labels from ExerciseDetailScreen without
- * introducing a cross-feature dependency.
- */
-private fun muscleGroupDisplayNameRu(group: String): String = when (group.uppercase()) {
-    "CHEST" -> "Грудь"
-    "BACK" -> "Спина"
-    "SHOULDERS" -> "Плечи"
-    "BICEPS" -> "Бицепс"
-    "TRICEPS" -> "Трицепс"
-    "FOREARMS" -> "Предплечья"
-    "ABS" -> "Пресс"
-    "QUADRICEPS" -> "Квадрицепс"
-    "HAMSTRINGS" -> "Бицепс бедра"
-    "CALVES" -> "Икры"
-    "GLUTES" -> "Ягодицы"
-    "CARDIO" -> "Кардио"
-    "FULL_BODY" -> "Всё тело"
-    else -> group
-}

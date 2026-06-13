@@ -1,7 +1,5 @@
 import SwiftUI
 
-// MARK: - Tab bar visibility state
-
 final class TabBarState: ObservableObject {
     @Published var isVisible: Bool = true
     @Published var pendingTabSwitch: MainTab? = nil
@@ -62,12 +60,49 @@ struct MainView: View {
     }
 
     var body: some View {
+        if #available(iOS 26, *) {
+            liquidGlassTabView
+        } else {
+            legacyTabView
+        }
+    }
+
+    @available(iOS 26, *)
+    private var liquidGlassTabView: some View {
+        TabView(selection: $selectedTab) {
+            Tab(MainTab.home.title, systemImage: MainTab.home.selectedIcon, value: .home) {
+                NavigationStack { HomeView() }
+                    .toolbar(tabBarState.isVisible ? .visible : .hidden, for: .tabBar)
+            }
+            Tab(MainTab.aiCoach.title, systemImage: MainTab.aiCoach.selectedIcon, value: .aiCoach) {
+                NavigationStack { AiCoachView() }
+                    .toolbar(tabBarState.isVisible ? .visible : .hidden, for: .tabBar)
+            }
+            Tab(MainTab.workouts.title, systemImage: MainTab.workouts.selectedIcon, value: .workouts) {
+                NavigationStack { WorkoutsView() }
+                    .toolbar(tabBarState.isVisible ? .visible : .hidden, for: .tabBar)
+            }
+            Tab(MainTab.profile.title, systemImage: MainTab.profile.selectedIcon, value: .profile) {
+                NavigationStack { ProfileView() }
+                    .toolbar(tabBarState.isVisible ? .visible : .hidden, for: .tabBar)
+            }
+        }
+        .tint(Palette.coral)
+        .environmentObject(profileStore)
+        .environmentObject(tabBarState)
+        .background(Palette.warmOffWhite.ignoresSafeArea())
+        .onAppear { profileStore.load() }
+        .onChange(of: tabBarState.pendingTabSwitch) { _, tab in
+            if let tab = tab {
+                selectedTab = tab
+                tabBarState.pendingTabSwitch = nil
+            }
+        }
+    }
+
+    private var legacyTabView: some View {
         ZStack(alignment: .bottom) {
-            // All four tab views stay alive in the view hierarchy so each
-            // tab's @StateObject ViewModels and scroll positions survive tab
-            // switches. We toggle visibility / hit-testing rather than
-            // swapping the views in/out via `switch`, which would tear down
-            // their state.
+
             ZStack {
                 tabView(.home) { HomeView() }
                 tabView(.aiCoach) { AiCoachView() }
@@ -115,13 +150,10 @@ struct MainView: View {
         }
         .opacity(isActive ? 1 : 0)
         .allowsHitTesting(isActive)
-        // Keeps inactive tabs out of accessibility focus while they sit
-        // invisible in the hierarchy.
+
         .accessibilityHidden(!isActive)
     }
 }
-
-// MARK: - Placeholder view
 
 struct PlaceholderView: View {
     let title: String

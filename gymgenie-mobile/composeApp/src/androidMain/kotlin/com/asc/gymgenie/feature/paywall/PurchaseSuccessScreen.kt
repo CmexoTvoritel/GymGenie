@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -42,7 +41,7 @@ fun PurchaseSuccessScreen(
             .fillMaxSize()
             .background(Color.White),
     ) {
-        // Close button — absolutely positioned, does not participate in layout flow.
+
         Box(
             modifier = Modifier
                 .align(Alignment.TopStart)
@@ -62,24 +61,17 @@ fun PurchaseSuccessScreen(
             )
         }
 
-        // Main column — image+texts block is vertically centered between the
-        // X button area at the top and the action buttons at the bottom by two
-        // weighted spacers, so the visual content stays balanced regardless of
-        // device height. Buttons live inside the same column to keep the
-        // layout flow predictable (no overlapping BottomCenter overlay).
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
                 .padding(horizontal = 24.dp),
         ) {
-            // Reserved space for the absolutely-placed X button so the
-            // content block does not shift under it.
+
             Spacer(modifier = Modifier.height(56.dp))
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // Centered content block — image + both texts as one cohesive group.
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -109,7 +101,7 @@ fun PurchaseSuccessScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = "Теперь давайте начнём с вашего ИИ-плана и изучим все возможности приложения",
+                    text = "Теперь вам доступны все возможности приложения для достижения ваших целей",
                     fontSize = 21.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color.Gray,
@@ -119,30 +111,11 @@ fun PurchaseSuccessScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // Bottom buttons — part of the same column so weighted spacers
-            // distribute the vertical free space symmetrically around the
-            // content block above.
             GymGenieButton(
-                text = "Начать с планом от ИИ",
+                text = "Освоить новые возможности",
                 onClick = onContinue,
                 containerColor = Coral,
             )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp)
-                    .clickable { onContinue() },
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "Продолжить без плана",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.Gray,
-                )
-            }
 
             Spacer(modifier = Modifier.height(24.dp))
             Spacer(modifier = Modifier.navigationBarsPadding())

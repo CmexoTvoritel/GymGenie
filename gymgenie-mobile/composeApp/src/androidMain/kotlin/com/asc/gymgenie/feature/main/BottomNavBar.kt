@@ -50,20 +50,6 @@ import com.asc.gymgenie.ui.theme.Coral
 import com.asc.gymgenie.ui.theme.Neutrals400
 import com.asc.gymgenie.ui.theme.Neutrals700
 
-/**
- * Reusable, self-contained glass bottom navigation bar.
- *
- * Visual layers (bottom → top):
- *   1. Pill-shaped frosted backdrop (blur on API 31+, tinted fill, hairline border)
- *   2. Top sheen (white→transparent vertical gradient over the upper half)
- *   3. Animated dark indicator pill that slides between item slots on tap
- *   4. Tab item row, each item rendered twice (inactive base + active overlay
- *      clipped horizontally to the indicator overlap)
- *
- * The component is intentionally agnostic of the host navigation: the caller
- * owns the selection state and the [BottomNavItem] list. Animation is a single
- * spring on indicator X — no drag, no stretch, no press scale (per spec).
- */
 @Composable
 fun BottomNavBar(
     items: List<BottomNavItem>,
@@ -121,9 +107,6 @@ fun BottomNavBar(
                     .size(width = itemWidth, height = itemHeight),
             )
 
-            // Tab row sits above the indicator so the icons/labels are visible.
-            // Each item draws an inactive base plus an active overlay clipped
-            // horizontally to the slice of the indicator that overlaps it.
             Row(
                 modifier = Modifier
                     .fillMaxSize()
@@ -144,20 +127,15 @@ fun BottomNavBar(
     }
 }
 
-/** Public model — caller decides how to map their tab enum into a renderable item. */
 data class BottomNavItem(
     val title: String,
     val icon: ImageVector,
     val selectedIcon: ImageVector = icon,
 )
 
-// region — internals --------------------------------------------------------
-
 @Composable
 private fun GlassBackdrop(modifier: Modifier) {
-    // The backdrop is the frosted base layer. On API 31+ we apply a real
-    // RenderEffect blur; on older devices we skip the blur and rely on the
-    // tinted fill alone — visually close enough without a custom snapshot.
+
     val blurModifier = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         Modifier.graphicsLayer {
             renderEffect = BlurEffect(20f, 20f, TileMode.Clamp)
@@ -176,7 +154,7 @@ private fun GlassBackdrop(modifier: Modifier) {
 private fun HairlineBorder(modifier: Modifier) {
     Box(
         modifier = modifier.drawBehind {
-            // 0.8px hairline on the inside of the pill.
+
             val strokeWidth = 0.8.dp.toPx()
             val radius = size.height / 2f
             drawRoundedStroke(
@@ -290,8 +268,6 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRoundedStroke(
         style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth),
     )
 }
-
-// region — design tokens ----------------------------------------------------
 
 private val BarHeight: Dp = 60.dp
 private val ItemWidth: Dp = 91.dp

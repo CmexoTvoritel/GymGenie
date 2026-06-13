@@ -13,8 +13,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.WorkspacePremium
+import androidx.compose.foundation.Image
 import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.painterResource
+import com.asc.gymgenie.R
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -48,11 +51,11 @@ fun SubscriptionCard(hasPro: Boolean, onClick: () -> Unit) {
                     .background(ProfileCoralSoft),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    imageVector = Icons.Filled.WorkspacePremium,
+                Image(
+                    painter = painterResource(R.drawable.ic_premium_badge),
                     contentDescription = null,
-                    tint = Coral,
                     modifier = Modifier.size(24.dp),
+                    colorFilter = ColorFilter.tint(Coral),
                 )
             }
             Column(modifier = Modifier.weight(1f)) {
@@ -95,11 +98,11 @@ fun SubscriptionCard(hasPro: Boolean, onClick: () -> Unit) {
                     .background(Color(0x2DFF5A3C)),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    imageVector = Icons.Filled.WorkspacePremium,
+                Image(
+                    painter = painterResource(R.drawable.ic_premium_badge),
                     contentDescription = null,
-                    tint = Coral,
                     modifier = Modifier.size(24.dp),
+                    colorFilter = ColorFilter.tint(Coral),
                 )
             }
             Column(modifier = Modifier.weight(1f)) {

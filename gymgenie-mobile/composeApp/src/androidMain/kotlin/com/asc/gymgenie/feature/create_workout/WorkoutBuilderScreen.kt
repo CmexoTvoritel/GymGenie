@@ -1,7 +1,9 @@
 package com.asc.gymgenie.feature.create_workout
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,7 +24,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Timer
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -33,15 +36,22 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.asc.gymgenie.R
 import com.asc.gymgenie.presentation.CreateWorkoutLimits
 import com.asc.gymgenie.presentation.CreateWorkoutUiState
 import com.asc.gymgenie.presentation.PendingExercise
@@ -51,17 +61,11 @@ import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
 import com.asc.gymgenie.ui.theme.SoftCard
 import com.asc.gymgenie.ui.theme.WarmOffWhite
+import com.asc.gymgenie.utils.WeekdayPairs
+import com.asc.gymgenie.utils.formatRestDuration
 import com.asc.gymgenie.workout.WorkoutScheduleType
 
-/**
- * Builder (hub) screen of the create-workout flow: review, edit, save.
- *
- * Not a numbered wizard step — the 3-step indicator only applies to the
- * group → exercise → config sub-flow used when adding an exercise.
- *
- * Reads directly from the shared [CreateWorkoutUiState] so the list of already
- * configured exercises survives back-and-forth navigation to add more items.
- */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun WorkoutBuilderScreen(
     state: CreateWorkoutUiState,
@@ -77,15 +81,22 @@ fun WorkoutBuilderScreen(
     onToggleScheduleDay: (String) -> Unit = {},
     onEditExerciseAt: (Int) -> Unit = {},
 ) {
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(WarmOffWhite)
-            .imePadding(),
+            .imePadding()
+            .pointerInput(Unit) {
+                detectTapGestures {
+                    focusManager.clearFocus()
+                    keyboardController?.hide()
+                }
+            },
     ) {
-        // The builder is the "home" of the flow and intentionally is NOT a
-        // numbered step in the wizard — dropping the subtitle keeps the
-        // step counter (1/3, 2/3, 3/3) honest while users add exercises.
+
         GymGenieToolbar(
             title = "Создание тренировки",
             showBackNavigation = true,
@@ -141,7 +152,7 @@ fun WorkoutBuilderScreen(
             }
 
             item {
-                SectionHeader(text = "Упражнения · ${state.exercises.size}")
+                SectionHeader(text = "Упражнения", count = state.exercises.size)
             }
 
             if (state.exercises.isEmpty()) {
@@ -215,17 +226,6 @@ private fun WorkoutNameField(
     }
 }
 
-/**
- * Optional free-text description for the workout plan.
- *
- * Mirrors [WorkoutNameField] visually so the two inputs read as a pair, with
- * the only deliberate difference being a 2-line cap (vs. single line) since
- * the description is meant to be a short blurb rather than a title.
- *
- * Length is clamped at [WorkoutDescriptionMaxLength] at the call site so the
- * cap is visible next to the field declaration and stays consistent with the
- * presenter's expectations.
- */
 @Composable
 private fun WorkoutDescriptionField(
     value: String,
@@ -276,20 +276,20 @@ private fun RestTimeCard(
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "Отдых между подходами",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = DeepInk,
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = formatRestDuration(restSeconds),
-                fontSize = 13.sp,
-                color = MutedText,
-            )
-        }
+        Icon(
+            imageVector = Icons.Outlined.Timer,
+            contentDescription = null,
+            tint = AccentOrange,
+            modifier = Modifier.size(22.dp),
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = "Отдых между подходами",
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = DeepInk,
+            modifier = Modifier.weight(1f),
+        )
 
         StepperCircleButton(
             symbol = "−",
@@ -322,13 +322,35 @@ private fun RestTimeCard(
 }
 
 @Composable
-private fun SectionHeader(text: String) {
-    Text(
-        text = text,
-        fontSize = 16.sp,
-        fontWeight = FontWeight.SemiBold,
-        color = MutedText,
-    )
+private fun SectionHeader(text: String, count: Int = 0) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = text,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MutedText,
+        )
+        Spacer(modifier = Modifier.weight(1f))
+        if (count > 0) {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(AccentOrange),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = count.toString(),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -368,13 +390,15 @@ private fun ExerciseRow(
         Box(
             modifier = Modifier
                 .size(40.dp)
-                .clip(CircleShape)
+                .clip(RoundedCornerShape(12.dp))
                 .background(AccentOrange.copy(alpha = 0.12f)),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = muscleGroupPickerEmoji(exercise.muscleGroupKey),
-                fontSize = 18.sp,
+            Image(
+                painter = painterResource(id = muscleGroupExerciseDrawable(exercise.muscleGroupKey)),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
             )
         }
 
@@ -396,9 +420,6 @@ private fun ExerciseRow(
             )
         }
 
-        // Edit button — pencil affordance on the trailing side, 12dp ahead of
-        // delete. Kept visually identical to delete (same size/surface) so the
-        // pair reads as a row of paired secondary actions.
         Box(
             modifier = Modifier
                 .size(36.dp)
@@ -407,15 +428,15 @@ private fun ExerciseRow(
                 .clickable { onEdit() },
             contentAlignment = Alignment.Center,
         ) {
-            Icon(
-                imageVector = Icons.Outlined.Edit,
+            Image(
+                painter = painterResource(R.drawable.ic_edit),
                 contentDescription = "Редактировать",
-                tint = DeepInk,
                 modifier = Modifier.size(16.dp),
+                colorFilter = ColorFilter.tint(DeepInk),
             )
         }
 
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(8.dp))
 
         Box(
             modifier = Modifier
@@ -425,21 +446,16 @@ private fun ExerciseRow(
                 .clickable { onRemove() },
             contentAlignment = Alignment.Center,
         ) {
-            Text(text = "🗑", fontSize = 16.sp)
+            Image(
+                painter = painterResource(R.drawable.ic_delete),
+                contentDescription = "Удалить",
+                modifier = Modifier.size(16.dp),
+                colorFilter = ColorFilter.tint(DeepInk),
+            )
         }
     }
 }
 
-/**
- * Renders the row subtitle as "<sets> подх • <reps> пов" and, when the
- * exercise is weight-tracked, appends a compact weight summary:
- *  - "X кг" when every set uses the same weight
- *  - "min-max кг" when the user pyramided up/down across sets
- *
- * Skips the weight segment entirely when the list is null or has no concrete
- * values (e.g. legacy rows) so the subtitle stays unchanged for bodyweight
- * exercises.
- */
 private fun buildExerciseRowSubtitle(exercise: PendingExercise): String = buildString {
     append("${exercise.sets} подх • ${exercise.reps} пов")
     val weights = exercise.setWeightsKg
@@ -455,11 +471,6 @@ private fun buildExerciseRowSubtitle(exercise: PendingExercise): String = buildS
     }
 }
 
-/**
- * Compact kg formatter for the builder row — same convention as the config
- * stepper, but without the unit suffix so the subtitle can place the "кг"
- * once at the end of the range.
- */
 private fun formatRowWeight(kg: Double): String =
     if (kg % 1.0 == 0.0) kg.toInt().toString() else kg.toString()
 
@@ -470,20 +481,19 @@ private fun BottomActionBar(
     onAddMore: () -> Unit,
     onSave: () -> Unit,
 ) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(WarmOffWhite)
             .padding(horizontal = 20.dp, vertical = 12.dp)
             .navigationBarsPadding(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         OutlinedButton(
             onClick = onAddMore,
             enabled = !isSaving,
             modifier = Modifier
-                .weight(1f)
+                .fillMaxWidth()
                 .height(54.dp),
             shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.outlinedButtonColors(contentColor = DeepInk),
@@ -499,7 +509,7 @@ private fun BottomActionBar(
             onClick = onSave,
             enabled = canSave,
             modifier = Modifier
-                .weight(1f)
+                .fillMaxWidth()
                 .height(54.dp),
             shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.buttonColors(
@@ -526,15 +536,19 @@ private fun BottomActionBar(
     }
 }
 
-/**
- * Two-state segmented control: one-time vs recurring schedule. Pure UI — the
- * lookup table and click handler are kept tiny so the row stays readable.
- */
 @Composable
 private fun ScheduleTypeSelector(
     selected: WorkoutScheduleType,
     onSelected: (WorkoutScheduleType) -> Unit,
 ) {
+    Column {
+        Text(
+            text = "Тип тренировки",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MutedText,
+        )
+        Spacer(modifier = Modifier.height(6.dp))
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -555,6 +569,7 @@ private fun ScheduleTypeSelector(
             onClick = { onSelected(WorkoutScheduleType.RECURRING) },
             modifier = Modifier.weight(1f),
         )
+    }
     }
 }
 
@@ -582,10 +597,6 @@ private fun ScheduleTypeOption(
     }
 }
 
-/**
- * Day-of-week picker shown only for the recurring schedule type. Day keys are
- * the `DayOfWeek` enum names so the value is API-ready and shared with iOS.
- */
 @Composable
 private fun ScheduleDayPicker(
     selectedDays: Set<String>,
@@ -619,25 +630,4 @@ private fun ScheduleDayPicker(
     }
 }
 
-private val ScheduleDays = listOf(
-    "MONDAY" to "Пн",
-    "TUESDAY" to "Вт",
-    "WEDNESDAY" to "Ср",
-    "THURSDAY" to "Чт",
-    "FRIDAY" to "Пт",
-    "SATURDAY" to "Сб",
-    "SUNDAY" to "Вс",
-)
-
-/**
- * Formats rest seconds according to the spec:
- * - < 60 → "Xс"
- * - >= 60 with no remainder → "Xм"
- * - >= 60 with remainder → "Xм Yс"
- */
-internal fun formatRestDuration(seconds: Int): String {
-    if (seconds < 60) return "${seconds}с"
-    val minutes = seconds / 60
-    val remainder = seconds % 60
-    return if (remainder == 0) "${minutes}м" else "${minutes}м ${remainder}с"
-}
+private val ScheduleDays = WeekdayPairs

@@ -37,16 +37,10 @@ fun ExerciseSearchBar(
     onClearSearch: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Keep the latest query and search callback so the focus-change listener
-    // never captures stale values from the first composition.
+
     val currentQuery by rememberUpdatedState(searchQuery)
     val currentOnSearch by rememberUpdatedState(onSearch)
 
-    // Guards against the double-search that would otherwise happen when the
-    // user taps IME Search: the keyboard action fires once, then the IME
-    // collapses and the field loses focus, which would re-fire the search via
-    // [onFocusChanged]. We mark the IME-triggered case and swallow the next
-    // focus-loss event instead of running a second network call.
     var searchTriggeredByIme by remember { mutableStateOf(false) }
 
     Box(
@@ -95,11 +89,7 @@ fun ExerciseSearchBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .onFocusChanged { focusState ->
-                    // Trigger search when the field loses focus with a non-empty
-                    // query — covers the IME being dismissed via Back as well
-                    // as the user tapping elsewhere on the screen. The IME
-                    // Search action already issued a request, so we skip the
-                    // follow-up focus-loss event in that case.
+
                     if (focusState.isFocused) {
                         searchTriggeredByIme = false
                     } else if (currentQuery.isNotEmpty()) {

@@ -1,5 +1,6 @@
 package com.asc.gymgenie.ai
 
+import com.asc.gymgenie.user.UpdateUserProfileRequest
 import com.asc.gymgenie.user.UserProfileResponse
 import com.asc.gymgenie.user.UserProfileStore
 import kotlinx.coroutines.CoroutineScope
@@ -13,11 +14,6 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/**
- * Steps in the AI workout flow. Encoded as a sealed enum so the presenter
- * exposes a single source of truth for navigation between the 5 internal
- * pages and the UI layer just renders whichever one is current.
- */
 enum class AiFlowStep(val index: Int) {
     CHOOSE(0),
     PROFILE(1),
@@ -26,13 +22,6 @@ enum class AiFlowStep(val index: Int) {
     CHAT(4),
 }
 
-/**
- * Profile information collected through screens 2-4.
- *
- * Numeric fields default to `0` so the slider UI can use a single
- * "any value > 0 is valid" rule. The textual answers default to empty
- * strings, which the picker UI treats as "not picked".
- */
 data class AiProfileData(
     val age: Int = 0,
     val height: Int = 0,
@@ -55,10 +44,6 @@ data class AiProfileData(
             else -> false
         }
 
-    /**
-     * Health context appended to every chat message. Empty when the user
-     * has no limitations — the backend then receives `null` for that field.
-     */
     fun healthContext(): String? = limitationsDesc.takeIf { it.isNotBlank() }
 
     companion object {
@@ -68,11 +53,6 @@ data class AiProfileData(
     }
 }
 
-/**
- * One bubble in the chat transcript. The `role` is intentionally a string
- * to keep the model trivially round-trippable to platform UI without
- * dragging the [AiResponseType] enum into both Compose and SwiftUI.
- */
 data class AiChatMessage(
     val role: Role,
     val text: String,
@@ -92,26 +72,6 @@ data class AiUiState(
     val errorMessage: String? = null,
 )
 
-/**
- * Presenter for the AI workout flow.
- *
- * Owns:
- *  - step navigation between the 5 in-feature pages
- *  - the profile data captured before chat starts
- *  - the chat transcript, typing indicator, and last-generated workout
- *  - calls into [AiApi] for `chat`, `saveWorkout`, and `replaceWorkout`
- *
- * Pre-fills [AiProfileData] from [UserProfileStore] so a returning user does
- * not have to re-enter age / height / weight / experience / frequency / health
- * limitations on every visit. The user can still freely edit any field.
- *
- * The view layer is purely declarative: it observes [state] and dispatches
- * intents (`goTo`, `updateProfile`, `sendMessage`, `saveWorkout`, `reset`).
- *
- * Lifetime: callers must invoke [onCleared] when the surface is disposed
- * so in-flight coroutines are cancelled. Android does this by tying the
- * VM to a `remember` block; iOS does it from the wrapper's `deinit`.
- */
 class AiViewModel(
     private val aiApi: AiApi,
     private val userProfileStore: UserProfileStore,
@@ -136,6 +96,10 @@ class AiViewModel(
     }
 
     fun goTo(step: AiFlowStep) {
+        val current = _state.value.step
+        if (step.index > current.index && current in PROFILE_STEPS) {
+            syncProfileIfChanged()
+        }
         _state.update { it.copy(step = step, errorMessage = null) }
     }
 
@@ -167,23 +131,6 @@ class AiViewModel(
     }
     fun setLimitationsDesc(value: String) = _state.update { it.copy(profile = it.profile.copy(limitationsDesc = value)) }
 
-    /**
-     * Sends a user-typed message to the AI. Appends the user bubble first
-     * (so the input feels responsive), turns on the typing indicator, then
-     * mutates the state again with the assistant's reply.
-     *
-     * Profile fields are sent on every request: the backend keeps server-side
-     * session state and ignores them after the first message, but resending
-     * keeps the wire contract idempotent and lets the backend rebuild context
-     * if its session expires.
-     *
-     * If the response is a [AiResponseType.WORKOUT] we cache it on state
-     * so the UI can render the "save workout" CTA. Subsequent messages are
-     * still allowed: the user may keep refining the plan, and only the
-     * latest workout is offered for saving — but [AiUiState.savedPlanId] is
-     * preserved so further saves go through `replaceWorkout` against the
-     * same persisted plan instead of creating duplicates.
-     */
     fun sendMessage(text: String) {
         val trimmed = text.trim()
         if (trimmed.isEmpty() || _state.value.isTyping) return
@@ -194,10 +141,7 @@ class AiViewModel(
                 messages = it.messages + userBubble,
                 isTyping = true,
                 errorMessage = null,
-                // A new message invalidates the previous "saved" badge so the
-                // user can save (or update) a fresh plan if the AI returns a
-                // different one. `savedPlanId` is intentionally preserved so
-                // subsequent saves overwrite the existing plan.
+
                 isSaved = false,
             )
         }
@@ -238,16 +182,6 @@ class AiViewModel(
         }
     }
 
-    /**
-     * Persists the last AI-generated workout. Idempotent at the UI level:
-     * once `isSaved == true` the screen replaces the CTA with a success
-     * banner and only un-sets the flag when a new AI message arrives.
-     *
-     * If the user has already saved this conversation's plan once
-     * ([AiUiState.savedPlanId] is non-null), subsequent saves go through
-     * [AiApi.replaceWorkout] and update the same persisted entry instead
-     * of creating new copies.
-     */
     fun saveWorkout() {
         val workout = _state.value.lastWorkout ?: return
         if (_state.value.isSaving || _state.value.isSaved) return
@@ -288,18 +222,66 @@ class AiViewModel(
         _state.update { it.copy(errorMessage = null) }
     }
 
-    /**
-     * Resets the entire flow back to the starting screen. Also fires a
-     * best-effort server-side session clear so the AI doesn't continue from
-     * a stale conversation if the user starts over.
-     */
+    private fun syncProfileIfChanged() {
+        val current = _state.value.profile
+        val stored = userProfileStore.profile.value ?: return
+        val request = buildProfileUpdateRequest(current, stored) ?: return
+        scope.launch { userProfileStore.saveProfile(request) }
+    }
+
+    private fun buildProfileUpdateRequest(
+        current: AiProfileData,
+        stored: UserProfileResponse,
+    ): UpdateUserProfileRequest? {
+        val ageChanged = current.age > 0 && current.age != (stored.ageYears ?: 0)
+        val heightChanged = current.height > 0 && current.height != (stored.heightCm?.toInt() ?: 0)
+        val weightChanged = current.weight > 0 && current.weight != (stored.weightKg?.toInt() ?: 0)
+        val experienceChanged = current.experience.isNotBlank() && current.experience != (stored.experience ?: "")
+        val frequencyChanged = current.frequency.isNotBlank() && current.frequency != (stored.frequency ?: "")
+
+        val currentHealth = when (current.hasLimitations) {
+            AiProfileData.HEALTH_YES -> current.limitationsDesc
+            AiProfileData.HEALTH_NO -> ""
+            else -> null
+        }
+        val healthChanged = currentHealth != null && currentHealth != (stored.healthIssues ?: "")
+
+        if (!ageChanged && !heightChanged && !weightChanged &&
+            !experienceChanged && !frequencyChanged && !healthChanged
+        ) return null
+
+        return UpdateUserProfileRequest(
+            ageYears = if (ageChanged) current.age else null,
+            heightCm = if (heightChanged) current.height.toDouble() else null,
+            weightKg = if (weightChanged) current.weight.toDouble() else null,
+            experience = if (experienceChanged) current.experience else null,
+            frequency = if (frequencyChanged) current.frequency else null,
+            healthIssues = if (healthChanged) currentHealth else null,
+        )
+    }
+
+    fun refreshProfileFromStore() {
+        if (_state.value.step != AiFlowStep.CHOOSE) return
+        val stored = userProfileStore.profile.value ?: return
+        _state.update { it.copy(profile = stored.toAiProfileData()) }
+    }
+
     fun reset() {
-        _state.value = AiUiState()
+        val stored = userProfileStore.profile.value
+        _state.value = if (stored != null) {
+            AiUiState(profile = stored.toAiProfileData())
+        } else {
+            AiUiState()
+        }
         scope.launch { aiApi.clearSession() }
     }
 
     fun onCleared() {
         scope.cancel()
+    }
+
+    private companion object {
+        val PROFILE_STEPS = setOf(AiFlowStep.PROFILE, AiFlowStep.EXPERIENCE, AiFlowStep.HEALTH)
     }
 }
 
@@ -309,10 +291,7 @@ private fun UserProfileResponse.toAiProfileData() = AiProfileData(
     weight = weightKg?.toInt() ?: 0,
     experience = experience ?: "",
     frequency = frequency ?: "",
-    // Empty string means "not yet answered"; only pre-select HEALTH_NO if the user
-    // explicitly stored healthIssues = "" (empty, not null) — but since null and ""
-    // are indistinguishable in the current schema, leave it unset so the user
-    // must make a conscious choice on the Health screen.
+
     hasLimitations = if (!healthIssues.isNullOrBlank()) AiProfileData.HEALTH_YES else "",
     limitationsDesc = healthIssues ?: "",
 )

@@ -82,15 +82,6 @@ fun RootContent(
     }
 }
 
-/**
- * Branded launch screen rendered while the app resolves its initial
- * destination (DataStore read for onboarding flag, token validation, and
- * profile fetch). The composable is intentionally stateless — navigation is
- * driven entirely by [DefaultRootComponent] and only the visuals live here.
- *
- * Layout: app icon centered on screen (matching Android 12+ system splash),
- * with a loading label and spinner pinned to the bottom of the screen.
- */
 @Composable
 private fun SplashContent() {
     val colors = MaterialTheme.colorScheme

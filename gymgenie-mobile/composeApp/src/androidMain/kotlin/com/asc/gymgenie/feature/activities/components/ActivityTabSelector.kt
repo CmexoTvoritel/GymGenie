@@ -84,7 +84,7 @@ fun ActivityTabSelector(
                 ) {
                     Text(
                         text = label,
-                        fontSize = 14.sp,
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = if (selected) Color.White else MutedText,
                     )

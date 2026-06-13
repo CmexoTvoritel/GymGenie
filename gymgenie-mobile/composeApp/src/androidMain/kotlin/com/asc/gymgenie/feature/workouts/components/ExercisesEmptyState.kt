@@ -6,6 +6,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -29,7 +33,12 @@ fun ExercisesEmptyState(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(text = "📦", fontSize = 48.sp)
+        Icon(
+            imageVector = Icons.Outlined.Inbox,
+            contentDescription = null,
+            modifier = Modifier.size(48.dp),
+            tint = MutedText,
+        )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = if (hasFilter) "Ничего не найдено" else "Каталог пуст",

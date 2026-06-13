@@ -11,6 +11,7 @@ import com.asc.gymgenie.nutrition.dto.MealPlanShortResponse
 import com.asc.gymgenie.nutrition.dto.ManualMealItemDto
 import com.asc.gymgenie.nutrition.dto.MealResponse
 import com.asc.gymgenie.nutrition.entity.DishEntity
+import com.asc.gymgenie.nutrition.entity.FoodCategory
 import com.asc.gymgenie.nutrition.entity.FoodProductEntity
 import com.asc.gymgenie.nutrition.entity.MealEntity
 import com.asc.gymgenie.nutrition.entity.MealPlanEntity
@@ -30,12 +31,6 @@ import java.time.format.DateTimeFormatter
 import java.util.UUID
 import kotlin.math.roundToInt
 
-/**
- * CRUD service for saved meal plans. AI-driven generation lives in
- * [com.asc.gymgenie.ai.nutrition.MealAiService]; this service owns the manual
- * (user-built) creation path plus all read/delete endpoints exposed under
- * `/api/v1/meal-plans`.
- */
 @Service
 class MealPlanService(
     private val mealPlanRepository: MealPlanRepository,
@@ -71,29 +66,12 @@ class MealPlanService(
         mealPlanRepository.delete(plan)
     }
 
-    /**
-     * Creates a meal plan manually from catalog products.
-     *
-     * The flow is:
-     *  1. Validate input (items non-empty; schedule fields consistent with [WorkoutScheduleType]).
-     *  2. Resolve every [ManualMealItemDto.foodProductId] up front — fail with
-     *     [BadRequestException] if any product is missing so we never persist a
-     *     partially-resolved plan.
-     *  3. Persist a single [MealPlanEntity] with `createdBy = USER`, one
-     *     [MealEntity] of [CreateManualMealPlanRequest.mealType], and one
-     *     [DishEntity] per item (macros derived from per-100g catalog values
-     *     scaled by the requested grams).
-     *  4. Sum dish calories into the plan-level `totalCalories` and meal-level
-     *     `estimatedCalories` so list/short responses reflect the manual plan
-     *     consistently with AI-generated plans.
-     */
     @Transactional
     fun createManualMealPlan(userId: UUID, request: CreateManualMealPlanRequest): MealPlanDetailResponse {
         validateScheduling(request.scheduleType, request.scheduleDays, request.oneOffDate)
 
         if (request.items.isEmpty()) {
-            // Belt-and-braces alongside @NotEmpty on the DTO — keeps the contract
-            // explicit at the service boundary for any non-controller caller.
+
             throw BadRequestException("Meal plan must contain at least one item")
         }
 
@@ -111,13 +89,6 @@ class MealPlanService(
         val user = userRepository.findById(userId)
             .orElseThrow { NotFoundException("User not found") }
 
-        // Pre-compute macros so the meal/plan totals can be initialized before
-        // dish entities are constructed (DishEntity.meal is non-null and we want
-        // to avoid a placeholder reference).
-        //
-        // Two cases:
-        //  1. Items with foodProductId → resolve from catalog, scale per-100g macros.
-        //  2. Items without foodProductId → inline AI-generated dish, accept macros as-is.
         data class ScaledMacros(
             val name: String,
             val grams: Double,
@@ -126,6 +97,7 @@ class MealPlanService(
             val carbsG: Int?,
             val fatG: Int?,
             val foodProductId: UUID?,
+            val foodCategory: FoodCategory? = null,
         )
 
         val scaledItems: List<ScaledMacros> = request.items.map { item ->
@@ -140,6 +112,7 @@ class MealPlanService(
                     carbsG = scalePer100g(product.carbsPer100g, item.grams),
                     fatG = scalePer100g(product.fatPer100g, item.grams),
                     foodProductId = product.id,
+                    foodCategory = product.category,
                 )
             } else {
                 ScaledMacros(
@@ -165,7 +138,8 @@ class MealPlanService(
             createdBy = NutritionCreatedBy.USER,
             scheduleType = request.scheduleType,
             scheduleDays = normalizedScheduleDays.toMutableSet(),
-            oneOffDate = normalizedOneOffDate
+            oneOffDate = normalizedOneOffDate,
+            primaryMealType = request.mealType.name
         )
 
         val meal = MealEntity(
@@ -187,23 +161,17 @@ class MealPlanService(
                     carbsG = scaled.carbsG,
                     fatG = scaled.fatG,
                     foodProductId = scaled.foodProductId,
-                    grams = scaled.grams
+                    grams = scaled.grams,
+                    foodCategory = scaled.foodCategory
                 )
             )
         }
         plan.meals.add(meal)
 
-        // Persist the aggregate root: CascadeType.ALL on MealPlanEntity.meals
-        // and MealEntity.dishes propagates the inserts in a single save call.
         val saved = mealPlanRepository.save(plan)
         return saved.toDetailResponse()
     }
 
-    /**
-     * Returns the calendar slots already occupied by the user's existing plans
-     * that include a meal of [mealType]. Splits results by scheduling mode so the
-     * mobile client can render distinct "weekday" and "specific date" pickers.
-     */
     @Transactional(readOnly = true)
     fun getBookedDays(userId: UUID, mealType: MealType): BookedDaysResponse {
         val plans = mealPlanRepository.findByUserIdAndMealType(userId, mealType)
@@ -230,10 +198,6 @@ class MealPlanService(
         return BookedDaysResponse(recurringDays = recurringDays, oneOffDates = oneOffDates)
     }
 
-    // ================================================================
-    // Validation helpers
-    // ================================================================
-
     private fun validateScheduling(
         scheduleType: WorkoutScheduleType,
         scheduleDays: List<String>,
@@ -244,7 +208,7 @@ class MealPlanService(
                 if (scheduleDays.isEmpty()) {
                     throw BadRequestException("scheduleDays is required for RECURRING meal plans")
                 }
-                // Validate every entry parses to a DayOfWeek before persisting.
+
                 scheduleDays.forEach { raw ->
                     if (!isValidDayOfWeek(raw.uppercase())) {
                         throw BadRequestException("Invalid day-of-week value: $raw")
@@ -275,11 +239,6 @@ class MealPlanService(
             false
         }
 
-    /**
-     * Scales a per-100g nutritional value by the requested grams and rounds to
-     * the nearest integer. Returns `null` only when the input itself is non-finite,
-     * which should never happen for catalog rows but guards the persistence column.
-     */
     private fun scalePer100g(per100g: Double, grams: Double): Int? {
         val raw = per100g * grams / 100.0
         if (raw.isNaN() || raw.isInfinite()) return null
@@ -291,10 +250,6 @@ class MealPlanService(
         MealType.LUNCH -> "Обед"
         MealType.DINNER -> "Ужин"
     }
-
-    // ================================================================
-    // Mappers
-    // ================================================================
 
     private fun MealPlanEntity.toShortResponse() = MealPlanShortResponse(
         id = id!!,
@@ -339,6 +294,7 @@ class MealPlanService(
         carbsG = carbsG,
         fatG = fatG,
         foodProductId = foodProductId,
-        grams = grams
+        grams = grams,
+        foodCategory = foodCategory?.name
     )
 }

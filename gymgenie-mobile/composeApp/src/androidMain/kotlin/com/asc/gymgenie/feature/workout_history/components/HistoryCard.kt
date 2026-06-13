@@ -1,10 +1,12 @@
 package com.asc.gymgenie.feature.workout_history.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -24,14 +26,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.asc.gymgenie.ui.components.muscleGroupCardEmoji
+import com.asc.gymgenie.feature.create_workout.muscleGroupExerciseDrawable
 import com.asc.gymgenie.ui.components.muscleGroupColors
 import com.asc.gymgenie.ui.theme.Coral
+import com.asc.gymgenie.utils.muscleGroupNameVerboseRu
 import com.asc.gymgenie.workout.WorkoutSessionHistoryItem
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
@@ -60,7 +65,7 @@ fun HistoryCard(
     val statusFg = if (isCompleted) CompletedFg else IncompleteFg
     val statusText = if (isCompleted) "Выполнено" else "Не закончено"
     val muscleColors = muscleGroupColors(session.primaryMuscleGroup)
-    val muscleEmoji = muscleGroupCardEmoji(session.primaryMuscleGroup)
+    val muscleDrawable = muscleGroupExerciseDrawable(session.primaryMuscleGroup ?: "")
 
     val progress = if (session.totalSets > 0) {
         session.completedSets.toFloat() / session.totalSets
@@ -87,7 +92,12 @@ fun HistoryCard(
                         .background(muscleColors.background),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(text = muscleEmoji, fontSize = 22.sp)
+                    Image(
+                        painter = painterResource(id = muscleDrawable),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                    )
                 }
                 Spacer(modifier = Modifier.width(12.dp))
 
@@ -102,7 +112,7 @@ fun HistoryCard(
                     )
                     if (session.primaryMuscleGroup != null) {
                         Text(
-                            text = muscleGroupLabel(session.primaryMuscleGroup),
+                            text = muscleGroupNameVerboseRu(session.primaryMuscleGroup),
                             fontSize = 15.sp,
                             color = MutedGray,
                         )
@@ -162,12 +172,21 @@ fun HistoryCard(
                     StatItem(label = "Упражнения", value = "${session.totalExercises}")
                     StatItem(label = "Подходы", value = "${session.completedSets}")
                 }
-            } else if (session.totalSets > 0) {
-                Text(
-                    text = "Сделано ${session.completedSets} из ${session.totalSets} подходов",
-                    fontSize = 13.sp,
-                    color = IncompleteFg,
-                )
+            } else {
+                if (session.totalExercises > 0) {
+                    Text(
+                        text = "Упражнения: ${session.completedExercises} из ${session.totalExercises}",
+                        fontSize = 16.sp,
+                        color = IncompleteFg,
+                    )
+                }
+                if (session.totalSets > 0) {
+                    Text(
+                        text = "Подходы: ${session.completedSets} из ${session.totalSets}",
+                        fontSize = 16.sp,
+                        color = IncompleteFg,
+                    )
+                }
             }
         }
     }
@@ -200,23 +219,4 @@ private fun formatEpochTime(epochMillis: Double): String {
     val instant = Instant.fromEpochMilliseconds(epochMillis.toLong())
     val local = instant.toLocalDateTime(TimeZone.currentSystemDefault())
     return String.format("%02d:%02d", local.hour, local.minute)
-}
-
-private fun muscleGroupLabel(group: String?): String = when (group?.uppercase()) {
-    "CHEST" -> "Грудные мышцы"
-    "BACK" -> "Спина"
-    "SHOULDERS", "SHOULDER" -> "Плечи"
-    "BICEPS" -> "Бицепс"
-    "TRICEPS" -> "Трицепс"
-    "FOREARMS" -> "Предплечья"
-    "ARMS" -> "Руки"
-    "ABS", "CORE" -> "Пресс"
-    "QUADRICEPS" -> "Квадрицепсы"
-    "HAMSTRINGS" -> "Задняя поверхность бедра"
-    "GLUTES" -> "Ягодицы"
-    "CALVES" -> "Икроножные"
-    "LEGS" -> "Ноги"
-    "CARDIO" -> "Кардио"
-    "FULL_BODY" -> "Все тело"
-    else -> "Смешанная"
 }

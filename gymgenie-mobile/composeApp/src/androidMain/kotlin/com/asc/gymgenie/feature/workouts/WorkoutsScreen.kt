@@ -107,6 +107,12 @@ fun WorkoutsScreen(
         viewModel.loadWorkoutPlans()
     }
 
+    LaunchedEffect(isTabActive) {
+        if (isTabActive) {
+            viewModel.loadWorkoutPlans()
+        }
+    }
+
     val pagerState = rememberPagerState(
         initialPage = 0,
         pageCount = { TabOrder.size },

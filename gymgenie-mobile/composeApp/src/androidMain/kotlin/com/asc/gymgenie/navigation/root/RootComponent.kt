@@ -20,10 +20,7 @@ interface RootComponent {
         data object Splash : Child()
         data object Onboarding : Child()
         data object Privacy : Child()
-        // Login/Main carry stateful instances (view models, child components).
-        // Plain `class` avoids structural-equality semantics that data class
-        // would inherit — Decompose compares children identity-wise during
-        // stack updates, and value equality on stateful objects is misleading.
+
         class Login(val authViewModel: AuthViewModel) : Child()
         data object Paywall : Child()
         data object PurchaseSuccess : Child()

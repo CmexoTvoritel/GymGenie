@@ -1,15 +1,6 @@
 import SwiftUI
 import Shared
 
-/// Builder (hub) — the screen where the user names the workout, tunes the
-/// rest interval, reviews added exercises, and saves.
-///
-/// Intentionally not a numbered step: the 3-step indicator only applies to
-/// the group → exercise → config sub-flow used when adding an exercise.
-///
-/// All persistent state lives in `CreateWorkoutViewModelWrapper`; this view
-/// only owns a local string binding to bridge SwiftUI's `TextField` with the
-/// shared ViewModel setter.
 struct WorkoutBuilderView: View {
     @ObservedObject var vm: CreateWorkoutViewModelWrapper
     let onBack: () -> Void
@@ -51,6 +42,8 @@ struct WorkoutBuilderView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
                 }
+                .contentShape(Rectangle())
+                .simultaneousGesture(TapGesture().onEnded { hideKeyboard() })
             }
 
             bottomBar
@@ -76,8 +69,6 @@ struct WorkoutBuilderView: View {
         )
     }
 
-    // MARK: - Header
-
     private var header: some View {
         GymGenieToolbar(
             title: "Создание тренировки",
@@ -86,8 +77,6 @@ struct WorkoutBuilderView: View {
             onBackTap: onBack
         )
     }
-
-    // MARK: - Name
 
     private var nameField: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -109,8 +98,6 @@ struct WorkoutBuilderView: View {
                 }
         }
     }
-
-    // MARK: - Description
 
     private var descriptionField: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -138,8 +125,6 @@ struct WorkoutBuilderView: View {
         }
     }
 
-    // MARK: - Rest card
-
     private var restCard: some View {
         HStack(spacing: 12) {
             Image(systemName: "clock")
@@ -148,14 +133,9 @@ struct WorkoutBuilderView: View {
                 .frame(width: 36, height: 36)
                 .background(Circle().fill(orange.opacity(0.12)))
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Отдых между подходами")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(deepInk)
-                Text(restDisplay(seconds: vm.restSeconds))
-                    .font(.system(size: 12))
-                    .foregroundColor(mutedText)
-            }
+            Text("Отдых между подходами")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(deepInk)
 
             Spacer()
 
@@ -165,6 +145,10 @@ struct WorkoutBuilderView: View {
                     disabled: vm.restSeconds <= minRest,
                     action: { vm.decrementRestSeconds() }
                 )
+                Text(restDisplay(seconds: vm.restSeconds))
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(deepInk)
+                    .frame(width: 64, alignment: .center)
                 smallStepperButton(
                     symbol: "plus",
                     disabled: vm.restSeconds >= maxRest,
@@ -176,14 +160,10 @@ struct WorkoutBuilderView: View {
         .background(RoundedRectangle(cornerRadius: 16).fill(softCard))
     }
 
-    // MARK: - Schedule type
-
-    /// Two capsule buttons inside a rounded surface — keeps visual parity with
-    /// the rest card: same horizontal padding, same surface fill, same radius.
     private var scheduleTypeCard: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Тип тренировки")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(mutedText)
 
             HStack(spacing: 6) {
@@ -214,8 +194,6 @@ struct WorkoutBuilderView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - Schedule days
-
     private static let weekdayKeys: [String] = [
         "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY",
         "FRIDAY", "SATURDAY", "SUNDAY",
@@ -224,9 +202,6 @@ struct WorkoutBuilderView: View {
         "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс",
     ]
 
-    /// Day-of-week picker shown only for [WorkoutScheduleType.RECURRING].
-    /// Seven equally spaced circular badges using the same `softCard` surface
-    /// as the rest of the builder for unselected state.
     private var scheduleDaysCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Дни недели")
@@ -268,8 +243,6 @@ struct WorkoutBuilderView: View {
         .buttonStyle(.plain)
         .disabled(disabled)
     }
-
-    // MARK: - Exercises
 
     private var exercisesSection: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -331,7 +304,9 @@ struct WorkoutBuilderView: View {
 
     private var emptyExercisesState: some View {
         VStack(spacing: 6) {
-            Text("🧩").font(.system(size: 36))
+            Image(systemName: "puzzlepiece")
+                .font(.system(size: 32))
+                .foregroundColor(mutedText)
             Text("Пока нет упражнений")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(deepInk)
@@ -345,29 +320,29 @@ struct WorkoutBuilderView: View {
     }
 
     private func exerciseRow(_ exercise: Shared.PendingExercise, index: Int) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 0) {
             ZStack {
-                RoundedRectangle(cornerRadius: 10).fill(softCard)
-                    .frame(width: 44, height: 44)
-                Text(muscleGroupEmoji(exercise.muscleGroupKey))
-                    .font(.system(size: 22))
+                RoundedRectangle(cornerRadius: 10, style: .continuous).fill(softCard)
+                    .frame(width: 40, height: 40)
+                Image(muscleGroupExerciseImageName(exercise.muscleGroupKey))
+                    .resizable()
+                    .aspectRatio(1, contentMode: .fit)
+                    .frame(width: 40, height: 40)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(exercise.exerciseNameRu)
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(deepInk)
-                    .lineLimit(1)
+                    .lineLimit(2)
                 Text(exerciseRowSubtitle(exercise))
                     .font(.system(size: 14))
                     .foregroundColor(mutedText)
             }
+            .padding(.leading, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            Spacer()
-
-            // Edit (pencil) sits left of delete, 12pt apart, sharing the same
-            // 36pt circular surface and neutral fill so the pair reads as a
-            // matched row of secondary actions.
             Button(action: { onEditExercise(index, exercise) }) {
                 Image(systemName: "pencil")
                     .font(.system(size: 14, weight: .semibold))
@@ -393,23 +368,12 @@ struct WorkoutBuilderView: View {
         .shadow(color: Color.black.opacity(0.04), radius: 3, y: 1)
     }
 
-    /// Builds the subtitle for an exercise row:
-    ///   - "<sets> подх • <reps> пов"
-    ///   - + " • X кг" if every set has the same weight
-    ///   - + " • min-max кг" if weights vary
-    ///
-    /// Skipped entirely for bodyweight rows or rows without recorded weights
-    /// so the subtitle stays clean for non-weight exercises.
     private func exerciseRowSubtitle(_ exercise: Shared.PendingExercise) -> String {
         let base = "\(exercise.sets) подх • \(exercise.reps) пов"
         guard exercise.requiresWeight,
               let raw = exercise.setWeightsKg
         else { return base }
 
-        // Kotlin's `List<Double?>?` is bridged as `NSArray` of `KotlinDouble`,
-        // exposed as `[Any]` in Swift. Cast each entry through `KotlinDouble`
-        // before reading the underlying `Double`; drop nils so the layout
-        // logic only inspects concrete values.
         let weights: [Double] = raw.compactMap { ($0 as? KotlinDouble)?.doubleValue }
         guard !weights.isEmpty else { return base }
 
@@ -422,17 +386,12 @@ struct WorkoutBuilderView: View {
         return "\(base) • \(formatWeightShort(minW))-\(formatWeightShort(maxW)) кг"
     }
 
-    /// Same convention as the config stepper: integer for whole numbers,
-    /// single-decimal for fractional values. No unit suffix — the caller
-    /// places "кг" once at the end of the range.
     private func formatWeightShort(_ kg: Double) -> String {
         if kg.truncatingRemainder(dividingBy: 1) == 0 {
             return String(Int(kg))
         }
         return String(format: "%.1f", kg)
     }
-
-    // MARK: - Bottom bar
 
     private var bottomBar: some View {
         VStack(spacing: 10) {
@@ -491,12 +450,6 @@ struct WorkoutBuilderView: View {
         localName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    // MARK: - Helpers
-
-    /// Formats rest interval according to the spec:
-    /// - `<60`  → "Xс"
-    /// - exact minute → "Xм"
-    /// - otherwise → "Xм Yс"
     private func restDisplay(seconds: Int32) -> String {
         let s = Int(seconds)
         if s < 60 { return "\(s)с" }
@@ -505,8 +458,6 @@ struct WorkoutBuilderView: View {
         if remainder == 0 { return "\(minutes)м" }
         return "\(minutes)м \(remainder)с"
     }
-
-    // MARK: - Drag reorder helpers
 
     private func dragYOffset(for index: Int) -> CGFloat {
         guard let from = dragFromIndex else { return 0 }
@@ -524,5 +475,12 @@ struct WorkoutBuilderView: View {
         let steps = Int(round(offset / rowHeight))
         let target = from + steps
         return max(0, min(target, vm.exercises.count - 1))
+    }
+
+    private func hideKeyboard() {
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil, from: nil, for: nil
+        )
     }
 }

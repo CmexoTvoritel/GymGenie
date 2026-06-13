@@ -15,13 +15,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/**
- * UI state of the Activity Catalog screen.
- *
- * [planIds] holds the ids of activities currently in the user's daily plan,
- * derived from the today endpoint. We expose it as a [Set] so the UI can
- * resolve the per-row toggle state in O(1) without iterating.
- */
 data class ActivityCatalogUiState(
     val isLoading: Boolean = true,
     val catalog: List<ActivityCatalogResponse> = emptyList(),
@@ -29,14 +22,6 @@ data class ActivityCatalogUiState(
     val error: String? = null,
 )
 
-/**
- * Drives the Activity Catalog screen — the list of activities the user can
- * add to their daily plan.
- *
- * The plan-membership signal is recovered from `getTodayActivities()` because
- * the catalog endpoint itself is plan-agnostic. A failure on the today call is
- * non-fatal — the catalog still renders, just without the toggle indicator.
- */
 class ActivityCatalogViewModel(
     private val activityApi: ActivityApi,
     private val sessionManager: SessionManager,
@@ -59,9 +44,6 @@ class ActivityCatalogViewModel(
                 return@launch
             }
 
-            // Today's plan is best-effort; if it fails (and isn't a 401) we
-            // still render the catalog with an empty plan set so the user
-            // can keep browsing.
             val planIds = activityApi.getTodayActivities().fold(
                 onSuccess = { today -> today.map { it.activityId }.toSet() },
                 onFailure = { e ->
@@ -79,20 +61,10 @@ class ActivityCatalogViewModel(
         }
     }
 
-    /**
-     * Toggles the plan membership of [activityId] with the default "every
-     * day" schedule. Updates local state optimistically and rolls back if the
-     * server call fails.
-     */
     fun togglePlan(activityId: String) {
         togglePlanInternal(activityId, request = null)
     }
 
-    /**
-     * Adds [activityId] to the plan with explicit schedule parameters.
-     * If the activity is already in the plan this behaves like a simple
-     * toggle-off (the schedule params are ignored on removal).
-     */
     fun addToPlanWithSchedule(
         activityId: String,
         scheduleType: String?,
@@ -131,7 +103,7 @@ class ActivityCatalogViewModel(
                     sessionManager.triggerLogout()
                     return@launch
                 }
-                // Revert the optimistic update.
+
                 applyPlanFlag(activityId, addToPlan = isInPlan)
             }
         }

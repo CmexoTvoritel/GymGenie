@@ -3,6 +3,7 @@ import SwiftUI
 struct ExerciseHeroView: View {
     let imageUrl: String?
     let techniqueTip: String?
+    let muscleGroup: String?
     var onInfoTapped: () -> Void
 
     var body: some View {
@@ -13,9 +14,8 @@ struct ExerciseHeroView: View {
                 } placeholder: {
                     placeholderView
                 }
-                .frame(height: 200)
-                .clipped()
-                .cornerRadius(16)
+                .frame(width: 200, height: 200)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
             } else {
                 placeholderView
             }
@@ -51,7 +51,7 @@ struct ExerciseHeroView: View {
                         )
                     )
                 }
-                .frame(height: 200)
+                .frame(width: 200, height: 200)
                 .cornerRadius(16)
                 .allowsHitTesting(false)
             }
@@ -68,10 +68,14 @@ struct ExerciseHeroView: View {
                     endPoint: .bottomTrailing
                 )
             )
-            .frame(height: 200)
+            .frame(width: 200, height: 200)
             .overlay(
-                Text("🏋️")
-                    .font(.system(size: 64))
+                Image(muscleGroupExerciseImageName(muscleGroup ?? ""))
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 200, height: 200)
+                    .clipped()
             )
+            .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 }

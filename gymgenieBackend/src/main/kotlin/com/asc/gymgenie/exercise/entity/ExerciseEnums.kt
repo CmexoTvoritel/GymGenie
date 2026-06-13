@@ -1,32 +1,32 @@
 package com.asc.gymgenie.exercise.entity
 
 enum class MuscleGroup {
-    CHEST,       // Грудные мышцы
-    BACK,        // Спина
-    SHOULDERS,   // Плечи
-    BICEPS,      // Бицепс
-    TRICEPS,     // Трицепс
-    FOREARMS,    // Предплечья
-    ABS,         // Пресс
-    QUADRICEPS,  // Квадрицепсы
-    HAMSTRINGS,  // Бицепс бедра
-    GLUTES,      // Ягодицы
-    CALVES,      // Икры
-    FULL_BODY,   // Всё тело
-    CARDIO       // Кардио
+    CHEST,
+    BACK,
+    SHOULDERS,
+    BICEPS,
+    TRICEPS,
+    FOREARMS,
+    ABS,
+    QUADRICEPS,
+    HAMSTRINGS,
+    GLUTES,
+    CALVES,
+    FULL_BODY,
+    CARDIO
 }
 
 enum class ExerciseCategory {
-    STRENGTH,    // Силовая
-    CARDIO,      // Кардио
-    FLEXIBILITY, // Растяжка
-    BALANCE,     // Баланс
-    PLYOMETRIC,  // Плиометрика
-    CALISTHENICS // Калистеника
+    STRENGTH,
+    CARDIO,
+    FLEXIBILITY,
+    BALANCE,
+    PLYOMETRIC,
+    CALISTHENICS
 }
 
 enum class DifficultyLevel {
-    BEGINNER,    // Начинающий
-    INTERMEDIATE,// Средний
-    ADVANCED     // Продвинутый
+    BEGINNER,
+    INTERMEDIATE,
+    ADVANCED
 }

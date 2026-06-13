@@ -37,6 +37,10 @@ class WorkoutSessionEntity(
     @Column(length = 1000)
     var notes: String? = null,
 
+    var totalPlannedSets: Int? = null,
+
+    var totalPlannedExercises: Int? = null,
+
     @OneToMany(mappedBy = "workoutSession", cascade = [CascadeType.ALL], orphanRemoval = true)
     @OrderBy("setNumber ASC")
     var sets: MutableList<WorkoutSessionSetEntity> = mutableListOf(),

@@ -48,37 +48,18 @@ import com.asc.gymgenie.ui.theme.AccentOrange
 import com.asc.gymgenie.ui.theme.DeepInk
 import com.asc.gymgenie.ui.theme.MutedText
 import com.asc.gymgenie.ui.theme.WarmOffWhite
+import com.asc.gymgenie.utils.WeekdayLabelsRu
+import com.asc.gymgenie.utils.backendToDayLabel
+import com.asc.gymgenie.utils.dayLabelToBackend
 import org.koin.core.context.GlobalContext
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-/**
- * Map from short Russian day labels (used in the UI chips) to the backend
- * enum values. The backend expects English upper-case day-of-week names.
- */
-private val dayLabelToBackend = linkedMapOf(
-    "Пн" to "MONDAY",
-    "Вт" to "TUESDAY",
-    "Ср" to "WEDNESDAY",
-    "Чт" to "THURSDAY",
-    "Пт" to "FRIDAY",
-    "Сб" to "SATURDAY",
-    "Вс" to "SUNDAY",
-)
+private val daysOfWeek = WeekdayLabelsRu
 
-private val backendToDayLabel = dayLabelToBackend.entries.associate { (k, v) -> v to k }
-
-private val daysOfWeek = dayLabelToBackend.keys.toList()
-
-/** Schedule mode selector options. */
 private enum class ScheduleMode { EVERY_DAY, RECURRING, ONE_TIME }
 
-/**
- * Screen for editing the schedule of an activity that is already in the
- * user's plan. Communicates with the backend via
- * [ActivitiesViewModel.updateSchedule].
- */
 @Composable
 fun ActivityScheduleSettingsScreen(
     activityId: String,
@@ -138,7 +119,7 @@ fun ActivityScheduleSettingsScreen(
 
             when (scheduleMode) {
                 ScheduleMode.EVERY_DAY -> {
-                    // No extra configuration needed
+
                 }
 
                 ScheduleMode.RECURRING -> {

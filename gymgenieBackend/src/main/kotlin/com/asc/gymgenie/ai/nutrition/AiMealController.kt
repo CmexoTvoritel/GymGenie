@@ -1,9 +1,6 @@
 package com.asc.gymgenie.ai.nutrition
 
-import com.asc.gymgenie.ai.nutrition.dto.AiMealChatRequest
-import com.asc.gymgenie.ai.nutrition.dto.AiMealChatResponse
-import com.asc.gymgenie.ai.nutrition.dto.SaveMealPlanRequest
-import com.asc.gymgenie.ai.nutrition.dto.SaveMealPlanResponse
+import com.asc.gymgenie.ai.nutrition.dto.*
 import jakarta.validation.Valid
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.Authentication
@@ -44,6 +41,29 @@ class AiMealController(
         val userId = UUID.fromString(authentication.name)
         val id = mealAiService.replaceMealPlan(userId, planId, request)
         return ResponseEntity.ok(SaveMealPlanResponse(id))
+    }
+
+    @GetMapping("/booked-days")
+    fun getBookedDays(
+        authentication: Authentication,
+        @RequestParam(required = false) mealType: String?
+    ): ResponseEntity<AiMealBookedDaysResponse> {
+        val userId = UUID.fromString(authentication.name)
+        return ResponseEntity.ok(mealAiService.getBookedDays(userId, mealType))
+    }
+
+    @GetMapping("/check-conflicts")
+    fun checkConflicts(
+        authentication: Authentication,
+        @RequestParam scheduleType: String,
+        @RequestParam(required = false) oneOffDate: String?,
+        @RequestParam(required = false) scheduleDays: List<String>?,
+        @RequestParam(required = false) mealType: String?
+    ): ResponseEntity<AiMealConflictCheckResponse> {
+        val userId = UUID.fromString(authentication.name)
+        return ResponseEntity.ok(
+            mealAiService.checkConflicts(userId, scheduleType, oneOffDate, scheduleDays ?: emptyList(), mealType)
+        )
     }
 
     @DeleteMapping("/session")

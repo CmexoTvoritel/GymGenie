@@ -74,7 +74,7 @@ struct ExerciseInfoSheet: View {
 
                 if !exercise.muscleGroup.isEmpty {
                     HStack(spacing: 6) {
-                        Text(muscleGroupRu(exercise.muscleGroup))
+                        Text(muscleGroupNameRu(exercise.muscleGroup))
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(.white)
                             .padding(.horizontal, 12)
@@ -162,22 +162,4 @@ struct ExerciseInfoSheet: View {
         }
     }
 
-    private func muscleGroupRu(_ g: String) -> String {
-        switch g.uppercased() {
-        case "CHEST": return "Грудь"
-        case "BACK": return "Спина"
-        case "SHOULDERS": return "Плечи"
-        case "BICEPS": return "Бицепс"
-        case "TRICEPS": return "Трицепс"
-        case "FOREARMS": return "Предплечья"
-        case "ABS": return "Пресс"
-        case "QUADRICEPS": return "Квадрицепс"
-        case "HAMSTRINGS": return "Бицепс бедра"
-        case "CALVES": return "Икры"
-        case "GLUTES": return "Ягодицы"
-        case "CARDIO": return "Кардио"
-        case "FULL_BODY": return "Всё тело"
-        default: return g
-        }
-    }
 }

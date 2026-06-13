@@ -1,11 +1,6 @@
 import SwiftUI
 import Shared
 
-/// Step 2 — browse and pick an exercise scoped to one muscle group.
-///
-/// Tapping the card body selects the exercise and advances the flow, while
-/// the small info badge opens the read-only detail sheet so the user can
-/// inspect technique before committing.
 struct ExercisePickerView: View {
     let muscleGroupKey: String
     let muscleGroupNameRu: String
@@ -13,7 +8,7 @@ struct ExercisePickerView: View {
     let onExerciseSelected: (Shared.ExerciseShortResponse) -> Void
 
     @StateObject private var picker = ExercisePickerViewModelWrapper()
-    @State private var detailExerciseId: String? = nil
+    @State private var detailExercise: Shared.ExerciseShortResponse? = nil
 
     private let orange = Color(red: 0.941, green: 0.439, blue: 0.188)
     private let deepInk = Color(red: 0.161, green: 0.141, blue: 0.125)
@@ -43,21 +38,23 @@ struct ExercisePickerView: View {
         }
         .sheet(
             isPresented: Binding(
-                get: { detailExerciseId != nil },
-                set: { if !$0 { detailExerciseId = nil } }
+                get: { detailExercise != nil },
+                set: { if !$0 { detailExercise = nil } }
             )
         ) {
-            if let id = detailExerciseId {
+            if let exercise = detailExercise {
                 ExerciseDetailView(
-                    exerciseId: id,
-                    onBack: { detailExerciseId = nil },
-                    onAddToWorkout: { _ in detailExerciseId = nil }
+                    exerciseId: exercise.id,
+                    onBack: { detailExercise = nil },
+                    onAddToWorkout: { _ in
+                        let captured = exercise
+                        detailExercise = nil
+                        onExerciseSelected(captured)
+                    }
                 )
             }
         }
     }
-
-    // MARK: - Content
 
     @ViewBuilder
     private var content: some View {
@@ -98,32 +95,25 @@ struct ExercisePickerView: View {
                     ProgressView().tint(orange).padding(.vertical, 12)
                 }
 
-                // Safe-area + 16pt floor so the last row clears the home indicator.
                 Color.clear.frame(height: proxy.safeAreaInsets.bottom + 16)
             }
         }
     }
 
-    /// Renders a single exercise card with three gestures:
-    /// - tap on the card body → select & advance the flow.
-    /// - long-press on the card → open the read-only detail sheet.
-    /// - tap on the floating "i" badge inside the image area → also opens the
-    ///   detail sheet.
-    ///
-    /// The info badge and the long-press handler now live inside
-    /// `ExerciseCard` itself so the picker stays free of layout glue.
     private func exerciseCell(_ exercise: Shared.ExerciseShortResponse) -> some View {
         ExerciseCard(
             exercise: exercise,
             onTap: { onExerciseSelected(exercise) },
-            onLongPress: { detailExerciseId = exercise.id },
-            onInfoTap: { detailExerciseId = exercise.id }
+            onLongPress: { detailExercise = exercise },
+            onInfoTap: { detailExercise = exercise }
         )
     }
 
     private var emptyView: some View {
         VStack(spacing: 8) {
-            Text("📦").font(.system(size: 44))
+            Image(systemName: "shippingbox")
+                .font(.system(size: 38))
+                .foregroundColor(mutedText)
             Text("Упражнений не найдено")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(deepInk)
@@ -136,7 +126,9 @@ struct ExercisePickerView: View {
 
     private func errorView(message: String) -> some View {
         VStack(spacing: 12) {
-            Text("⚠️").font(.system(size: 40))
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 36))
+                .foregroundColor(orange)
             Text(message)
                 .font(.system(size: 14))
                 .foregroundColor(mutedText)

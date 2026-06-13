@@ -19,14 +19,14 @@ import com.asc.gymgenie.ui.theme.OnBackground
 internal fun TimerBox(text: String, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
-            .height(88.dp)
+            .height(72.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(CoralLight),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text,
-            fontSize = 52.sp,
+            fontSize = 48.sp,
             fontWeight = FontWeight.Bold,
             color = OnBackground,
         )

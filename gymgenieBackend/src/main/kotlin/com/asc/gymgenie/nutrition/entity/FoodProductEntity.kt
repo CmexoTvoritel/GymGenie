@@ -3,13 +3,6 @@ package com.asc.gymgenie.nutrition.entity
 import jakarta.persistence.*
 import java.util.*
 
-/**
- * Global, shared food product catalog.
- *
- * Represents a single food product with reference nutritional values per 100g.
- * Records are managed centrally (not user-scoped) and are referenced from [MealItemEntity]
- * when a user picks a catalog product instead of entering a custom item manually.
- */
 @Entity
 @Table(name = "food_products")
 class FoodProductEntity(
@@ -30,8 +23,6 @@ class FoodProductEntity(
 
     @Column(length = 10)
     var emoji: String? = null,
-
-    // ----- Nutritional values per 100g of product -----
 
     @Column(nullable = false)
     var caloriesPer100g: Double,

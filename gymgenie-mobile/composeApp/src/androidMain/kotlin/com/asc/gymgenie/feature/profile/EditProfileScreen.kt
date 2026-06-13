@@ -58,6 +58,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
@@ -99,9 +100,10 @@ fun EditProfileScreen(
     val profile by userProfileStore.profile.collectAsState()
     val updateState by profileViewModel.state.collectAsState()
 
-    // Seed the shared form holder from the loaded profile exactly once.
-    // After the first initialization, in-flight edits in sub-screens must not be clobbered when
-    // the user returns and the profile flow re-emits.
+    LaunchedEffect(Unit) {
+        form.initialized = false
+    }
+
     LaunchedEffect(profile) {
         val loaded = profile
         if (!form.initialized && loaded != null) {
@@ -142,15 +144,20 @@ fun EditProfileScreen(
         )
     }
 
+    val focusManager = LocalFocusManager.current
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(WarmOffWhite),
+            .background(WarmOffWhite)
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = { focusManager.clearFocus() })
+            },
     ) {
         GymGenieToolbar(
             title = "Редактировать",
             showBackNavigation = true,
-            onBackClick = onBack,
+            onBackClick = { if (!updateState.isLoading) onBack() },
             actions = listOf(
                 ToolbarAction(
                     content = {
@@ -536,4 +543,3 @@ internal fun PickerGroup(
         }
     }
 }
-

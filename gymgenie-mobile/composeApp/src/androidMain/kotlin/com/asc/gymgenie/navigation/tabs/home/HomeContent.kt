@@ -14,6 +14,7 @@ import com.asc.gymgenie.feature.activities.ActivitiesScreen
 import com.asc.gymgenie.feature.activities.ActivityCatalogScreen
 import com.asc.gymgenie.feature.activities.ActivityGoalSettingsScreen
 import com.asc.gymgenie.feature.activities.ActivityScheduleSettingsScreen
+import com.asc.gymgenie.feature.create_workout.CreateWorkoutFlowScreen
 import com.asc.gymgenie.feature.home.HomeScreen
 import com.asc.gymgenie.feature.meal_plan_detail.MealPlanDetailScreen
 import com.asc.gymgenie.feature.notifications.NotificationsScreen
@@ -50,7 +51,9 @@ fun HomeContent(
                     onSessionReady = onSessionReady,
                     onCreateMealPlan = { mealType, date -> component.openCreateMealPlan(mealType, date) },
                     onViewMealPlan = { planId -> component.openMealPlanDetail(planId) },
+                    onCreateWorkout = component::openCreateWorkout,
                     mealPlansReloadKey = mealPlansReloadKey,
+                    activitiesRefreshSignal = activitiesRefreshSignal,
                     onOpenPaywall = onOpenPaywall,
                     onNotificationsClick = component::openNotifications,
                     onSwitchToProfile = onSwitchToProfile,
@@ -101,9 +104,19 @@ fun HomeContent(
 
                 is HomeComponent.Child.MealPlanDetail -> MealPlanDetailScreen(
                     planId = instance.planId,
+                    isPastDate = instance.isPastDate,
                     onBack = component::pop,
                     onDeleted = component::onMealPlanDeleted,
                     onEdit = { component.openCreateMealPlan(editPlanId = instance.planId) },
+                )
+
+                is HomeComponent.Child.CreateWorkout -> CreateWorkoutFlowScreen(
+                    viewModel = instance.viewModel,
+                    onDismiss = {
+                        instance.viewModel.reset()
+                        component.pop()
+                    },
+                    onSaved = component::onWorkoutCreated,
                 )
 
                 is HomeComponent.Child.CreateMealPlan -> CreateMealPlanFlowScreen(

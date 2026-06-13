@@ -1,11 +1,13 @@
 package com.asc.gymgenie.ui.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,13 +28,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.asc.gymgenie.feature.create_workout.muscleGroupExerciseDrawable
+import com.asc.gymgenie.utils.WeekdayPairs
 import com.asc.gymgenie.workout.WorkoutPlanShortResponse
 import com.asc.gymgenie.workout.WorkoutScheduleType
 
@@ -46,20 +51,6 @@ private val MutedManualText = Color(0xFF5C5C63)
 private val InkBlack = Color(0xFF0A0A0A)
 private val InkMuted = Color(0xFF8B8B92)
 
-/**
- * Shared card representing a single workout plan.
- *
- * Used in two contexts:
- *  - The workouts catalog list, where the eye/start action pair is shown via a
- *    non-null [onView] handler.
- *  - The home tab pager, where [onView] is `null` and the card collapses to a
- *    single full-width "Начать тренировку" CTA on a deep-ink background.
- *
- * Active plans get a coral border + a 3dp top stripe so they read at a glance
- * without forcing the layout to grow taller. The body is wrapped in a coral →
- * white vertical gradient that signals the action color without overpowering
- * the content.
- */
 @Composable
 fun WorkoutPlanCard(
     plan: WorkoutPlanShortResponse,
@@ -77,11 +68,7 @@ fun WorkoutPlanCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(Coral.copy(alpha = 0.1f), Color.White),
-                ),
-            )
+            .background(Color.White)
             .border(borderWidth, borderColor, RoundedCornerShape(20.dp)),
     ) {
         if (plan.isActive) {
@@ -94,7 +81,7 @@ fun WorkoutPlanCard(
         }
 
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
-            // Row 1: image + title + badge
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -106,7 +93,12 @@ fun WorkoutPlanCard(
                         .background(muscleColors.background),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(text = "🏋️", fontSize = 22.sp)
+                    Image(
+                        painter = painterResource(id = muscleGroupExerciseDrawable(plan.primaryMuscleGroup ?: "")),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                    )
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
@@ -124,7 +116,6 @@ fun WorkoutPlanCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Row 2: description (always reserves 2-line height)
             val desc = plan.description?.takeIf { it.isNotBlank() }
             Text(
                 text = desc ?: "",
@@ -376,31 +367,9 @@ internal fun muscleGroupColors(group: String?): MuscleGroupColors {
     }
 }
 
-internal fun muscleGroupCardEmoji(group: String?): String = when (group?.uppercase()) {
-    "CHEST" -> "🫁"
-    "BACK" -> "🦾"
-    "SHOULDERS", "SHOULDER" -> "💪"
-    "BICEPS", "TRICEPS", "FOREARMS", "ARMS" -> "💪"
-    "ABS", "CORE" -> "🔥"
-    "QUADRICEPS", "HAMSTRINGS", "GLUTES", "CALVES", "LEGS" -> "🦵"
-    "CARDIO" -> "❤️"
-    "FULL_BODY" -> "⭐"
-    else -> "🏋"
-}
-
-private val DayAbbreviations = listOf(
-    "MONDAY" to "Пн",
-    "TUESDAY" to "Вт",
-    "WEDNESDAY" to "Ср",
-    "THURSDAY" to "Чт",
-    "FRIDAY" to "Пт",
-    "SATURDAY" to "Сб",
-    "SUNDAY" to "Вс",
-)
-
 internal fun formatRecurringDays(days: List<String>): String {
     if (days.isEmpty()) return "Постоянная"
     val normalized = days.map { it.uppercase() }.toSet()
-    val ordered = DayAbbreviations.filter { it.first in normalized }.map { it.second }
+    val ordered = WeekdayPairs.filter { it.first in normalized }.map { it.second }
     return if (ordered.isEmpty()) "Постоянная" else ordered.joinToString(" · ")
 }

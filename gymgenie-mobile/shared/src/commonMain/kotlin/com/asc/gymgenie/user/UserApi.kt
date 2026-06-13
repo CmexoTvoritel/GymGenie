@@ -47,12 +47,6 @@ class UserApi(
         }
     }
 
-    /**
-     * Activates Premium for the authenticated user. Backend is the single
-     * source of truth — the response contains the authoritative profile with
-     * the updated [UserProfileResponse.subscriptionType], which the caller
-     * should push into [UserProfileStore] so dependent screens observe it.
-     */
     suspend fun activateSubscription(): Result<UserProfileResponse> {
         return try {
             val response = client.put("$baseUrl/api/v1/users/me/subscription")
